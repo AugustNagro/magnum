@@ -7,16 +7,14 @@ import scala.compiletime.{
   constValueTuple,
   erasedValue,
   error,
-  summonInline
+  summonInline,
+  summonFrom
 }
 import scala.compiletime.ops.any.==
 import scala.compiletime.ops.boolean.&&
 import scala.reflect.ClassTag
 
 sealed trait DbConfig[EC, E, ID]:
-
-  def sqlNameMapper: SqlNameMapper
-  def tableName: String
 
   private[magnum] def count(using DbCon): Long
   private[magnum] def existsById(id: ID)(using DbCon): Boolean
@@ -33,16 +31,13 @@ sealed trait DbConfig[EC, E, ID]:
   ): Vector[E]
   private[magnum] def update(entity: E)(using DbCon): Unit
   private[magnum] def updateAll(entities: Iterable[E])(using DbCon): Unit
-  private[magnum] transparent inline def cols: Any
 
 object DbConfig:
 
-  inline def apply[EC <: Product, E <: Product, ID](
-      nameMapper: SqlNameMapper = SameCase
-  )(using
+  inline def apply[EC <: Product, E <: Product, ID]()(using
       ecMirror: Mirror.ProductOf[EC],
       eMirror: Mirror.ProductOf[E],
-      eDbEntity: DbEntity[E]
+      dbEntity: DbReader[E]
   ): DbConfig[EC, E, ID] =
     type ECMets = ecMirror.MirroredElemTypes
     type ECMels = ecMirror.MirroredElemLabels
@@ -58,13 +53,12 @@ object DbConfig:
     inline if eArity == 0 then
       error(s"${constValue[ELabel]} needs at least 1 element")
 
-    type EMetsAndMels = Tuple.Zip[EMets, EMels]
-    assertEcIsSubsetOfE[ECMets, ECMels, ECLabel, EMetsAndMels, ELabel]
+    assertECIsSubsetOfE[ECMets, ECMels, EMets, EMels]
 
     /*
     Query parts
      */
-    val tblName = nameMapper.toTableName(constValue[ELabel])
+    val tblName = constValue[ELabel]
 
     /*
     The queries themselves
@@ -72,8 +66,6 @@ object DbConfig:
     val countSql = s"SELECT count(*) FROM $tblName"
 
     new DbConfig[EC, E, ID]:
-      def tableName: String = tblName
-      def sqlNameMapper: SqlNameMapper = nameMapper
       def count(using con: DbCon): Long = ???
       def existsById(id: ID)(using DbCon): Boolean = ???
       def findAll(using DbCon): Vector[E] = ???
@@ -88,26 +80,44 @@ object DbConfig:
       def update(entity: E)(using DbCon): Unit = ???
       def updateAll(entities: Iterable[E])(using DbCon): Unit = ???
 
-private inline def assertEcIsSubsetOfE[
+private inline def assertECIsSubsetOfE[
     ECMets <: Tuple,
     ECMels <: Tuple,
-    ECLabel,
-    EMetsAndMels <: Tuple,
-    ELabel
+    EMets <: Tuple,
+    EMels <: Tuple
 ]: Unit =
   inline (erasedValue[ECMets], erasedValue[ECMels]) match
     case _: (EmptyTuple, EmptyTuple) => ()
     case _: ((ecMet *: ecMetTail), (ecMel *: ecMelTail)) =>
-      type TestEField[ETup] <: Boolean = ETup match
-        case (eMet *: eMel) => (eMet == ecMet) && (eMel == ecMel)
-        case _              => false
-
-      type ECFieldIsInE =
-        Tuple.Size[Tuple.Filter[EMetsAndMels, TestEField]] == 1
-
-      inline if constValue[ECFieldIsInE] then
-        assertEcIsSubsetOfE[ecMetTail, ecMelTail, ECLabel, EMetsAndMels, ELabel]
+      inline if ecFieldInE[ecMet, ecMel, EMets, EMels] then
+        assertECIsSubsetOfE[ecMetTail, ecMelTail, EMets, EMels]
       else
-        error(s"${constValue[ECLabel]} must be a subset of ${constValue[
-            ELabel
-          ]}. Field ${constValue[ecMel]} was not found on ${constValue[ELabel]}")
+        error(
+          "EC must be a subset of E. Are there any fields on EC you forgot to update on E?"
+        )
+
+private inline def ecFieldInE[ECMet, ECMel, EMets <: Tuple, EMels <: Tuple]
+    : Boolean =
+  inline (erasedValue[EMets], erasedValue[EMels]) match
+    case _: (EmptyTuple, EmptyTuple) => false
+    case _: ((eMet *: eMetTail), (eMel *: eMelTail)) =>
+      inline if testTypes[eMel, ECMel] && testTypes[eMet, ECMet] then true
+      else ecFieldInE[ECMet, ECMel, eMetTail, eMelTail]
+
+private inline def testTypes[A, B]: Boolean =
+  summonFrom {
+    case _: (A =:= B) => true
+    case _            => false
+  }
+
+private inline def buildSingleDefault[E, Mets](
+    rs: ResultSet,
+    m: Mirror.ProductOf[E],
+    res: Array[Any],
+    i: Int = 0
+): E =
+  inline erasedValue[Mets] match
+    case _: EmptyTuple => m.fromProduct(ArrayProduct(res))
+    case _: (met *: metTail) =>
+      res(i) = Util.getFromRow[met](rs, i + 1)
+      buildSingleDefault[E, metTail](rs, m, res, i + 1)

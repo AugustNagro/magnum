@@ -12,31 +12,31 @@ import javax.sql.DataSource
   * @tparam ID
   *   id type of E
   */
-open class Repo[EC <: Product, E <: Product: DbEntity, ID](
-    ds: DataSource,
-    config: DbConfig[EC, E, ID]
-) extends ImmutableRepo[E, ID](ds, config):
+open class Repo[EC, E, ID](
+    dataSource: DataSource,
+    schema: DbSchema[EC, E, ID]
+) extends ImmutableRepo[E, ID](dataSource, schema):
 
   /** Deletes an entity using its id */
-  def deleteById(id: ID)(using DbCon): Unit = config.deleteById(id)
+  def deleteById(id: ID)(using DbCon): Unit = schema.deleteById(id)
 
   /** Deletes ALL entities */
-  def truncate()(using DbCon): Unit = config.truncate()
+  def truncate()(using DbCon): Unit = schema.truncate()
 
   /** Deletes all entities with an Iterable of ids */
   def deleteAllById(ids: Iterable[ID])(using DbCon): Unit =
-    config.deleteAllById(ids)
+    schema.deleteAllById(ids)
 
   /** Insert and return entity E */
-  def insert(entityCreator: EC)(using DbCon): E = config.insert(entityCreator)
+  def insert(entityCreator: EC)(using DbCon): E = schema.insert(entityCreator)
 
   /** Insert and return all new entities */
   def insertAll(entityCreators: Iterable[EC])(using DbCon): Vector[E] =
-    config.insertAll(entityCreators)
+    schema.insertAll(entityCreators)
 
   /** Update the entity */
-  def update(entity: E)(using DbCon): Unit = config.update(entity)
+  def update(entity: E)(using DbCon): Unit = schema.update(entity)
 
   /** Update all entities */
   def updateAll(entities: Iterable[E])(using DbCon): Unit =
-    config.updateAll(entities)
+    schema.updateAll(entities)

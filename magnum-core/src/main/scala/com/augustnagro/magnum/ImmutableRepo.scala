@@ -11,30 +11,17 @@ import scala.util.{Try, Using}
   * @tparam ID
   *   id type of E
   */
-open class ImmutableRepo[E <: Product: DbEntity, ID](
-    val ds: DataSource,
-    val config: DbConfig[?, E, ID]
+open class ImmutableRepo[E, ID](
+    val dataSource: DataSource,
+    val schema: DbSchema[?, E, ID]
 ):
-
-  // todo change somehow
-//  val cols = Util.buildCols[E](config.tableName, config.sqlNameMapper)
-
-  extension (sc: StringContext)
-    def sql(args: Any*): SqlBuilder =
-      if args.isEmpty then return SqlBuilder(sc.parts.mkString, Vector.empty)
-      val resQuery = StringBuilder() ++= sc.parts(0)
-      val resParams = Vector.newBuilder[Any]
-      for i <- 0 until args.length do
-        resQuery ++= sc.parts(i + 1)
-        args(i) match
-          case Col(columnName) => resQuery ++= columnName
-          case param           => resParams += param
-      SqlBuilder(resQuery.result(), resParams.result())
+  
+  export Util.{sql, runPreparedBatch, runBatch}
 
   def connect[T](f: DbCon ?=> T): T =
     Using
       .Manager(manager =>
-        val con = manager(ds.getConnection)
+        val con = manager(dataSource.getConnection)
         f(using DbCon(con, manager))
       )
       .get
@@ -42,7 +29,7 @@ open class ImmutableRepo[E <: Product: DbEntity, ID](
   def transact[T](f: DbTx ?=> T): T =
     Using
       .Manager(manager =>
-        val con = manager(ds.getConnection)
+        val con = manager(dataSource.getConnection)
         con.setAutoCommit(false)
         try
           val res = f(using DbTx(con, manager))
@@ -56,24 +43,24 @@ open class ImmutableRepo[E <: Product: DbEntity, ID](
       .get
 
   /** Count of all entities */
-  def count(using DbCon): Long = config.count
+  def count(using DbCon): Long = schema.count
 
   /** Returns true if an E exists with the given id */
-  def existsById(id: ID)(using DbCon): Boolean = config.existsById(id)
+  def existsById(id: ID)(using DbCon): Boolean = schema.existsById(id)
 
   /** Returns all entity values */
-  def findAll(using DbCon): Vector[E] = config.findAll
+  def findAll(using DbCon): Vector[E] = schema.findAll
 
   /** Find all entities matching the specification. See the scaladoc of [[Spec]]
     * for more details
     */
-  def findAll(spec: Spec[E])(using DbCon): Vector[E] = config.findAll(spec)
+  def findAll(spec: Spec[E])(using DbCon): Vector[E] = schema.findAll(spec)
 
   /** Returns Some(entity) if a matching E is found */
-  def findById(id: ID)(using DbCon): Option[E] = config.findById(id)
+  def findById(id: ID)(using DbCon): Option[E] = schema.findById(id)
 
   /** Find all entities having ids in the Iterable. If an Id is not found, no
     * error is thrown.
     */
   def findAllById(ids: Iterable[ID])(using DbCon): Vector[E] =
-    config.findAllById(ids)
+    schema.findAllById(ids)

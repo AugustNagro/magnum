@@ -14,10 +14,7 @@ import scala.compiletime.{
 /** Typeclass defining database entities. Has methods to build E from a JDBC
   * ResultSet
   */
-trait DbEntity[E]:
-
-  // todo cols? as transparent inline def, impl being in the derived method
-  transparent inline def cols: Any
+trait DbReader[E]:
 
   /** Build an E from the ResultSet. Make sure the ResultSet is in a valid state
     * (ie, ResultSet::next has been called).
@@ -33,18 +30,21 @@ trait DbEntity[E]:
     while rs.next() do res += buildSingle(rs)
     res.result()
 
-object DbEntity:
+object DbReader:
 
-  inline given derived[E](using m: Mirror.ProductOf[E]): DbEntity[E] =
+  given DbReader[Int] = rs => rs.getInt(1)
+  
+  given DbReader[Long] = rs => rs.getLong(1)
+  
+  // todo more
+
+  inline given derived[E](using m: Mirror.ProductOf[E]): DbReader[E] =
     type Mets = m.MirroredElemTypes
     inline val arity = constValue[Tuple.Size[Mets]]
-    new DbEntity[E]:
-      def buildSingle(rs: ResultSet): E =
-        buildSingleDefault[E, m.MirroredElemTypes](
-          rs,
-          m,
-          Array.ofDim[Any](arity)
-        )
+    (rs: ResultSet) =>
+      buildSingleDefault[E, m.MirroredElemTypes](rs, m, Array.ofDim[Any](arity))
+
+end DbReader
 
 private inline def buildSingleDefault[E, Mets](
     rs: ResultSet,

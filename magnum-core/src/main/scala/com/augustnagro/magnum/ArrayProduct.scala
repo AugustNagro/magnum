@@ -1,6 +1,6 @@
 package com.augustnagro.magnum
 
-private[magnum] class ArrayProduct(arr: Array[Any]) extends Product:
+class ArrayProduct(arr: Array[Any]) extends Product:
   override def productArity: Int = arr.length
 
   override def productElement(n: Int): Any = arr(n)

@@ -1,6 +1,7 @@
 package com.augustnagro.magnum
 
-import java.sql.ResultSet
+import java.sql.{PreparedStatement, ResultSet}
+import scala.util.Using
 import scala.deriving.Mirror
 import scala.compiletime.{
   constValue,
@@ -16,44 +17,48 @@ import scala.quoted.*
 
 private[magnum] object Util:
 
-  transparent inline def buildCols[T](
-      dbTableName: String,
-      nameMapper: SqlNameMapper
-  ) = ${ buildColsImpl[T]('dbTableName, 'nameMapper) }
+  // todo can be a macro
+  extension (sc: StringContext)
+    def sql(args: Any*): Sql =
+      if args.isEmpty then return Sql(sc.parts.mkString, Vector.empty)
+      val resQuery = StringBuilder().append(sc.parts(0))
+      val resParams = Vector.newBuilder[Any]
+      for i <- 0 until args.length do
+        args(i) match
+          case dbSchema: DbSchema[?, ?, ?] =>
+            resQuery.append(dbSchema.tableWithAlias)
+          case schemaName: DbSchemaName =>
+            resQuery
+              .append(schemaName.tableAlias)
+              .append('.')
+              .append(schemaName.sqlName)
+          case schemaNames: Array[DbSchemaName] =>
+            resQuery.append(
+              schemaNames
+                .map(sn => sn.tableAlias + "." + sn.sqlName)
+                .mkString(", ")
+            )
+          case param =>
+            resQuery.append('?')
+            resParams += param
+        resQuery.append(sc.parts(i + 1))
+      Sql(resQuery.result(), resParams.result())
 
-  def buildColsImpl[T: Type](
-      dbTableName: Expr[String],
-      nameMapper: Expr[SqlNameMapper]
-  )(using
-      Quotes
-  ): Expr[Any] =
-    import quotes.reflect.*
-    Expr.summon[Mirror.ProductOf[T]].get match
-      case '{
-            $m: Mirror.ProductOf[T] {
-              type MirroredElemLabels = mels
-              type MirroredElemTypes = mets
-            }
-          } =>
-        buildRefinement[mels, Cols](dbTableName, nameMapper)
+  // todo
+  def runPreparedBatch[T](values: Iterable[T])(f: T => Sql): Unit =
+    ???
 
-  private def buildRefinement[Mels: Type, XX: Type](
-      dbTableName: Expr[String],
-      nameMapper: Expr[SqlNameMapper]
-  )(using Quotes): Expr[Any] =
-    import quotes.reflect.*
-    Type.of[Mels] match
-      case '[EmptyTuple] =>
-        val res = '{ Cols($dbTableName, $nameMapper).asInstanceOf[XX] }
-        println(res.show)
-        res
-      case '[mel *: melTail] =>
-        val label = Type.valueOfConstant[mel].get.toString
-        val newRefinement =
-          Refinement(TypeRepr.of[XX], label, TypeRepr.of[String])
-        newRefinement.asType match
-          case '[tpe] =>
-            buildRefinement[melTail, tpe](dbTableName, nameMapper)
+  def runBatch[T](values: Iterable[T])(f: T => Sql): Unit =
+    ???
+
+  def setValues(ps: PreparedStatement, params: Vector[Any]): Unit =
+    for (p, i) <- params.iterator.zipWithIndex do
+      val javaObject = p match
+        case bd: scala.math.BigDecimal => bd.bigDecimal
+        case bi: scala.math.BigInt     => bi.bigInteger
+        case o: Option[?]              => o.orNull
+        case x                         => x
+      ps.setObject(i, javaObject)
 
   inline def getFromRow[Met](rs: ResultSet, columnIndex: Int): Any =
     inline erasedValue[Met] match
