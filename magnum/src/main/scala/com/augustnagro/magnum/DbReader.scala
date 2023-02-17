@@ -55,5 +55,5 @@ private inline def buildSingleDefault[E, Mets](
   inline erasedValue[Mets] match
     case _: EmptyTuple => m.fromProduct(ArrayProduct(res))
     case _: (met *: metTail) =>
-      res(i) = Util.getFromRow[met](rs, i + 1)
+      res(i) = getFromRow[met](rs, i + 1)
       buildSingleDefault[E, metTail](rs, m, res, i + 1)

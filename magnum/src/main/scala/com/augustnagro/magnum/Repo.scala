@@ -12,10 +12,8 @@ import javax.sql.DataSource
   * @tparam ID
   *   id type of E
   */
-open class Repo[EC, E, ID](
-    dataSource: DataSource,
-    schema: DbSchema[EC, E, ID]
-) extends ImmutableRepo[E, ID](dataSource, schema):
+open class Repo[EC, E, ID](schema: DbSchema[EC, E, ID])
+    extends ImmutableRepo[E, ID](schema):
 
   /** Deletes an entity using its id */
   def deleteById(id: ID)(using DbCon): Unit = schema.deleteById(id)

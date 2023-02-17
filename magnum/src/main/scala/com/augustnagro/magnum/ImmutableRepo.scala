@@ -11,36 +11,7 @@ import scala.util.{Try, Using}
   * @tparam ID
   *   id type of E
   */
-open class ImmutableRepo[E, ID](
-    val dataSource: DataSource,
-    val schema: DbSchema[?, E, ID]
-):
-  
-  export Util.{sql, runPreparedBatch, runBatch}
-
-  def connect[T](f: DbCon ?=> T): T =
-    Using
-      .Manager(manager =>
-        val con = manager(dataSource.getConnection)
-        f(using DbCon(con, manager))
-      )
-      .get
-
-  def transact[T](f: DbTx ?=> T): T =
-    Using
-      .Manager(manager =>
-        val con = manager(dataSource.getConnection)
-        con.setAutoCommit(false)
-        try
-          val res = f(using DbTx(con, manager))
-          con.commit()
-          res
-        catch
-          case t =>
-            con.rollback()
-            throw t
-      )
-      .get
+open class ImmutableRepo[E, ID](val schema: DbSchema[?, E, ID]):
 
   /** Count of all entities */
   def count(using DbCon): Long = schema.count

@@ -28,14 +28,31 @@ inThisBuild(
 
 val mUnitVersion = "0.7.29"
 
-lazy val magnumCore = project
-  .in(file("magnum-core"))
+lazy val magnum = project
+  .in(file("magnum"))
   .settings(
-    libraryDependencies += "org.scalameta" %% "munit" % mUnitVersion % Test
+    libraryDependencies ++= Seq(
+      "org.scalameta" %% "munit" % mUnitVersion % Test
+    )
   )
 
-lazy val magnumPg = project
-  .in(file("magnum-pg"))
+lazy val magnumPgTests = project
+  .in(file("magnum-pg-tests"))
+  .dependsOn(magnum)
   .settings(
-    libraryDependencies += "org.scalameta" %% "munit" % mUnitVersion % Test
+    publish / skip := true,
+    libraryDependencies ++= Seq(
+      "org.scalameta" %% "munit" % mUnitVersion % Test,
+      "org.postgresql" % "postgresql" % "42.5.4"
+    )
+  )
+
+lazy val magnumMySqlTests = project
+  .in(file("magnum-mysql-tests"))
+  .dependsOn(magnum)
+  .settings(
+    publish / skip := true,
+    libraryDependencies ++= Seq(
+      "org.scalameta" %% "munit" % mUnitVersion % Test
+    )
   )

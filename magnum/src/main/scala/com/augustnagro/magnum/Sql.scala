@@ -8,14 +8,14 @@ class Sql(query: String, params: Vector[Any]):
     val ps = con.manager(
       con.connection.prepareStatement(query, Statement.RETURN_GENERATED_KEYS)
     )
-    Util.setValues(ps, params)
+    setValues(ps, params)
     con.manager(ps.executeQuery())
 
   def run[E](using con: DbCon, dbe: DbReader[E]): Vector[E] =
     val ps = con.manager(
       con.connection.prepareStatement(query, Statement.RETURN_GENERATED_KEYS)
     )
-    Util.setValues(ps, params)
+    setValues(ps, params)
     val rs = con.manager(ps.executeQuery())
     dbe.build(rs)
 

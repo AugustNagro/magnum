@@ -1,6 +1,5 @@
 package com.augustnagro.magnum
 
-import Util.sql
 import scala.deriving.Mirror
 import scala.compiletime.{
   constValue,
@@ -43,7 +42,8 @@ object DbSchema:
   )(using
       ecMirror: Mirror.ProductOf[EC],
       eMirror: Mirror.ProductOf[E],
-      dbEntity: DbReader[E]
+      dbEntity: DbReader[E],
+      idCls: ClassTag[ID]
   ) = ${ dbSchemaImpl[EC, E, ID]('{ sqlNameMapper }) }
 
   private def dbSchemaImpl[EC: Type, E: Type, ID: Type](
@@ -74,50 +74,61 @@ object DbSchema:
   ](
       sqlNameMapper: Expr[SqlNameMapper],
       tableNameSql: Expr[String],
-      schemaNames: List[Expr[DbSchemaName]]
+      fieldNames: List[String]
   )(using Quotes): Expr[Any] =
     import quotes.reflect.*
     Type.of[EMels] match
       case '[mel *: melTail] =>
         val scalaFieldName = Type.valueOfConstant[mel].get.toString
-        val scalaFieldNameExpr = Expr(scalaFieldName)
         val fieldNameRefinement =
           Refinement(
             TypeRepr.of[RES],
             scalaFieldName,
             TypeRepr.of[DbSchemaName]
           )
-        val schemaName = '{
-          DbSchemaName(
-            $scalaFieldNameExpr,
-            $sqlNameMapper.toColumnName($scalaFieldNameExpr),
-            $tableNameSql
-          )
-        }
         fieldNameRefinement.asType match
           case '[tpe] =>
             applyRefinements[EC, E, ID, melTail, tpe](
               sqlNameMapper,
               tableNameSql,
-              schemaName :: schemaNames
+              scalaFieldName :: fieldNames
             )
       case '[EmptyTuple] =>
-        val schemaNamesList = Expr.ofSeq(schemaNames.reverse)
-        buildDbSchema[EC, E, ID, RES](tableNameSql, schemaNamesList)
+        buildDbSchema[EC, E, ID, RES](
+          tableNameSql,
+          Expr(fieldNames),
+          sqlNameMapper
+        )
 
   private def buildDbSchema[EC: Type, E: Type, ID: Type, RES: Type](
       tableNameSql: Expr[String],
-      schemaNamesList: Expr[Seq[DbSchemaName]]
+      fieldNames: Expr[List[String]],
+      sqlNameMapper: Expr[SqlNameMapper]
   )(using Quotes): Expr[Any] =
     val dbReaderExpr = Expr.summon[DbReader[E]].get
+    val idClassTag = Expr.summon[ClassTag[ID]].get
     '{
       given DbReader[E] = $dbReaderExpr
-      val schemaNames = IArray.unsafeFromArray($schemaNamesList.toArray)
-      val tblNameSql = $tableNameSql
-      val defaultAlias =
+      given ClassTag[ID] = $idClassTag
+      val nameMapper: SqlNameMapper = $sqlNameMapper
+      val tblNameSql: String = $tableNameSql
+
+      val defaultAlias: String =
         if tblNameSql.length == 1 then tblNameSql.toLowerCase
         else tblNameSql.updated(0, tblNameSql.head.toLower)
 
+      val schemaNames: IArray[DbSchemaName] = IArray.from(
+        $fieldNames.iterator
+          .map(fn =>
+            DbSchemaName(
+              scalaName = fn,
+              sqlName = nameMapper.toColumnName(fn),
+              tableAlias = defaultAlias
+            )
+          )
+      )
+
+      // todo make DbSchema a class with these parameters instead..
       class DbSchemaImpl(
           tableAlias: String,
           schemaNames: IArray[DbSchemaName],
@@ -153,8 +164,13 @@ object DbSchema:
           sql"select * from $this".run
 
         def findAll(spec: Spec[E])(using DbCon): Vector[E] = ???
-        def findById(id: ID)(using DbCon): Option[E] = ???
-        def findAllById(ids: Iterable[ID])(using DbCon): Vector[E] = ???
+
+        def findById(id: ID)(using DbCon): Option[E] =
+          sql"select * from $this where $idName = $id".run[E].headOption
+
+        def findAllById(ids: Iterable[ID])(using DbCon): Vector[E] =
+          sql"select * from $this where $idName = ANY(${ids.toArray})".run
+
         def deleteById(id: ID)(using DbCon): Unit = ???
         def truncate()(using DbCon): Unit = ???
         def deleteAllById(ids: Iterable[ID])(using DbCon): Unit = ???
@@ -165,6 +181,6 @@ object DbSchema:
         def updateAll(entities: Iterable[E])(using DbCon): Unit = ???
       end DbSchemaImpl
 
-      DbSchemaImpl(defaultAlias, schemaNames, schemaNames(0))
+      DbSchemaImpl(defaultAlias, schemaNames, schemaNames.last)
         .asInstanceOf[RES]
     }
