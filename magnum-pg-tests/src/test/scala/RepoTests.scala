@@ -1,4 +1,4 @@
-import com.augustnagro.magnum.{CamelToSnakeCase, DbSchema}
+import com.augustnagro.magnum.{CamelToSnakeCase, DbSchema, Repo}
 import munit.FunSuite
 
 import java.nio.file.{Files, Path}
@@ -26,11 +26,7 @@ class RepoTests extends FunSuite {
 
   val person = DbSchema[PersonCreator, Person, Long](CamelToSnakeCase)
 
-  // Repo should be highlighted in Red.
-  // When the underlined import popup shows up, use Alt+Enter to import like normal.
-  // However, nothing actually gets imported.
-  // If you change the code snippet to `val repo = new Repo(person)` then
-  // the import action will work like normal.
+  // auto complete does not work here.
   val repo = Repo(person)
 
   private def ds(): DataSource =
