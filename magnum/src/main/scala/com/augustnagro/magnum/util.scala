@@ -70,21 +70,18 @@ extension (sc: StringContext)
         case dbSchema: DbSchema[?, ?, ?] =>
           resQuery.append(dbSchema.tableWithAlias)
         case schemaName: DbSchemaName =>
-          resQuery
-            .append(schemaName.tableAlias)
-            .append('.')
-            .append(schemaName.sqlName)
+          resQuery.append(schemaNameToSql(schemaName))
         case schemaNames: Array[DbSchemaName] =>
-          resQuery.append(
-            schemaNames
-              .map(sn => sn.tableAlias + "." + sn.sqlName)
-              .mkString(", ")
-          )
+          resQuery.append(schemaNames.map(schemaNameToSql).mkString(", "))
         case param =>
           resQuery.append('?')
           resParams += param
       resQuery.append(sc.parts(i + 1))
     Sql(resQuery.result(), resParams.result())
+
+private def schemaNameToSql(sn: DbSchemaName): String =
+  if sn.tableAlias.isEmpty then sn.sqlName
+  else sn.tableAlias + "." + sn.sqlName
 
 // todo
 def runPreparedBatch[T](values: Iterable[T])(f: T => Sql): Unit =

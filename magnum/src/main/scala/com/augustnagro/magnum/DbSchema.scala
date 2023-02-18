@@ -112,21 +112,18 @@ object DbSchema:
       given ClassTag[ID] = $idClassTag
       val nameMapper: SqlNameMapper = $sqlNameMapper
       val tblNameSql: String = $tableNameSql
+      val defaultAlias = ""
 
-      val defaultAlias: String =
-        if tblNameSql.length == 1 then tblNameSql.toLowerCase
-        else tblNameSql.updated(0, tblNameSql.head.toLower)
-
-      val schemaNames: IArray[DbSchemaName] = IArray.from(
-        $fieldNames.iterator
-          .map(fn =>
-            DbSchemaName(
-              scalaName = fn,
-              sqlName = nameMapper.toColumnName(fn),
-              tableAlias = defaultAlias
-            )
+      val schemaNames: IArray[DbSchemaName] = IArray
+        .from($fieldNames.iterator)
+        .map(fn =>
+          DbSchemaName(
+            scalaName = fn,
+            sqlName = nameMapper.toColumnName(fn),
+            tableAlias = defaultAlias
           )
-      )
+        )
+        .reverse
 
       // todo make DbSchema a class with these parameters instead..
       class DbSchemaImpl(
@@ -152,7 +149,8 @@ object DbSchema:
           ).asInstanceOf[this.type]
 
         def tableWithAlias: String =
-          tblNameSql + " " + tableAlias
+          if tableAlias.isEmpty then tblNameSql
+          else tblNameSql + " " + tableAlias
 
         def count(using con: DbCon): Long =
           sql"select count(*) from $this".run[Long].head
@@ -171,8 +169,12 @@ object DbSchema:
         def findAllById(ids: Iterable[ID])(using DbCon): Vector[E] =
           sql"select * from $this where $idName = ANY(${ids.toArray})".run
 
-        def deleteById(id: ID)(using DbCon): Unit = ???
-        def truncate()(using DbCon): Unit = ???
+        def deleteById(id: ID)(using DbCon): Unit =
+          sql"delete from $this where $idName = id".runUpdate
+
+        def truncate()(using DbCon): Unit =
+          sql"truncate table $this"
+
         def deleteAllById(ids: Iterable[ID])(using DbCon): Unit = ???
         def insert(entityCreator: EC)(using DbCon): E = ???
         def insertAll(entityCreators: Iterable[EC])(using DbCon): Vector[E] =
@@ -181,6 +183,6 @@ object DbSchema:
         def updateAll(entities: Iterable[E])(using DbCon): Unit = ???
       end DbSchemaImpl
 
-      DbSchemaImpl(defaultAlias, schemaNames, schemaNames.last)
+      DbSchemaImpl(defaultAlias, schemaNames, schemaNames.head)
         .asInstanceOf[RES]
     }

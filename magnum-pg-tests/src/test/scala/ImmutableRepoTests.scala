@@ -11,6 +11,7 @@ import com.augustnagro.magnum.{
 }
 
 import java.nio.file.{Files, Path}
+import java.sql.Connection
 import javax.sql.DataSource
 import scala.util.Using
 
@@ -18,11 +19,9 @@ class ImmutableRepoTests extends FunSuite {
 
   case class Car(id: Long, model: String, topSpeed: Int) derives DbReader
 
-  case class CarCreator(model: String, topSpeed: Int)
+  val carSchema = DbSchema[Car, Car, Long](CamelToSnakeCase)
 
-  val userSchema = DbSchema[CarCreator, Car, Long](CamelToSnakeCase)
-
-  val carRepo = ImmutableRepo(userSchema)
+  val carRepo = ImmutableRepo(carSchema)
 
   val allCars = Vector(
     Car(1L, "McLaren Senna", 208),
@@ -48,12 +47,64 @@ class ImmutableRepoTests extends FunSuite {
     }
   }
 
+  // todo findAll Spec
+
+  test("findById") {
+    connect(ds()) {
+      assertEquals(carRepo.findById(3L).get, allCars.last)
+      assertEquals(carRepo.findById(4L), None)
+    }
+  }
+
   test("findAllByIds") {
     connect(ds()) {
       assertEquals(
-        Vector(1L, 3L),
-        carRepo.findAllById(Vector(1L, 3L)).map(_.id)
+        carRepo.findAllById(Vector(1L, 3L)).map(_.id),
+        Vector(1L, 3L)
       )
+    }
+  }
+
+  test("repeatable read transaction") {
+    transact(ds(), withRepeatableRead) {
+      assertEquals(carRepo.count, 3L)
+    }
+  }
+
+  test("select query") {
+    connect(ds()) {
+      val car = carSchema
+      val minSpeed = 210
+      val query =
+        sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
+
+      assertNoDiff(
+        query.query,
+        "select id, model, top_speed from car where top_speed > ?"
+      )
+
+      assertEquals(query.params, Vector(minSpeed))
+
+      assertEquals(
+        query.run[Car],
+        allCars.tail
+      )
+    }
+  }
+
+  test("select query with aliasing") {
+    connect(ds()) {
+      val car = carSchema.alias("c")
+      val minSpeed = 210
+      val query =
+        sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
+
+      assertNoDiff(
+        query.query,
+        "select c.id, c.model, c.top_speed from car c where c.top_speed > ?"
+      )
+
+      assertEquals(query.run[Car], allCars.tail)
     }
   }
 
@@ -69,5 +120,8 @@ class ImmutableRepoTests extends FunSuite {
       con.prepareStatement(testSql).execute()
     )
     ds
+
+  private def withRepeatableRead(con: Connection): Unit =
+    con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
 
 }
