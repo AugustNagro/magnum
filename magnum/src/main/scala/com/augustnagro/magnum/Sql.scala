@@ -1,34 +1,31 @@
 package com.augustnagro.magnum
 
 import java.sql.{PreparedStatement, ResultSet, Statement}
+import scala.util.{Failure, Success, Using}
 
 class Sql(val query: String, val params: Vector[Any]):
 
-  def runRS()(using con: DbCon): ResultSet =
-    try
-      val ps = con.manager(
-        con.connection.prepareStatement(query)
-      )
-      setValues(ps, params)
-      con.manager(ps.executeQuery())
-    catch
-      case e: Exception =>
-        throw SqlException(e, this)
-
-  def run[E](using con: DbCon, dbe: DbReader[E]): Vector[E] =
-    try
-      val ps = con.manager(
+  def run[E](using con: DbCon, dbReader: DbReader[E]): Vector[E] =
+    Using.Manager(use =>
+      val ps = use(
         con.connection.prepareStatement(query, Statement.RETURN_GENERATED_KEYS)
       )
       setValues(ps, params)
-      val rs = con.manager(ps.executeQuery())
-      dbe.build(rs)
-    catch
-      case e: Exception =>
-        throw SqlException(e, this)
+      val rs = use(ps.executeQuery())
+      dbReader.build(rs)
+    ) match
+      case Failure(t)   => throw SqlException(t, this)
+      case Success(res) => res
 
   /** Exactly like [[java.sql.PreparedStatement]].executeUpdate */
-  def runUpdate(using con: DbCon): Int = ???
+  def runUpdate(using con: DbCon): Int =
+    Using.Manager(use =>
+      val ps = use(con.connection.prepareStatement(query))
+      setValues(ps, params)
+      ps.executeUpdate()
+    ) match
+      case Failure(t)   => throw SqlException(t, this)
+      case Success(res) => res
 
   // todo stored procedures
 

@@ -1,11 +1,11 @@
 package com.augustnagro.magnum
 
-class SqlException(ex: Exception, sql: Sql)
+class SqlException(t: Throwable, sql: Sql)
     extends RuntimeException(
       s"""Error executing query:
          |${sql.query}
          |With message:
-         |${ex.getMessage}
+         |${t.getMessage}
          |""".stripMargin,
-      ex
+      t
     )

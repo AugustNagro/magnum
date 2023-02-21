@@ -1,8 +1,8 @@
 package com.augustnagro.magnum
 
-import java.sql.{Connection, PreparedStatement, ResultSet}
+import java.sql.{Connection, PreparedStatement, ResultSet, Statement}
 import javax.sql.DataSource
-import scala.util.Using
+import scala.util.{Failure, Success, Using}
 import scala.deriving.Mirror
 import scala.compiletime.{
   constValue,
@@ -17,47 +17,36 @@ import scala.reflect.ClassTag
 import scala.quoted.*
 
 def connect[T](dataSource: DataSource)(f: DbCon ?=> T): T =
-  Using
-    .Manager(manager =>
-      val con = manager(dataSource.getConnection)
-      f(using DbCon(con, manager))
-    )
-    .get
+  Using.resource(dataSource.getConnection)(con => f(using DbCon(con)))
 
 def transact[T](dataSource: DataSource)(f: DbTx ?=> T): T =
-  Using
-    .Manager(manager =>
-      val con = manager(dataSource.getConnection)
-      con.setAutoCommit(false)
-      try
-        val res = f(using DbTx(con, manager))
-        con.commit()
-        res
-      catch
-        case t =>
-          con.rollback()
-          throw t
-    )
-    .get
+  Using.resource(dataSource.getConnection)(con =>
+    con.setAutoCommit(false)
+    try
+      val res = f(using DbTx(con))
+      con.commit()
+      res
+    catch
+      case t =>
+        con.rollback()
+        throw t
+  )
 
 def transact[T](dataSource: DataSource, connectionConfig: Connection => Unit)(
     f: DbTx ?=> T
 ): T =
-  Using
-    .Manager(manager =>
-      val con = manager(dataSource.getConnection)
-      connectionConfig(con)
-      con.setAutoCommit(false)
-      try
-        val res = f(using DbTx(con, manager))
-        con.commit()
-        res
-      catch
-        case t =>
-          con.rollback()
-          throw t
-    )
-    .get
+  Using.resource(dataSource.getConnection)(con =>
+    connectionConfig(con)
+    con.setAutoCommit(false)
+    try
+      val res = f(using DbTx(con))
+      con.commit()
+      res
+    catch
+      case t =>
+        con.rollback()
+        throw t
+  )
 
 // todo can be a macro
 extension (sc: StringContext)
@@ -83,18 +72,40 @@ private def schemaNameToSql(sn: DbSchemaName): String =
   if sn.tableAlias.isEmpty then sn.sqlName
   else sn.tableAlias + "." + sn.sqlName
 
-// todo
-def runPreparedBatch[T](values: Iterable[T])(f: T => Sql): Unit =
-  ???
+def runBatch[T, E](values: Iterable[T])(
+    f: T => Sql
+)(using con: DbCon, dbReader: DbReader[E]): Vector[E] =
+  if values.isEmpty then return Vector.empty
+  val firstSql = f(values.head)
 
-def runBatch[T](values: Iterable[T])(f: T => Sql): Unit =
-  ???
+  Using.Manager(use =>
+    val ps = use(
+      con.connection
+        .prepareStatement(firstSql.query, Statement.RETURN_GENERATED_KEYS)
+    )
+    setValues(ps, firstSql.params)
+    ps.addBatch()
+    for v <- values.tail do
+      val sql = f(v)
+      assert(
+        sql.query == firstSql.query,
+        "all queries must be the same for batch PreparedStatement"
+      )
+      setValues(ps, sql.params)
+      ps.addBatch()
+
+    ps.executeBatch()
+    val genRs = use(ps.getGeneratedKeys)
+    dbReader.build(genRs)
+  ) match
+    case Failure(t)   => throw SqlException(t, firstSql)
+    case Success(res) => res
 
 private[magnum] def setValues(
     ps: PreparedStatement,
     params: Vector[Any]
 ): Unit =
-  for (p, i) <- params.iterator.zipWithIndex do
+  for (p, i) <- params.zipWithIndex do
     val javaObject = p match
       case bd: scala.math.BigDecimal => bd.bigDecimal
       case bi: scala.math.BigInt     => bi.bigInteger
