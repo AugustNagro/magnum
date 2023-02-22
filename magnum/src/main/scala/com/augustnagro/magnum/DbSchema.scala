@@ -140,6 +140,7 @@ object DbSchema:
     val dbReaderExpr = Expr.summon[DbReader[E]].get
     val idClassTag = Expr.summon[ClassTag[ID]].get
     val eMirrorExpr = Expr.summon[Mirror.ProductOf[E]].get
+    val genIndexes = genKeyIndexes[E, EC]
     '{
       given dbReader: DbReader[E] = $dbReaderExpr
       given ClassTag[ID] = $idClassTag
@@ -147,6 +148,7 @@ object DbSchema:
       val nameMapper: SqlNameMapper = $sqlNameMapper
       val tblNameSql: String = $tableNameSql
       val defaultAlias = ""
+      val indexes: Array[Int] = ${ Expr(genIndexes) }
 
       val schemaNames: IArray[DbSchemaName] = IArray
         .from($fieldNames)
@@ -227,10 +229,7 @@ object DbSchema:
           val ecValues = ecProduct.productIterator.toVector
 
           Using.Manager(use =>
-            val ps = use(
-              con.connection
-                .prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)
-            )
+            val ps = use(con.connection.prepareStatement(insertSql, indexes))
             setValues(ps, ecValues)
             ps.executeUpdate()
             val rs = use(ps.getGeneratedKeys)
@@ -256,6 +255,41 @@ object DbSchema:
       DbSchemaImpl(defaultAlias, schemaNames, schemaNames.head)
         .asInstanceOf[RES]
     }
+
+  private def genKeyIndexes[E: Type, EC: Type](using Quotes): Array[Int] =
+    import quotes.reflect.*
+    val eMirror = Expr.summon[Mirror.ProductOf[E]].get
+    val ecMirror = Expr.summon[Mirror.ProductOf[EC]].get
+    (eMirror, ecMirror) match
+      case (
+            '{
+              $eM: Mirror.ProductOf[E] {
+                type MirroredElemTypes = eMets
+                type MirroredElemLabels = eMels
+              }
+            },
+            '{
+              $ecM: Mirror.ProductOf[EC] {
+                type MirroredElemLabels = ecMels
+              }
+            }
+          ) =>
+        genKeyIndexesImpl[eMets, eMels, ecMels](Array.empty[Int])
+
+  private def genKeyIndexesImpl[
+      EMets: Type,
+      EMels: Type,
+      ECMels: Type
+  ](res: Array[Int], col: Int = 1)(using Quotes): Array[Int] =
+    import quotes.reflect.*
+    (Type.of[EMets], Type.of[EMels]) match
+      case ('[EmptyTuple], '[EmptyTuple]) => res
+      case ('[eMet *: eMetTail], '[eMel *: eMelTail]) =>
+        val eFieldName = Type.valueOfConstant[eMel].get.toString
+        val newRes =
+          if findEcIndex[ECMels](eFieldName).isDefined then res :+ col
+          else res
+        genKeyIndexesImpl[eMetTail, eMelTail, ECMels](newRes, col + 1)
 
   private def eFromInsert[E: Type, EC: Type](
       rs: Expr[ResultSet],
