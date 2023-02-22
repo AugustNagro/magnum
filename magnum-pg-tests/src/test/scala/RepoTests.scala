@@ -26,9 +26,25 @@ class RepoTests extends FunSuite {
 
   val person = DbSchema[PersonCreator, Person, Long](CamelToSnakeCase)
 
-  val repo = Repo(person)
+  // aliases should not affect generated queries
+  val repo = Repo(person.alias("p"))
 
   test("delete") {
+    connect(ds()) {
+      val p = repo.findById(1L).get
+      repo.delete(p)
+      assertEquals(repo.findById(1L), None)
+    }
+  }
+
+  test("delete invalid") {
+    connect(ds()) {
+      repo.delete(Person(23L, None, "", false, OffsetDateTime.now))
+      assertEquals(8L, repo.count)
+    }
+  }
+
+  test("deleteById") {
     connect(ds()) {
       repo.deleteById(1L)
       repo.deleteById(2L)
@@ -37,10 +53,13 @@ class RepoTests extends FunSuite {
     }
   }
 
-  test("truncate") {
+  test("deleteAll") {
     connect(ds()) {
-      repo.truncate()
-      assertEquals(repo.count, 0L)
+      val p1 = repo.findById(1L).get
+      val p2 = p1.copy(id = 2L)
+      val p3 = p1.copy(id = 99L)
+      repo.deleteAll(Vector(p1, p2, p3))
+      assertEquals(6L, repo.count)
     }
   }
 
@@ -48,6 +67,13 @@ class RepoTests extends FunSuite {
     connect(ds()) {
       repo.deleteAllById(Vector(1L, 2L, 1L))
       assertEquals(6L, repo.count)
+    }
+  }
+
+  test("truncate") {
+    connect(ds()) {
+      repo.truncate()
+      assertEquals(repo.count, 0L)
     }
   }
 
@@ -69,14 +95,108 @@ class RepoTests extends FunSuite {
       )
 
       assertEquals(repo.count, 10L)
+      assertEquals(repo.findById(9L).get.lastName, "Smith")
     }
   }
 
   test("insert invalid") {
-    connect(ds()) {
-      val invalidP = PersonCreator(None, null, false)
-      repo.insert(invalidP)
+    intercept[SqlException] {
+      connect(ds()) {
+        val invalidP = PersonCreator(None, null, false)
+        repo.insert(invalidP)
+      }
     }
+  }
+
+  test("update") {
+    connect(ds()) {
+      val p = repo.findById(1L).get
+      val updated = p.copy(firstName = None)
+      repo.update(updated)
+      assertEquals(repo.findById(1L).get, updated)
+    }
+  }
+
+  test("update invalid") {
+    intercept[SqlException] {
+      connect(ds()) {
+        val p = repo.findById(1L).get
+        val updated = p.copy(lastName = null)
+        repo.update(updated)
+      }
+    }
+  }
+
+  test("insertAll") {
+    connect(ds()) {
+      val newPeople = Vector(
+        PersonCreator(
+          firstName = Some("Chandler"),
+          lastName = "Johnsored",
+          isAdmin = true
+        ),
+        PersonCreator(
+          firstName = None,
+          lastName = "Odysseus",
+          isAdmin = false
+        ),
+        PersonCreator(
+          firstName = Some("Jorge"),
+          lastName = "Masvidal",
+          isAdmin = true
+        )
+      )
+
+      repo.insertAll(newPeople)
+      assertEquals(repo.count, 11L)
+      assertEquals(repo.findById(11L).get.lastName, newPeople.last.lastName)
+    }
+  }
+
+  test("updateAll") {
+    connect(ds()) {
+      val newPeople = Vector(
+        repo.findById(1L).get.copy(lastName = "Peterson"),
+        repo.findById(2L).get.copy(lastName = "Moreno")
+      )
+      repo.updateAll(newPeople)
+      assertEquals(repo.findById(1L).get, newPeople(0))
+      assertEquals(repo.findById(2L).get, newPeople(1))
+    }
+  }
+
+  test("transact") {
+    val count = transact(ds()) {
+      val p = PersonCreator(
+        firstName = Some("Chandler"),
+        lastName = "Brown",
+        isAdmin = false
+      )
+      repo.insert(p)
+      repo.count
+    }
+
+    assertEquals(count, 9L)
+  }
+
+  test("transact failed") {
+    val p = PersonCreator(
+      firstName = Some("Chandler"),
+      lastName = "Brown",
+      isAdmin = false
+    )
+
+    try
+      transact(ds()) {
+        repo.insert(p)
+        throw RuntimeException()
+      }
+      fail("should not reach")
+    catch
+      case _: Exception =>
+        transact(ds()) {
+          assertEquals(repo.count, 8L)
+        }
   }
 
   private def ds(): DataSource =

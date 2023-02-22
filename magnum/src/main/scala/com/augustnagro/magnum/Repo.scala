@@ -16,10 +16,17 @@ open class Repo[EC, E, ID](schema: DbSchema[EC, E, ID])
     extends ImmutableRepo[E, ID](schema):
 
   /** Deletes an entity using its id */
+  def delete(entity: E)(using DbCon): Unit = schema.delete(entity)
+
+  /** Deletes an entity using its id */
   def deleteById(id: ID)(using DbCon): Unit = schema.deleteById(id)
 
   /** Deletes ALL entities */
   def truncate()(using DbCon): Unit = schema.truncate()
+
+  /** Delete all provided entities */
+  def deleteAll(entities: Iterable[E])(using DbCon): Unit =
+    schema.deleteAll(entities)
 
   /** Deletes all entities with an Iterable of ids */
   def deleteAllById(ids: Iterable[ID])(using DbCon): Unit =

@@ -48,7 +48,6 @@ def transact[T](dataSource: DataSource, connectionConfig: Connection => Unit)(
         throw t
   )
 
-// todo can be a macro
 extension (sc: StringContext)
   def sql(args: Any*): Sql =
     if args.isEmpty then return Sql(sc.parts.mkString, Vector.empty)
@@ -98,8 +97,8 @@ def runBatch[T, E](values: Iterable[T])(
     val genRs = use(ps.getGeneratedKeys)
     dbReader.build(genRs)
   ) match
-    case Failure(t)   => throw SqlException(t, firstSql)
     case Success(res) => res
+    case Failure(t)   => throw SqlException(t, firstSql)
 
 private[magnum] def setValues(
     ps: PreparedStatement,

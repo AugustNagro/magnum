@@ -8,7 +8,7 @@ class Sql(val query: String, val params: Vector[Any]):
   def run[E](using con: DbCon, dbReader: DbReader[E]): Vector[E] =
     Using.Manager(use =>
       val ps = use(
-        con.connection.prepareStatement(query, Statement.RETURN_GENERATED_KEYS)
+        con.connection.prepareStatement(query)
       )
       setValues(ps, params)
       val rs = use(ps.executeQuery())

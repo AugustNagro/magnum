@@ -1,6 +1,6 @@
 package com.augustnagro.magnum
 
-import java.sql.{Connection, ResultSet, Statement}
+import java.sql.{Connection, PreparedStatement, ResultSet, Statement}
 import java.time.OffsetDateTime
 import scala.deriving.Mirror
 import scala.compiletime.{
@@ -29,8 +29,10 @@ sealed trait DbSchema[EC, E, ID] extends Selectable:
   private[magnum] def findAll(spec: Spec[E])(using DbCon): Vector[E]
   private[magnum] def findById(id: ID)(using DbCon): Option[E]
   private[magnum] def findAllById(ids: Iterable[ID])(using DbCon): Vector[E]
+  private[magnum] def delete(entity: E)(using DbCon): Unit
   private[magnum] def deleteById(id: ID)(using DbCon): Unit
   private[magnum] def truncate()(using DbCon): Unit
+  private[magnum] def deleteAll(entities: Iterable[E])(using DbCon): Unit
   private[magnum] def deleteAllById(ids: Iterable[ID])(using DbCon): Unit
   private[magnum] def insert(entityCreator: EC)(using DbCon): E
   private[magnum] def insertAll(entityCreators: Iterable[EC])(using
@@ -140,7 +142,6 @@ object DbSchema:
     val dbReaderExpr = Expr.summon[DbReader[E]].get
     val idClassTag = Expr.summon[ClassTag[ID]].get
     val eMirrorExpr = Expr.summon[Mirror.ProductOf[E]].get
-    val genIndexes = genKeyIndexes[E, EC]
     '{
       given dbReader: DbReader[E] = $dbReaderExpr
       given ClassTag[ID] = $idClassTag
@@ -148,7 +149,6 @@ object DbSchema:
       val nameMapper: SqlNameMapper = $sqlNameMapper
       val tblNameSql: String = $tableNameSql
       val defaultAlias = ""
-      val indexes: Array[Int] = ${ Expr(genIndexes) }
 
       val schemaNames: IArray[DbSchemaName] = IArray
         .from($fieldNames)
@@ -161,20 +161,36 @@ object DbSchema:
         )
         .reverse
 
+      // todo @id annotation
+      val idIndex = 0
+      val idName = schemaNames(idIndex).sqlName
+
       val ecInsertFields: IArray[String] =
         IArray.from($ecFieldNames).reverse.map(nameMapper.toColumnName)
       val ecInsertKeys = ecInsertFields.mkString("(", ", ", ")")
       val ecInsertQs =
         IArray.fill(ecInsertFields.size)("?").mkString("(", ", ", ")")
 
+      val updateKeys: String = schemaNames
+        .map(sn => sn.sqlName + " = ?")
+        .patch(idIndex, IArray.empty, 1)
+        .mkString(", ")
+
+      val countSql = s"select count(*) from $tblNameSql"
+      val existsByIdSql = s"select 1 from $tblNameSql where $idName = ?"
+      val findAllSql = s"select * from $tblNameSql"
+      val findByIdSql = s"select * from $tblNameSql where $idName = ?"
+      val findAllByIdSql = s"select * from $tblNameSql where $idName = ANY(?)"
+      val deleteByIdSql = s"delete from $tblNameSql where $idName = ?"
+      val truncateSql = s"truncate table $tblNameSql"
       val insertSql =
         s"insert into $tblNameSql $ecInsertKeys values $ecInsertQs"
+      val updateSql = s"update $tblNameSql set $updateKeys where $idName = ?"
 
       // todo make DbSchema a class with these parameters instead?
       class DbSchemaImpl(
           tableAlias: String,
-          schemaNames: IArray[DbSchemaName],
-          idName: DbSchemaName
+          schemaNames: IArray[DbSchemaName]
       ) extends DbSchema[EC, E, ID]:
 
         def selectDynamic(scalaName: String): Any =
@@ -189,8 +205,7 @@ object DbSchema:
             schemaNames.map(sn => sn.copy(tableAlias = tableAlias))
           new DbSchemaImpl(
             tableAlias,
-            newSchemaNames,
-            newSchemaNames(0)
+            newSchemaNames
           ).asInstanceOf[this.type]
 
         def tableWithAlias: String =
@@ -198,199 +213,127 @@ object DbSchema:
           else tblNameSql + " " + tableAlias
 
         def count(using con: DbCon): Long =
-          sql"select count(*) from $this".run[Long].head
+          Sql(countSql, Vector.empty).run[Long].head
 
         def existsById(id: ID)(using DbCon): Boolean =
-          sql"select 1 from $this where $idName = $id".run[Int].nonEmpty
+          Sql(existsByIdSql, Vector(id)).run[Int].nonEmpty
 
         def findAll(using DbCon): Vector[E] =
-          sql"select * from $this".run
+          Sql(findAllSql, Vector.empty).run
 
         def findAll(spec: Spec[E])(using DbCon): Vector[E] = ???
 
         def findById(id: ID)(using DbCon): Option[E] =
-          sql"select * from $this where $idName = $id".run[E].headOption
+          Sql(findByIdSql, Vector(id)).run[E].headOption
 
         def findAllById(ids: Iterable[ID])(using DbCon): Vector[E] =
-          sql"select * from $this where $idName = ANY(${ids.toArray})".run
+          Sql(findAllByIdSql, Vector(ids.toArray)).run
+
+        def delete(entity: E)(using DbCon): Unit =
+          deleteById(
+            entity
+              .asInstanceOf[Product]
+              .productElement(idIndex)
+              .asInstanceOf[ID]
+          )
 
         def deleteById(id: ID)(using DbCon): Unit =
-          sql"delete from $this where $idName = $id".runUpdate
+          Sql(deleteByIdSql, Vector(id)).runUpdate
 
         def truncate()(using DbCon): Unit =
-          sql"truncate table $this".runUpdate
+          Sql(truncateSql, Vector.empty).runUpdate
 
-        // todo use batch
-        def deleteAllById(ids: Iterable[ID])(using DbCon): Unit =
-          sql"delete from $this where $idName = ANY(${ids.toArray})".runUpdate
+        def deleteAll(entities: Iterable[E])(using DbCon): Unit =
+          deleteAllById(
+            entities.map(e =>
+              e.asInstanceOf[Product].productElement(idIndex).asInstanceOf[ID]
+            )
+          )
+
+        def deleteAllById(ids: Iterable[ID])(using con: DbCon): Unit =
+          Using.Manager(use =>
+            val ps = use(con.connection.prepareStatement(deleteByIdSql))
+            for id <- ids do
+              ps.setObject(1, id)
+              ps.addBatch()
+            ps.executeBatch()
+          ) match
+            case Success(_) => ()
+            case Failure(t) =>
+              throw SqlException(t, Sql(deleteByIdSql, Vector.empty))
 
         def insert(entityCreator: EC)(using con: DbCon): E =
-          val ecProduct = entityCreator.asInstanceOf[Product]
-          val ecValues = ecProduct.productIterator.toVector
-
           Using.Manager(use =>
-            val ps = use(con.connection.prepareStatement(insertSql, indexes))
-            setValues(ps, ecValues)
+            val ps = use(
+              con.connection
+                .prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)
+            )
+            setValues(
+              ps,
+              entityCreator.asInstanceOf[Product].productIterator.toVector
+            )
             ps.executeUpdate()
             val rs = use(ps.getGeneratedKeys)
             rs.next()
-            val c = rs.getMetaData.getColumnCount
-            println("c: " + c)
-            for x <- 1 to c do println(s"$x = ${rs.getObject(x)}")
-            println("xx: " + rs.getObject(2))
-            println("yy: " + rs.getObject(2, classOf[OffsetDateTime]))
-            ${ eFromInsert[E, EC]('{ rs }, '{ ecProduct }) }
+            dbReader.buildSingle(rs)
           ) match
             case Success(res) => res
-            case Failure(ex) => throw SqlException(ex, Sql(insertSql, ecValues))
+            case Failure(ex) =>
+              throw SqlException(ex, Sql(insertSql, Vector.empty))
 
-        def insertAll(entityCreators: Iterable[EC])(using DbCon): Vector[E] =
-          ???
+        def insertAll(
+            entityCreators: Iterable[EC]
+        )(using con: DbCon): Vector[E] =
+          Using.Manager(use =>
+            val ps = use(
+              con.connection
+                .prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)
+            )
+            for ec <- entityCreators do
+              setValues(ps, ec.asInstanceOf[Product].productIterator.toVector)
+              ps.addBatch()
+            ps.executeBatch()
+            val rs = use(ps.getGeneratedKeys)
+            dbReader.build(rs)
+          ) match
+            case Success(res) => res
+            case Failure(t) =>
+              throw SqlException(t, Sql(insertSql, Vector.empty))
 
-        def update(entity: E)(using DbCon): Unit = ???
+        def update(entity: E)(using DbCon): Unit =
+          val entityValues: Vector[Any] = entity
+            .asInstanceOf[Product]
+            .productIterator
+            .toVector
+          // put ID at the end
+          val updateValues =
+            entityValues
+              .patch(idIndex, Vector.empty, 1)
+              .appended(entityValues(idIndex))
+          Sql(updateSql, updateValues).runUpdate
 
-        def updateAll(entities: Iterable[E])(using DbCon): Unit = ???
+        def updateAll(entities: Iterable[E])(using con: DbCon): Unit =
+          Using.Manager(use =>
+            val ps = use(con.connection.prepareStatement(updateSql))
+            for entity <- entities do
+              val entityValues: Vector[Any] = entity
+                .asInstanceOf[Product]
+                .productIterator
+                .toVector
+              // put ID at the end
+              val updateValues = entityValues
+                .patch(idIndex, Vector.empty, 1)
+                .appended(entityValues(idIndex))
+
+              setValues(ps, updateValues)
+              ps.addBatch()
+
+            ps.executeBatch()
+          ) match
+            case Success(_) => ()
+            case Failure(t) =>
+              throw SqlException(t, Sql(updateSql, Vector.empty))
       end DbSchemaImpl
 
-      DbSchemaImpl(defaultAlias, schemaNames, schemaNames.head)
-        .asInstanceOf[RES]
+      DbSchemaImpl(defaultAlias, schemaNames).asInstanceOf[RES]
     }
-
-  private def genKeyIndexes[E: Type, EC: Type](using Quotes): Array[Int] =
-    import quotes.reflect.*
-    val eMirror = Expr.summon[Mirror.ProductOf[E]].get
-    val ecMirror = Expr.summon[Mirror.ProductOf[EC]].get
-    (eMirror, ecMirror) match
-      case (
-            '{
-              $eM: Mirror.ProductOf[E] {
-                type MirroredElemTypes = eMets
-                type MirroredElemLabels = eMels
-              }
-            },
-            '{
-              $ecM: Mirror.ProductOf[EC] {
-                type MirroredElemLabels = ecMels
-              }
-            }
-          ) =>
-        genKeyIndexesImpl[eMets, eMels, ecMels](Array.empty[Int])
-
-  private def genKeyIndexesImpl[
-      EMets: Type,
-      EMels: Type,
-      ECMels: Type
-  ](res: Array[Int], col: Int = 1)(using Quotes): Array[Int] =
-    import quotes.reflect.*
-    (Type.of[EMets], Type.of[EMels]) match
-      case ('[EmptyTuple], '[EmptyTuple]) => res
-      case ('[eMet *: eMetTail], '[eMel *: eMelTail]) =>
-        val eFieldName = Type.valueOfConstant[eMel].get.toString
-        val newRes =
-          if findEcIndex[ECMels](eFieldName).isDefined then res :+ col
-          else res
-        genKeyIndexesImpl[eMetTail, eMelTail, ECMels](newRes, col + 1)
-
-  private def eFromInsert[E: Type, EC: Type](
-      rs: Expr[ResultSet],
-      ec: Expr[Product]
-  )(using Quotes): Expr[E] =
-    import quotes.reflect.*
-    val eMirror = Expr.summon[Mirror.ProductOf[E]].get
-    val ecMirror = Expr.summon[Mirror.ProductOf[EC]].get
-    (eMirror, ecMirror) match
-      case (
-            '{
-              $eM: Mirror.ProductOf[E] {
-                type MirroredElemTypes = eMets
-                type MirroredElemLabels = eMels
-              }
-            },
-            '{
-              $ecM: Mirror.ProductOf[EC] {
-                type MirroredElemLabels = ecMels
-              }
-            }
-          ) =>
-        eFromInsertImpl[E, EC, eMets, eMels, ecMels](rs, ec, Vector.empty)
-
-  private def eFromInsertImpl[
-      E: Type,
-      EC: Type,
-      EMets: Type,
-      EMels: Type,
-      ECMels: Type
-  ](
-      rs: Expr[ResultSet],
-      ec: Expr[Product],
-      exprs: Vector[Expr[Any]],
-      rsCol: Int = 1
-  )(using Quotes): Expr[E] =
-    import quotes.reflect.*
-    (Type.of[EMets], Type.of[EMels]) match
-      case ('[EmptyTuple], '[EmptyTuple]) =>
-        val mirror = Expr.summon[Mirror.ProductOf[E]].get
-        val productExpr = Expr.ofTupleFromSeq(exprs)
-        '{ $mirror.fromProduct($productExpr) }
-
-      case ('[eMet *: eMetTail], '[eMel *: eMelTail]) =>
-        val eFieldName = Type.valueOfConstant[eMel].get.toString
-        findEcIndex[ECMels](eFieldName) match
-          case Some(ecIndex) =>
-            val expr = '{ $ec.productElement(${ Expr(ecIndex) }) }
-            eFromInsertImpl[E, EC, eMetTail, eMelTail, ECMels](
-              rs,
-              ec,
-              exprs :+ expr,
-              rsCol
-            )
-          case None =>
-            val expr = fromRow[eMet](rs, Expr(rsCol))
-            eFromInsertImpl[E, EC, eMetTail, eMelTail, ECMels](
-              rs,
-              ec,
-              exprs :+ expr,
-              rsCol + 1
-            )
-
-  private def findEcIndex[ECMels: Type](eFieldName: String, i: Int = 0)(using
-      Quotes
-  ): Option[Int] =
-    Type.of[ECMels] match
-      case '[EmptyTuple] =>
-        None
-      case '[ecMel *: ecMelTail] =>
-        val ecFieldName = Type.valueOfConstant[ecMel].get.toString
-        if ecFieldName == eFieldName then Some(i)
-        else findEcIndex[ecMelTail](eFieldName, i + 1)
-
-  private def fromRow[Met: Type](rs: Expr[ResultSet], col: Expr[Int])(using
-      Quotes
-  ): Expr[Any] =
-    Type.of[Met] match
-      case '[String]                => '{ $rs.getString($col) }
-      case '[Boolean]               => '{ $rs.getBoolean($col) }
-      case '[Byte]                  => '{ $rs.getByte($col) }
-      case '[Short]                 => '{ $rs.getShort($col) }
-      case '[Int]                   => '{ $rs.getInt($col) }
-      case '[Long]                  => '{ $rs.getLong($col) }
-      case '[Float]                 => '{ $rs.getFloat($col) }
-      case '[Double]                => '{ $rs.getDouble($col) }
-      case '[Array[Byte]]           => '{ $rs.getBytes($col) }
-      case '[java.sql.Date]         => '{ $rs.getDate($col) }
-      case '[java.sql.Time]         => '{ $rs.getTime($col) }
-      case '[java.sql.Timestamp]    => '{ $rs.getTimestamp($col) }
-      case '[java.sql.Ref]          => '{ $rs.getRef($col) }
-      case '[java.sql.Blob]         => '{ $rs.getBlob($col) }
-      case '[java.sql.Clob]         => '{ $rs.getClob($col) }
-      case '[java.net.URL]          => '{ $rs.getURL($col) }
-      case '[java.sql.RowId]        => '{ $rs.getRowId($col) }
-      case '[java.sql.NClob]        => '{ $rs.getNClob($col) }
-      case '[java.sql.SQLXML]       => '{ $rs.getSQLXML($col) }
-      case '[scala.math.BigDecimal] => '{ BigDecimal($rs.getBigDecimal($col)) }
-      case '[scala.math.BigInt] =>
-        '{ BigInt($rs.getObject($col, classOf[java.math.BigInteger])) }
-      case '[Option[t]] => '{ Option(${ fromRow[t](rs, col) }) }
-      case _ =>
-        val cls = Expr.summon[ClassTag[Met]].get
-        '{ $rs.getObject($col, $cls.runtimeClass) }
