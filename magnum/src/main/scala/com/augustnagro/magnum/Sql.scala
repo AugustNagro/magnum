@@ -3,7 +3,7 @@ package com.augustnagro.magnum
 import java.sql.{PreparedStatement, ResultSet, Statement}
 import scala.util.{Failure, Success, Using}
 
-class Sql(val query: String, val params: Vector[Any]):
+case class Sql(query: String, params: Vector[Any]):
 
   def run[E](using con: DbCon, dbReader: DbReader[E]): Vector[E] =
     Using.Manager(use =>

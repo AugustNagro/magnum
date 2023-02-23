@@ -17,7 +17,7 @@ import scala.quoted.*
 import scala.util.{Failure, Success, Using}
 
 sealed trait DbSchema[EC, E, ID] extends Selectable:
-  def selectDynamic(scalaName: String): Any
+  def selectDynamic(scalaName: String): DbSchemaName
   def all: IArray[DbSchemaName]
   def alias: String
   def alias(tableSqlAlias: String): this.type
@@ -176,16 +176,16 @@ object DbSchema:
         .patch(idIndex, IArray.empty, 1)
         .mkString(", ")
 
-      val countSql = s"select count(*) from $tblNameSql"
-      val existsByIdSql = s"select 1 from $tblNameSql where $idName = ?"
-      val findAllSql = s"select * from $tblNameSql"
-      val findByIdSql = s"select * from $tblNameSql where $idName = ?"
-      val findAllByIdSql = s"select * from $tblNameSql where $idName = ANY(?)"
-      val deleteByIdSql = s"delete from $tblNameSql where $idName = ?"
-      val truncateSql = s"truncate table $tblNameSql"
+      val countSql = s"SELECT count(*) FROM $tblNameSql"
+      val existsByIdSql = s"SELECT 1 FROM $tblNameSql WHERE $idName = ?"
+      val findAllSql = s"SELECT * FROM $tblNameSql"
+      val findByIdSql = s"SELECT * FROM $tblNameSql WHERE $idName = ?"
+      val findAllByIdSql = s"SELECT * FROM $tblNameSql WHERE $idName = ANY(?)"
+      val deleteByIdSql = s"DELETE FROM $tblNameSql WHERE $idName = ?"
+      val truncateSql = s"TRUNCATE TABLE $tblNameSql"
       val insertSql =
-        s"insert into $tblNameSql $ecInsertKeys values $ecInsertQs"
-      val updateSql = s"update $tblNameSql set $updateKeys where $idName = ?"
+        s"INSERT INTO $tblNameSql $ecInsertKeys VALUES $ecInsertQs"
+      val updateSql = s"UPDATE $tblNameSql SET $updateKeys WHERE $idName = ?"
 
       // todo make DbSchema a class with these parameters instead?
       class DbSchemaImpl(
@@ -193,7 +193,7 @@ object DbSchema:
           schemaNames: IArray[DbSchemaName]
       ) extends DbSchema[EC, E, ID]:
 
-        def selectDynamic(scalaName: String): Any =
+        def selectDynamic(scalaName: String): DbSchemaName =
           schemaNames.find(_.scalaName == scalaName).get
 
         def all: IArray[DbSchemaName] = schemaNames
