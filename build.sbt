@@ -53,6 +53,7 @@ lazy val magnumMySqlTests = project
   .settings(
     publish / skip := true,
     libraryDependencies ++= Seq(
+      "mysql" % "mysql-connector-java" % "8.0.32",
       "org.scalameta" %% "munit" % mUnitVersion % Test
     )
   )

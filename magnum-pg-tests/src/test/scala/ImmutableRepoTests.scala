@@ -7,7 +7,8 @@ import com.augustnagro.magnum.{
   ImmutableRepo,
   connect,
   sql,
-  transact
+  transact,
+  Id
 }
 
 import java.nio.file.{Files, Path}
@@ -17,16 +18,16 @@ import scala.util.Using
 
 class ImmutableRepoTests extends FunSuite {
 
-  case class Car(id: Long, model: String, topSpeed: Int) derives DbReader
+  case class Car(model: String, @Id id: Long, topSpeed: Int) derives DbReader
 
   val carSchema = DbSchema[Car, Car, Long](CamelToSnakeCase)
 
   val carRepo = ImmutableRepo(carSchema)
 
   val allCars = Vector(
-    Car(1L, "McLaren Senna", 208),
-    Car(2L, "Ferrari F8 Tributo", 212),
-    Car(3L, "Aston Martin Superleggera", 211)
+    Car("McLaren Senna", 1L, 208),
+    Car("Ferrari F8 Tributo", 2L, 212),
+    Car("Aston Martin Superleggera", 3L, 211)
   )
 
   test("count") {
@@ -80,7 +81,7 @@ class ImmutableRepoTests extends FunSuite {
 
       assertNoDiff(
         query.query,
-        "select id, model, top_speed from car where top_speed > ?"
+        "select model, id, top_speed from car where top_speed > ?"
       )
 
       assertEquals(query.params, Vector(minSpeed))
@@ -101,7 +102,7 @@ class ImmutableRepoTests extends FunSuite {
 
       assertNoDiff(
         query.query,
-        "select c.id, c.model, c.top_speed from car c where c.top_speed > ?"
+        "select c.model, c.id, c.top_speed from car c where c.top_speed > ?"
       )
 
       assertEquals(query.run[Car], allCars.tail)

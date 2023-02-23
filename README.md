@@ -3,10 +3,11 @@
 A 'new look' for Repository-style Database access.
 
 
-todo: @id annotation
+todo: testing of other databases
+todo: documentation
 todo: DatabaseType type class that swaps out impl of ANY(*) queries
 todo: sql.run method respect logging level and print query when appropriate.
-todo: error messages
+todo: good error messages
 todo: should update() and delete() methods return a value? (update could generate some keys.
   however, this breaks command-query-seperation.
   And could cause -y-warn-value-discard problems when unused)

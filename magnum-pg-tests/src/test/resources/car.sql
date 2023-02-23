@@ -1,8 +1,8 @@
 drop table if exists car;
 
 create table car (
-    id bigint primary key generated always as identity,
     model varchar(50) not null,
+    id bigint primary key generated always as identity,
     top_speed int
 );
 

@@ -102,7 +102,7 @@ object DbSchema:
       case '[EmptyTuple] =>
         buildDbSchema[EC, E, ID, RES](
           tableNameSql,
-          Expr(fieldNames),
+          Expr(fieldNames.reverse),
           ecFieldNames[EC],
           sqlNameMapper
         )
@@ -126,7 +126,21 @@ object DbSchema:
         val fieldName = Type.valueOfConstant[mel].get.toString
         ecFieldNamesImpl[melTail](fieldName :: res)
       case '[EmptyTuple] =>
-        Expr(res)
+        Expr(res.reverse)
+
+  private def idAnnotIndex[E: Type](using Quotes): Expr[Int] =
+    import quotes.reflect.*
+    val idAnnot = TypeRepr.of[Id]
+    val index = TypeRepr
+      .of[E]
+      .typeSymbol
+      .caseFields
+      .indexWhere(sym =>
+        sym.annotations.exists(term => term.tpe =:= idAnnot)
+      ) match
+      case -1 => 0
+      case x  => x
+    Expr(index)
 
   private def buildDbSchema[
       EC: Type,
@@ -159,14 +173,12 @@ object DbSchema:
             tableAlias = defaultAlias
           )
         )
-        .reverse
 
-      // todo @id annotation
-      val idIndex = 0
+      val idIndex = ${ idAnnotIndex[E] }
       val idName = schemaNames(idIndex).sqlName
 
       val ecInsertFields: IArray[String] =
-        IArray.from($ecFieldNames).reverse.map(nameMapper.toColumnName)
+        IArray.from($ecFieldNames).map(nameMapper.toColumnName)
       val ecInsertKeys = ecInsertFields.mkString("(", ", ", ")")
       val ecInsertQs =
         IArray.fill(ecInsertFields.size)("?").mkString("(", ", ", ")")
