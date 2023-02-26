@@ -205,6 +205,7 @@ class RepoTests extends FunSuite {
     ds.setDatabaseName(PgConfig.Db.name)
     ds.setUser(PgConfig.Db.user)
     ds.setPassword(PgConfig.Db.password)
+    ds.setPortNumbers(Array(PgConfig.Db.port))
     val testSql =
       Files.readString(Path.of(getClass.getResource("/person.sql").toURI))
     Using.resource(ds.getConnection)(con =>

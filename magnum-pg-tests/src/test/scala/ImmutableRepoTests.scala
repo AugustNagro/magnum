@@ -8,7 +8,8 @@ import com.augustnagro.magnum.{
   connect,
   sql,
   transact,
-  Id
+  Id,
+  Spec
 }
 
 import java.nio.file.{Files, Path}
@@ -48,7 +49,13 @@ class ImmutableRepoTests extends FunSuite {
     }
   }
 
-  // todo findAll Spec
+  test("findAll spec") {
+    connect(ds()) {
+      val spec = Spec(carSchema)
+        .where(sql"${carSchema.topSpeed} > 211")
+      assertEquals(carRepo.findAll(spec), Vector(allCars(1)))
+    }
+  }
 
   test("findById") {
     connect(ds()) {
@@ -115,6 +122,7 @@ class ImmutableRepoTests extends FunSuite {
     ds.setDatabaseName(PgConfig.Db.name)
     ds.setUser(PgConfig.Db.user)
     ds.setPassword(PgConfig.Db.password)
+    ds.setPortNumbers(Array(PgConfig.Db.port))
     val testSql =
       Files.readString(Path.of(getClass.getResource("/car.sql").toURI))
     Using.resource(ds.getConnection)(con =>

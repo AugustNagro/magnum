@@ -7,3 +7,4 @@ object PgConfig:
     val user =
       propOrNone("PgConfig.Db.user").orElse(propOrNone("user.name")).get
     val password = propOrElse("PgConfig.Db.password", "")
+    val port = propOrElse("PgConfig.Db.port", "5432").toInt

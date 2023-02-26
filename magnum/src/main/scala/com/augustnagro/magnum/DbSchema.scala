@@ -43,7 +43,9 @@ sealed trait DbSchema[EC, E, ID] extends Selectable:
 
 object DbSchema:
   transparent inline def apply[EC <: Product, E <: Product, ID](
-      sqlNameMapper: SqlNameMapper = SameCase
+      sqlNameMapper: SqlNameMapper = SameCase,
+      // todo
+      dbType: DbType = DbType.Postgres
   )(using
       ecMirror: Mirror.ProductOf[EC],
       eMirror: Mirror.ProductOf[E],
@@ -233,7 +235,8 @@ object DbSchema:
         def findAll(using DbCon): Vector[E] =
           Sql(findAllSql, Vector.empty).run
 
-        def findAll(spec: Spec[E])(using DbCon): Vector[E] = ???
+        def findAll(spec: Spec[E])(using DbCon): Vector[E] =
+          spec.build.run
 
         def findById(id: ID)(using DbCon): Option[E] =
           Sql(findByIdSql, Vector(id)).run[E].headOption
@@ -349,3 +352,15 @@ object DbSchema:
 
       DbSchemaImpl(defaultAlias, schemaNames).asInstanceOf[RES]
     }
+
+private[magnum] def pgDbSchema[EC, E, ID, RES](
+    dbReaderExpr: Expr[DbReader[E]],
+    idClassTag: Expr[ClassTag[ID]],
+    eMirrorExpr: Expr[Mirror.ProductOf[E]]
+): Expr[RES] = ???
+
+private[magnum] def mySqlDbSchema[EC, E, ID, RES](
+    dbReaderExpr: Expr[DbReader[E]],
+    idClassTag: Expr[ClassTag[ID]],
+    eMirrorExpr: Expr[Mirror.ProductOf[E]]
+): Expr[RES] = ???
