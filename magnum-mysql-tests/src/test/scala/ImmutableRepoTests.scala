@@ -9,7 +9,10 @@ class ImmutableRepoTests extends FunSuite:
 
   case class Car(model: String, @Id id: Long, topSpeed: Int) derives DbReader
 
-  val carSchema = DbSchema[Car, Car, Long](CamelToSnakeCase)
+  val carSchema = DbSchema[Car, Car, Long](
+    sqlNameMapper = CamelToSnakeCase,
+    dbType = DbType.MySql
+  )
 
   val carRepo = ImmutableRepo(carSchema)
 

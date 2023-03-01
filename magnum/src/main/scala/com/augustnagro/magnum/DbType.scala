@@ -1,4 +1,6 @@
 package com.augustnagro.magnum
 
 enum DbType:
-  case Postgres, MySql
+  /** For any database that supports the ISO SQL specification */
+  case SqlCompliant
+  case MySql
