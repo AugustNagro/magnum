@@ -1,7 +1,5 @@
 package com.augustnagro.magnum
 
-import jdk.jshell.spi.ExecutionControl.NotImplementedException
-
 import java.sql.{Connection, PreparedStatement, ResultSet, Statement}
 import java.time.OffsetDateTime
 import scala.collection.View
@@ -46,7 +44,7 @@ sealed trait DbSchema[EC, E, ID] extends Selectable:
 
 object DbSchema:
   transparent inline def apply[EC <: Product, E <: Product, ID](
-      sqlNameMapper: SqlNameMapper = SameCase,
+      sqlNameMapper: SqlNameMapper = SqlNameMapper.SameCase,
       dbType: DbType = DbType.SqlCompliant
   )(using
       ecMirror: Mirror.ProductOf[EC],
@@ -163,53 +161,27 @@ object DbSchema:
       sqlNameMapper: Expr[SqlNameMapper],
       dbType: Expr[DbType]
   )(using Quotes): Expr[Any] =
-    // only to avoid 'Match case Unreachable Warning'
-    dbType.value match
-      case Some(tpe) =>
-        swtichDbType[EC, E, ID, RES](
-          tpe,
-          tableNameSql,
-          fieldNames,
-          ecFieldNames,
-          sqlNameMapper
-        )
-      case None =>
-        '{
-          val tpe = $dbType
+    '{
+      ($dbType: @unchecked) match
+        case DbType.SqlCompliant =>
           ${
-            swtichDbType[EC, E, ID, RES](
-              '{ tpe },
+            sqlComplientDbSchema[EC, E, ID, RES](
               tableNameSql,
               fieldNames,
               ecFieldNames,
               sqlNameMapper
             )
           }
-        }
-
-  // only to avoid 'Match case Unreachable Warning'
-  private def swtichDbType[EC: Type, E: Type, ID: Type, RES: Type](
-      dbType: DbType,
-      tableNameSql: Expr[String],
-      fieldNames: Expr[List[String]],
-      ecFieldNames: Expr[List[String]],
-      sqlNameMapper: Expr[SqlNameMapper]
-  )(using Quotes): Expr[RES] =
-    dbType match
-      case DbType.SqlCompliant =>
-        sqlComplientDbSchema[EC, E, ID, RES](
-          tableNameSql,
-          fieldNames,
-          ecFieldNames,
-          sqlNameMapper
-        )
-      case DbType.MySql =>
-        mySqlDbSchema[EC, E, ID, RES](
-          tableNameSql,
-          fieldNames,
-          ecFieldNames,
-          sqlNameMapper
-        )
+        case DbType.MySql =>
+          ${
+            mySqlDbSchema[EC, E, ID, RES](
+              tableNameSql,
+              fieldNames,
+              ecFieldNames,
+              sqlNameMapper
+            )
+          }
+    }
 
   private def sqlComplientDbSchema[EC: Type, E: Type, ID: Type, RES: Type](
       tableNameSql: Expr[String],
@@ -411,7 +383,7 @@ object DbSchema:
               throw SqlException(t, Sql(updateSql, Vector.empty))
       end SqlCompliantDbSchema
 
-      PgDbSchema(defaultAlias, schemaNames).asInstanceOf[RES]
+      SqlCompliantDbSchema(defaultAlias, schemaNames).asInstanceOf[RES]
     }
 
   private def mySqlDbSchema[EC: Type, E: Type, ID: Type, RES: Type](
@@ -425,7 +397,7 @@ object DbSchema:
     val eMirrorExpr = Expr.summon[Mirror.ProductOf[E]].get
     '{
       given dbReader: DbReader[E] = $dbReaderExpr
-      given ClassTag[ID] = $idClassTag
+      given idCls: ClassTag[ID] = $idClassTag
       val eMirror = $eMirrorExpr
       val nameMapper: SqlNameMapper = $sqlNameMapper
       val tblNameSql: String = $tableNameSql
@@ -449,6 +421,7 @@ object DbSchema:
       val ecInsertKeys = ecInsertFields.mkString("(", ", ", ")")
       val ecInsertQs =
         IArray.fill(ecInsertFields.size)("?").mkString("(", ", ", ")")
+      val insertGenKeys = Array(idName)
 
       val updateKeys: String = schemaNames
         .map(sn => sn.sqlName + " = ?")
@@ -505,7 +478,7 @@ object DbSchema:
           Sql(findByIdSql, Vector(id)).run[E].headOption
 
         def findAllById(ids: Iterable[ID])(using DbCon): Vector[E] =
-          throw NotImplementedException(
+          throw UnsupportedOperationException(
             "MySql does not support 'ANY' keyword, and does not support long IN parameter lists. Use findById in a loop instead."
           )
 
@@ -544,10 +517,8 @@ object DbSchema:
 
         def insert(entityCreator: EC)(using con: DbCon): E =
           Using.Manager(use =>
-            val ps = use(
-              con.connection
-                .prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)
-            )
+            val ps =
+              use(con.connection.prepareStatement(insertSql, insertGenKeys))
             setValues(
               ps,
               entityCreator.asInstanceOf[Product].productIterator.toVector
@@ -555,7 +526,12 @@ object DbSchema:
             ps.executeUpdate()
             val rs = use(ps.getGeneratedKeys)
             rs.next()
-            dbReader.buildSingle(rs)
+            val id = rs.getObject(1, idCls.runtimeClass).asInstanceOf[ID]
+            // unfortunately, mysql only will return auto_incremented keys.
+            // it doesn't return default columns, and adding other columns to
+            // the insertGenKeys array doesn't change this behavior. So we need
+            // to query by ID after every insert.
+            findById(id).get
           ) match
             case Success(res) => res
             case Failure(ex) =>
@@ -565,16 +541,18 @@ object DbSchema:
             entityCreators: Iterable[EC]
         )(using con: DbCon): Vector[E] =
           Using.Manager(use =>
-            val ps = use(
-              con.connection
-                .prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)
-            )
+            val ps =
+              use(con.connection.prepareStatement(insertSql, insertGenKeys))
             for ec <- entityCreators do
               setValues(ps, ec.asInstanceOf[Product].productIterator.toVector)
               ps.addBatch()
             ps.executeBatch()
             val rs = use(ps.getGeneratedKeys)
-            dbReader.build(rs)
+            val resBuilder = Vector.newBuilder[E]
+            while rs.next() do
+              val id = rs.getObject(1, idCls.runtimeClass).asInstanceOf[ID]
+              resBuilder += findById(id).get
+            resBuilder.result()
           ) match
             case Success(res) => res
             case Failure(t) =>

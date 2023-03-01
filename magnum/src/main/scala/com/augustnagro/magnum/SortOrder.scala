@@ -4,8 +4,8 @@ trait SortOrder:
   def sql: String
 
 object SortOrder:
-  val Asc: SortOrder = new:
+  object Asc extends SortOrder:
     def sql: String = "ASC"
     
-  val Desc: SortOrder = new:
+  object Desc extends SortOrder:
     def sql: String = "DESC"

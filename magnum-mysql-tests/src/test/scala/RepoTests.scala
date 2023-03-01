@@ -1,14 +1,13 @@
 import com.augustnagro.magnum.*
+import com.mysql.cj.jdbc.MysqlDataSource
 import munit.FunSuite
 
-import java.nio.file.{Files, Path}
-import javax.sql.DataSource
-import org.postgresql.ds.PGSimpleDataSource
-
 import java.time.OffsetDateTime
+import java.nio.file.{Files, Path}
+import java.sql.Connection
 import scala.util.Using
 
-class RepoTests extends FunSuite {
+class RepoTests extends FunSuite:
 
   case class PersonCreator(
       firstName: Option[String],
@@ -24,8 +23,10 @@ class RepoTests extends FunSuite {
       created: OffsetDateTime
   )
 
-  val person =
-    DbSchema[PersonCreator, Person, Long](SqlNameMapper.CamelToSnakeCase)
+  val person = DbSchema[PersonCreator, Person, Long](
+    SqlNameMapper.CamelToSnakeCase,
+    DbType.MySql
+  )
 
   // aliases should not affect generated queries
   val repo = Repo(person.alias("p"))
@@ -200,18 +201,17 @@ class RepoTests extends FunSuite {
         }
   }
 
-  def ds(): DataSource =
-    val ds = PGSimpleDataSource()
-    ds.setServerNames(Array(PgConfig.Db.host))
-    ds.setDatabaseName(PgConfig.Db.name)
-    ds.setUser(PgConfig.Db.user)
-    ds.setPassword(PgConfig.Db.password)
-    ds.setPortNumbers(Array(PgConfig.Db.port))
+  def ds(): MysqlDataSource =
+    val ds = MysqlDataSource()
+    ds.setServerName(MySqlConfig.Db.host)
+    ds.setDatabaseName(MySqlConfig.Db.name)
+    ds.setUser(MySqlConfig.Db.user)
+    ds.setPassword(MySqlConfig.Db.password)
+    ds.setPort(MySqlConfig.Db.port)
+    ds.setAllowMultiQueries(true)
     val testSql =
       Files.readString(Path.of(getClass.getResource("/person.sql").toURI))
     Using.resource(ds.getConnection)(con =>
       con.prepareStatement(testSql).execute()
     )
     ds
-
-}

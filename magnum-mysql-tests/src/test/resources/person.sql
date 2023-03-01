@@ -16,4 +16,4 @@ insert into person (first_name, last_name, is_admin, created) values
 ('John', 'Jay', true, now()),
 ('Thomas', 'Jefferson', true, now()),
 ('James', 'Madison', true, now()),
-(null, 'Nagro', false, timestamp '1997-08-12');
+(null, 'Nagro', false, now());

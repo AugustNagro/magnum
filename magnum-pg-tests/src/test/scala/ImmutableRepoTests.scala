@@ -1,15 +1,15 @@
 import munit.FunSuite
 import org.postgresql.ds.PGSimpleDataSource
 import com.augustnagro.magnum.{
-  CamelToSnakeCase,
   DbReader,
   DbSchema,
+  Id,
   ImmutableRepo,
+  Spec,
+  SqlNameMapper,
   connect,
   sql,
-  transact,
-  Id,
-  Spec
+  transact
 }
 
 import java.nio.file.{Files, Path}
@@ -21,7 +21,7 @@ class ImmutableRepoTests extends FunSuite {
 
   case class Car(model: String, @Id id: Long, topSpeed: Int) derives DbReader
 
-  val carSchema = DbSchema[Car, Car, Long](CamelToSnakeCase)
+  val carSchema = DbSchema[Car, Car, Long](SqlNameMapper.CamelToSnakeCase)
 
   val carRepo = ImmutableRepo(carSchema)
 

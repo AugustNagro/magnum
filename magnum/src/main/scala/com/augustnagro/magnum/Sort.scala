@@ -1,7 +1,7 @@
 package com.augustnagro.magnum
 
 private case class Sort(
-    column: DbSchemaName,
+    column: String,
     direction: SortOrder,
     nullOrder: NullOrder
 )

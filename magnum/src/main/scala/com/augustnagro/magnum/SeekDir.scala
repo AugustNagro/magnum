@@ -4,8 +4,8 @@ trait SeekDir:
   def sql: String
 
 object SeekDir:
-  val Gt: SeekDir = new:
+  object Gt extends SeekDir:
     def sql: String = ">"
 
-  val Lt: SeekDir = new:
+  object Lt extends SeekDir:
     def sql: String = "<"

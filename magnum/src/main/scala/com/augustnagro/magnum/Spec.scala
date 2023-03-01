@@ -18,7 +18,7 @@ class Spec[E] private (
       direction: SortOrder = SortOrder.Asc,
       nullOrder: NullOrder = NullOrder.Last
   ): Spec[E] =
-    val sort = Sort(column, direction, nullOrder)
+    val sort = Sort(toSql(column), direction, nullOrder)
     new Spec(schema, predicates, limit, offset, sort :: sorts)
 
   def limit(limit: Int): Spec[E] =
@@ -34,8 +34,9 @@ class Spec[E] private (
       columnSort: SortOrder,
       nullOrder: NullOrder = NullOrder.Last
   ): Spec[E] =
-    val sort = Sort(column, columnSort, nullOrder)
-    val pred = Sql(s"${column.sqlName} ${seekDirection.sql} ?", Vector(value))
+    val colSql = toSql(column)
+    val sort = Sort(colSql, columnSort, nullOrder)
+    val pred = Sql(s"$colSql ${seekDirection.sql} ?", Vector(value))
     new Spec(schema, pred :: predicates, limit, offset, sort :: sorts)
 
   def build: Sql =
@@ -48,7 +49,7 @@ class Spec[E] private (
 
     val orderByClause = StringJoiner(", ", "ORDER BY ", "").setEmptyValue("")
     for Sort(col, dir, nullOrder) <- sorts.reverse do
-      orderByClause.add(col.sqlName + " " + dir.sql + " " + nullOrder.sql)
+      orderByClause.add(col + " " + dir.sql + " " + nullOrder.sql)
 
     val selectPart = "SELECT * FROM " + schema.tableWithAlias + " "
     val finalSj = StringJoiner(" ", selectPart, "")
@@ -60,6 +61,10 @@ class Spec[E] private (
     for o <- offset do finalSj.add("OFFSET " + o)
 
     Sql(finalSj.toString, allParams.result())
+
+  private def toSql(column: DbSchemaName): String =
+    if column.tableAlias.isEmpty then column.sqlName
+    else column.tableAlias + "." + column.sqlName
 
 object Spec:
   def apply[E](schema: DbSchema[?, E, ?]): Spec[E] =

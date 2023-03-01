@@ -100,7 +100,7 @@ def runBatch[T, E](values: Iterable[T])(
     case Success(res) => res
     case Failure(t)   => throw SqlException(t, firstSql)
 
-private[magnum] def setValues(
+private def setValues(
     ps: PreparedStatement,
     params: Vector[Any]
 ): Unit =
@@ -112,7 +112,7 @@ private[magnum] def setValues(
       case x                         => x
     ps.setObject(i + 1, javaObject)
 
-private[magnum] inline def getFromRow[Met](
+private inline def getFromRow[Met](
     rs: ResultSet,
     columnIndex: Int
 ): Any =

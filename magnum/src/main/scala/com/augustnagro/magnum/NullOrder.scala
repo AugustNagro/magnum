@@ -4,8 +4,8 @@ trait NullOrder:
   def sql: String
 
 object NullOrder:
-  val First: NullOrder = new:
+  object First extends NullOrder:
     def sql: String = "NULLS FIRST"
 
-  val Last: NullOrder = new:
+  object Last extends NullOrder:
     def sql: String = "NULLS LAST"

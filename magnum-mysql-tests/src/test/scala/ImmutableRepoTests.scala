@@ -3,6 +3,7 @@ import munit.FunSuite
 import com.augustnagro.magnum.*
 
 import java.nio.file.{Files, Path}
+import java.sql.Connection
 import scala.util.Using
 
 class ImmutableRepoTests extends FunSuite:
@@ -10,7 +11,7 @@ class ImmutableRepoTests extends FunSuite:
   case class Car(model: String, @Id id: Long, topSpeed: Int) derives DbReader
 
   val carSchema = DbSchema[Car, Car, Long](
-    sqlNameMapper = CamelToSnakeCase,
+    sqlNameMapper = SqlNameMapper.CamelToSnakeCase,
     dbType = DbType.MySql
   )
 
@@ -56,11 +57,59 @@ class ImmutableRepoTests extends FunSuite:
   }
 
   test("findAllByIds") {
+    intercept[UnsupportedOperationException] {
+      connect(ds()) {
+        assertEquals(
+          carRepo.findAllById(Vector(1L, 3L)).map(_.id),
+          Vector(1L, 3L)
+        )
+      }
+    }
+  }
+
+  test("repeatable read transaction") {
+    transact(ds(), withRepeatableRead) {
+      assertEquals(carRepo.count, 3L)
+    }
+  }
+
+  private def withRepeatableRead(con: Connection): Unit =
+    con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
+
+  test("select query") {
     connect(ds()) {
-      assertEquals(
-        carRepo.findAllById(Vector(1L, 3L)).map(_.id),
-        Vector(1L, 3L)
+      val car = carSchema
+      val minSpeed = 210
+      val query =
+        sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
+
+      assertNoDiff(
+        query.query,
+        "select model, id, top_speed from car where top_speed > ?"
       )
+
+      assertEquals(query.params, Vector(minSpeed))
+
+      assertEquals(
+        query.run[Car],
+        allCars.tail
+      )
+    }
+  }
+
+  test("select query with aliasing") {
+    connect(ds()) {
+      val car = carSchema.alias("c")
+      val minSpeed = 210
+      val query =
+        sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
+
+      assertNoDiff(
+        query.query,
+        "select c.model, c.id, c.top_speed from car c where c.top_speed > ?"
+      )
+
+      assertEquals(query.run[Car], allCars.tail)
     }
   }
 
