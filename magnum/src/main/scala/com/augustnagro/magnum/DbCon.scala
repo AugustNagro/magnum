@@ -1,7 +1,6 @@
 package com.augustnagro.magnum
 
-import java.sql.{CallableStatement, Connection, PreparedStatement, Statement}
-import scala.util.Using
+import java.sql.Connection
 
 /** Simple wrapper around java.sql.Connection. Doesn't have the ability to
   * close() or configure.

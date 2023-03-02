@@ -9,33 +9,29 @@ class SpecTests extends FunSuite:
 
   val selectPart = "SELECT * FROM User "
 
-  test("select all") {
+  test("select all"):
     assertEquals(Spec(user).build.query, selectPart)
-  }
 
-  test("empty predicate") {
+  test("empty predicate"):
     assertEquals(Spec(user).where(sql"").build.query, selectPart)
-  }
 
-  test("predicate having param at end") {
+  test("predicate having param at end"):
     val age = 3
     val spec = Spec(user)
       .where(sql"${user.age} > $age")
       .build
     assertEquals(spec.query, selectPart + "WHERE (age > ?)")
     assertEquals(spec.params, Vector(age))
-  }
 
-  test("predicate having param at start") {
+  test("predicate having param at start"):
     val age = 3
     val spec = Spec(user)
       .where(sql"$age < ${user.age}")
       .build
     assertEquals(spec.query, selectPart + "WHERE (? < age)")
     assertEquals(spec.params, Vector(age))
-  }
 
-  test("AND in where predicate") {
+  test("AND in where predicate"):
     val name = "AUGUST"
     val age = 3
     val spec = Spec(user)
@@ -43,9 +39,8 @@ class SpecTests extends FunSuite:
       .build
     assertEquals(spec.query, selectPart + "WHERE (age > ? AND ? = upper(name))")
     assertEquals(spec.params, Vector(age, name))
-  }
 
-  test("multiple where predicates") {
+  test("multiple where predicates"):
     val name = "AUGUST"
     val age = 3
     val spec = Spec(user)
@@ -57,33 +52,29 @@ class SpecTests extends FunSuite:
       selectPart + "WHERE (age > ?) AND (? = upper(name))"
     )
     assertEquals(spec.params, Vector(age, name))
-  }
 
-  test("orderBy") {
+  test("orderBy"):
     val spec = Spec(user)
       .orderBy(user.name, SortOrder.Asc, NullOrder.Last)
       .build
     assertEquals(spec.query, selectPart + "ORDER BY name ASC NULLS LAST")
     assertEquals(spec.params, Vector.empty)
-  }
 
-  test("limit") {
+  test("limit"):
     val spec = Spec(user)
       .limit(99)
       .build
     assertEquals(spec.query, selectPart + "LIMIT 99")
     assertEquals(spec.params, Vector.empty)
-  }
 
-  test("offset") {
+  test("offset"):
     val spec = Spec(user)
       .offset(100)
       .build
     assertEquals(spec.query, selectPart + "OFFSET 100")
     assertEquals(spec.params, Vector.empty)
-  }
 
-  test("seek") {
+  test("seek"):
     val age = 3
     val spec = Spec(user)
       .seek(user.age, SeekDir.Gt, age, SortOrder.Asc)
@@ -93,9 +84,8 @@ class SpecTests extends FunSuite:
       selectPart + "WHERE (age > ?) ORDER BY age ASC NULLS LAST"
     )
     assertEquals(spec.params, Vector(age))
-  }
 
-  test("seek multiple") {
+  test("seek multiple"):
     val age = 3
     val name = "John"
     val spec = Spec(user)
@@ -107,9 +97,8 @@ class SpecTests extends FunSuite:
       selectPart + "WHERE (age > ?) AND (name < ?) ORDER BY age ASC NULLS LAST, name DESC NULLS FIRST"
     )
     assertEquals(spec.params, Vector(age, name))
-  }
 
-  test("everything") {
+  test("everything"):
     val age = 3
     val name = "John"
     val spec = Spec(user)
@@ -124,9 +113,7 @@ class SpecTests extends FunSuite:
     )
     assertEquals(spec.params, Vector(age, name))
 
-  }
-
-  test("aliased schema") {
+  test("aliased schema"):
     val age = 3
     val name = "John"
     val u = user.alias("u")
@@ -141,4 +128,3 @@ class SpecTests extends FunSuite:
       "SELECT * FROM User u WHERE (u.age > ?) AND (u.name < ?) ORDER BY u.age ASC NULLS LAST, u.name DESC NULLS LAST LIMIT 10"
     )
     assertEquals(spec.params, Vector(age, name))
-  }

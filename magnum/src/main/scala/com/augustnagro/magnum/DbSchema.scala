@@ -49,16 +49,35 @@ object DbSchema:
   )(using
       ecMirror: Mirror.ProductOf[EC],
       eMirror: Mirror.ProductOf[E],
-      dbEntity: DbReader[E],
+      dbReader: DbReader[E],
       idCls: ClassTag[ID]
   ) = ${ dbSchemaImpl[EC, E, ID]('{ sqlNameMapper }, '{ dbType }) }
 
-  // todo assert EC effective <: E
+  private def assertECIsSubsetOfE[EC: Type, E: Type](using Quotes): Unit =
+    import quotes.reflect.*
+    val eRepr = TypeRepr.of[E]
+    val ecRepr = TypeRepr.of[EC]
+    val eFields = eRepr.typeSymbol.caseFields
+    val ecFields = ecRepr.typeSymbol.caseFields
+
+    for ecField <- ecFields do
+      if !eFields.exists(f =>
+          f.name == ecField.name &&
+            f.signature.resultSig == ecField.signature.resultSig
+        )
+      then
+        report.error(
+          s"""${ecRepr.show} must be an effective subset of ${eRepr.show}.
+           |Are there any fields on ${ecRepr.show} you forgot to update on ${eRepr.show}?
+           |""".stripMargin
+        )
+
   private def dbSchemaImpl[EC: Type, E: Type, ID: Type](
       sqlNameMapper: Expr[SqlNameMapper],
       dbType: Expr[DbType]
   )(using Quotes): Expr[Any] =
     import quotes.reflect.*
+    assertECIsSubsetOfE[EC, E]
     Expr.summon[Mirror.ProductOf[E]].get match
       case '{
             $m: Mirror.ProductOf[E] {
@@ -221,7 +240,7 @@ object DbSchema:
 
       val updateKeys: String = schemaNames
         .map(sn => sn.sqlName + " = ?")
-        .patch(idIndex, IArray.empty, 1)
+        .patch(idIndex, IArray.empty[String], 1)
         .mkString(", ")
 
       val countSql = s"SELECT count(*) FROM $tblNameSql"
@@ -425,7 +444,7 @@ object DbSchema:
 
       val updateKeys: String = schemaNames
         .map(sn => sn.sqlName + " = ?")
-        .patch(idIndex, IArray.empty, 1)
+        .patch(idIndex, IArray.empty[String], 1)
         .mkString(", ")
 
       val countSql = s"SELECT count(*) FROM $tblNameSql"

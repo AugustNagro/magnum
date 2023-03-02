@@ -65,10 +65,13 @@ object DbReader:
   inline given derived[E](using m: Mirror.ProductOf[E]): DbReader[E] =
     type Mets = m.MirroredElemTypes
     inline val arity = constValue[Tuple.Size[Mets]]
-    (rs: ResultSet) =>
-      buildSingleDefault[E, m.MirroredElemTypes](rs, m, Array.ofDim[Any](arity))
-
-end DbReader
+    new DbReader[E]:
+      def buildSingle(rs: ResultSet): E =
+        buildSingleDefault[E, m.MirroredElemTypes](
+          rs,
+          m,
+          Array.ofDim[Any](arity)
+        )
 
 private inline def buildSingleDefault[E, Mets](
     rs: ResultSet,

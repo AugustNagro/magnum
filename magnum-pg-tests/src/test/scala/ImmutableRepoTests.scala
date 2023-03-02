@@ -1,23 +1,13 @@
 import munit.FunSuite
 import org.postgresql.ds.PGSimpleDataSource
-import com.augustnagro.magnum.{
-  DbReader,
-  DbSchema,
-  Id,
-  ImmutableRepo,
-  Spec,
-  SqlNameMapper,
-  connect,
-  sql,
-  transact
-}
+import com.augustnagro.magnum.*
 
 import java.nio.file.{Files, Path}
 import java.sql.Connection
 import javax.sql.DataSource
 import scala.util.Using
 
-class ImmutableRepoTests extends FunSuite {
+class ImmutableRepoTests extends FunSuite:
 
   case class Car(model: String, @Id id: Long, topSpeed: Int) derives DbReader
 
@@ -31,56 +21,44 @@ class ImmutableRepoTests extends FunSuite {
     Car("Aston Martin Superleggera", 3L, 211)
   )
 
-  test("count") {
-    val count = connect(ds())(carRepo.count)
-    assertEquals(count, 3L)
-  }
+  test("count"):
+    connect(ds()):
+      assertEquals(carRepo.count, 3L)
 
-  test("existsById") {
-    connect(ds()) {
+  test("existsById"):
+    connect(ds()):
       assert(carRepo.existsById(3L))
       assert(!carRepo.existsById(4L))
-    }
-  }
 
-  test("findAll") {
-    connect(ds()) {
-      assertEquals(carRepo.findAll, allCars)
-    }
-  }
+  test("findAll"):
+    val allCars = connect(ds()):
+      carRepo.findAll
+    assertEquals(allCars, allCars)
 
-  test("findAll spec") {
-    connect(ds()) {
+  test("findAll spec"):
+    connect(ds()):
       val spec = Spec(carSchema)
         .where(sql"${carSchema.topSpeed} > 211")
       assertEquals(carRepo.findAll(spec), Vector(allCars(1)))
-    }
-  }
 
-  test("findById") {
-    connect(ds()) {
+  test("findById"):
+    connect(ds()):
       assertEquals(carRepo.findById(3L).get, allCars.last)
       assertEquals(carRepo.findById(4L), None)
-    }
-  }
 
-  test("findAllByIds") {
-    connect(ds()) {
+  test("findAllByIds"):
+    connect(ds()):
       assertEquals(
         carRepo.findAllById(Vector(1L, 3L)).map(_.id),
         Vector(1L, 3L)
       )
-    }
-  }
 
-  test("repeatable read transaction") {
-    transact(ds(), withRepeatableRead) {
+  test("repeatable read transaction"):
+    transact(ds(), withRepeatableRead):
       assertEquals(carRepo.count, 3L)
-    }
-  }
 
-  test("select query") {
-    connect(ds()) {
+  test("select query"):
+    connect(ds()):
       val car = carSchema
       val minSpeed = 210
       val query =
@@ -90,18 +68,14 @@ class ImmutableRepoTests extends FunSuite {
         query.query,
         "select model, id, top_speed from car where top_speed > ?"
       )
-
       assertEquals(query.params, Vector(minSpeed))
-
       assertEquals(
         query.run[Car],
         allCars.tail
       )
-    }
-  }
 
-  test("select query with aliasing") {
-    connect(ds()) {
+  test("select query with aliasing"):
+    connect(ds()):
       val car = carSchema.alias("c")
       val minSpeed = 210
       val query =
@@ -111,10 +85,7 @@ class ImmutableRepoTests extends FunSuite {
         query.query,
         "select c.model, c.id, c.top_speed from car c where c.top_speed > ?"
       )
-
       assertEquals(query.run[Car], allCars.tail)
-    }
-  }
 
   private def ds(): DataSource =
     val ds = PGSimpleDataSource()
@@ -133,4 +104,3 @@ class ImmutableRepoTests extends FunSuite {
   private def withRepeatableRead(con: Connection): Unit =
     con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
 
-}

@@ -3,7 +3,7 @@ inThisBuild(
     organization := "com.augustnagro",
     version := "0.1.0-SNAPSHOT",
     versionScheme := Some("early-semver"),
-    scalaVersion := "3.2.2",
+    scalaVersion := "3.3.0-RC3",
     homepage := Some(url("https://github.com/AugustNagro/magnum")),
     licenses += ("Apache-2.0", url(
       "https://opensource.org/licenses/Apache-2.0"

@@ -31,56 +31,44 @@ class RepoTests extends FunSuite:
   // aliases should not affect generated queries
   val repo = Repo(person.alias("p"))
 
-  test("delete") {
-    connect(ds()) {
+  test("delete"):
+    connect(ds()):
       val p = repo.findById(1L).get
       repo.delete(p)
       assertEquals(repo.findById(1L), None)
-    }
-  }
 
-  test("delete invalid") {
-    connect(ds()) {
+  test("delete invalid"):
+    connect(ds()):
       repo.delete(Person(23L, None, "", false, OffsetDateTime.now))
       assertEquals(8L, repo.count)
-    }
-  }
 
-  test("deleteById") {
-    connect(ds()) {
+  test("deleteById"):
+    connect(ds()):
       repo.deleteById(1L)
       repo.deleteById(2L)
       repo.deleteById(1L)
       assertEquals(repo.findAll.size, 6)
-    }
-  }
 
-  test("deleteAll") {
-    connect(ds()) {
+  test("deleteAll"):
+    connect(ds()):
       val p1 = repo.findById(1L).get
       val p2 = p1.copy(id = 2L)
       val p3 = p1.copy(id = 99L)
       repo.deleteAll(Vector(p1, p2, p3))
       assertEquals(6L, repo.count)
-    }
-  }
 
-  test("deleteAllById") {
-    connect(ds()) {
+  test("deleteAllById"):
+    connect(ds()):
       repo.deleteAllById(Vector(1L, 2L, 1L))
       assertEquals(6L, repo.count)
-    }
-  }
 
-  test("truncate") {
-    connect(ds()) {
+  test("truncate"):
+    connect(ds()):
       repo.truncate()
       assertEquals(repo.count, 0L)
-    }
-  }
 
-  test("insert") {
-    connect(ds()) {
+  test("insert"):
+    connect(ds()):
       repo.insert(
         PersonCreator(
           firstName = Some("John"),
@@ -98,39 +86,29 @@ class RepoTests extends FunSuite:
 
       assertEquals(repo.count, 10L)
       assertEquals(repo.findById(9L).get.lastName, "Smith")
-    }
-  }
 
-  test("insert invalid") {
-    intercept[SqlException] {
-      connect(ds()) {
+  test("insert invalid"):
+    intercept[SqlException]:
+      connect(ds()):
         val invalidP = PersonCreator(None, null, false)
         repo.insert(invalidP)
-      }
-    }
-  }
 
-  test("update") {
-    connect(ds()) {
+  test("update"):
+    connect(ds()):
       val p = repo.findById(1L).get
       val updated = p.copy(firstName = None)
       repo.update(updated)
       assertEquals(repo.findById(1L).get, updated)
-    }
-  }
 
-  test("update invalid") {
-    intercept[SqlException] {
-      connect(ds()) {
+  test("update invalid"):
+    intercept[SqlException]:
+      connect(ds()):
         val p = repo.findById(1L).get
         val updated = p.copy(lastName = null)
         repo.update(updated)
-      }
-    }
-  }
 
-  test("insertAll") {
-    connect(ds()) {
+  test("insertAll"):
+    connect(ds()):
       val newPeople = Vector(
         PersonCreator(
           firstName = Some("Chandler"),
@@ -152,11 +130,9 @@ class RepoTests extends FunSuite:
       repo.insertAll(newPeople)
       assertEquals(repo.count, 11L)
       assertEquals(repo.findById(11L).get.lastName, newPeople.last.lastName)
-    }
-  }
 
-  test("updateAll") {
-    connect(ds()) {
+  test("updateAll"):
+    connect(ds()):
       val newPeople = Vector(
         repo.findById(1L).get.copy(lastName = "Peterson"),
         repo.findById(2L).get.copy(lastName = "Moreno")
@@ -164,11 +140,9 @@ class RepoTests extends FunSuite:
       repo.updateAll(newPeople)
       assertEquals(repo.findById(1L).get, newPeople(0))
       assertEquals(repo.findById(2L).get, newPeople(1))
-    }
-  }
 
-  test("transact") {
-    val count = transact(ds()) {
+  test("transact"):
+    val count = transact(ds()):
       val p = PersonCreator(
         firstName = Some("Chandler"),
         lastName = "Brown",
@@ -176,30 +150,23 @@ class RepoTests extends FunSuite:
       )
       repo.insert(p)
       repo.count
-    }
-
     assertEquals(count, 9L)
-  }
 
-  test("transact failed") {
+  test("transact failed"):
     val p = PersonCreator(
       firstName = Some("Chandler"),
       lastName = "Brown",
       isAdmin = false
     )
-
     try
-      transact(ds()) {
+      transact(ds()):
         repo.insert(p)
         throw RuntimeException()
-      }
       fail("should not reach")
     catch
       case _: Exception =>
-        transact(ds()) {
+        transact(ds()):
           assertEquals(repo.count, 8L)
-        }
-  }
 
   def ds(): MysqlDataSource =
     val ds = MysqlDataSource()
