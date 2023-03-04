@@ -2,17 +2,16 @@
 
 A 'new look' for Repository-style Database access.
 
+Supports any database with a JDBC driver, including:
+* Postgres
+* MySql
+* H2
 
-todo: try scala 3.3 rc
-todo: delete DbConfig class
+todo: test containers..
 todo: testing of other databases: Oracle, MSSQL, DB2, SQLlite, Cassandra, Clickhouse, H2
 todo: documentation
-todo: DatabaseType type class that swaps out impl of ANY(*) queries
 todo: sql.run method respect logging level and print query when appropriate.
 todo: good error messages
-todo: should update() and delete() methods return a value? (update could generate some keys.
-  however, this breaks command-query-seperation.
-  And could cause -y-warn-value-discard problems when unused)
 
 Todo: Comparison with existing frameworks:
 

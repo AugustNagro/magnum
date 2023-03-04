@@ -6,3 +6,4 @@ enum DbType:
     */
   case SqlCompliant
   case MySql
+  case H2

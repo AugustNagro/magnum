@@ -1,13 +1,21 @@
-import munit.FunSuite
-import org.postgresql.ds.PGSimpleDataSource
 import com.augustnagro.magnum.*
+import com.dimafeng.testcontainers.OracleContainer
+import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
+import munit.FunSuite
+import org.testcontainers.utility.DockerImageName
+import oracle.jdbc.datasource.impl.OracleDataSource
 
 import java.nio.file.{Files, Path}
 import java.sql.Connection
+import java.time.OffsetDateTime
 import javax.sql.DataSource
 import scala.util.Using
 
-class ImmutableRepoTests extends FunSuite:
+class OracleTests extends FunSuite, TestContainersFixtures:
+
+  /*
+  Immutable Repo Tests
+   */
 
   case class Car(model: String, @Id id: Long, topSpeed: Int) derives DbReader
 
@@ -31,9 +39,9 @@ class ImmutableRepoTests extends FunSuite:
       assert(!carRepo.existsById(4L))
 
   test("findAll"):
-    val allCars = connect(ds()):
+    val cars = connect(ds()):
       carRepo.findAll
-    assertEquals(allCars, allCars)
+    assertEquals(cars, allCars)
 
   test("findAll spec"):
     connect(ds()):
@@ -56,6 +64,9 @@ class ImmutableRepoTests extends FunSuite:
   test("repeatable read transaction"):
     transact(ds(), withRepeatableRead):
       assertEquals(carRepo.count, 3L)
+
+  private def withRepeatableRead(con: Connection): Unit =
+    con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
 
   test("select query"):
     connect(ds()):
@@ -87,20 +98,46 @@ class ImmutableRepoTests extends FunSuite:
       )
       assertEquals(query.run[Car], allCars.tail)
 
-  private def ds(): DataSource =
-    val ds = PGSimpleDataSource()
-    ds.setServerNames(Array(PgConfig.Db.host))
-    ds.setDatabaseName(PgConfig.Db.name)
-    ds.setUser(PgConfig.Db.user)
-    ds.setPassword(PgConfig.Db.password)
-    ds.setPortNumbers(Array(PgConfig.Db.port))
-    val testSql =
-      Files.readString(Path.of(getClass.getResource("/car.sql").toURI))
-    Using.resource(ds.getConnection)(con =>
-      con.prepareStatement(testSql).execute()
-    )
+  val oracleContainer = ForAllContainerFixture(
+    OracleContainer
+      .Def(dockerImageName =
+        DockerImageName.parse(
+          "gvenzl/oracle-xe:21.3.0"
+        )
+      )
+      .createContainer()
+  )
+
+  override def munitFixtures: Seq[Fixture[_]] =
+    super.munitFixtures :+ oracleContainer
+
+  def ds(): DataSource =
+    val oracle = oracleContainer()
+    val ds = OracleDataSource()
+    ds.setURL(oracle.jdbcUrl)
+    ds.setUser(oracle.username)
+    ds.setPassword(oracle.password)
+    Using.resource(ds.getConnection()): con =>
+      val stmt = con.createStatement()
+      try stmt.execute("drop table car")
+      catch case _ => ()
+      stmt.execute(
+        """create table car (
+          |  model varchar2(50) not null,
+          |  id number generated always as identity,
+          |  top_speed number
+          |)""".stripMargin
+      )
+      stmt.execute(
+        """insert into car (model, top_speed)
+          |values ('McLaren Senna', 208)""".stripMargin
+      )
+      stmt.execute(
+        """insert into car (model, top_speed)
+          |values ('Ferrari F8 Tributo', 212)""".stripMargin
+      )
+      stmt.execute(
+        """insert into car (model, top_speed)
+          |values ('Aston Martin Superleggera', 211)""".stripMargin
+      )
     ds
-
-  private def withRepeatableRead(con: Connection): Unit =
-    con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
-
