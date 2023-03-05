@@ -8,6 +8,7 @@ Supports any database with a JDBC driver, including:
 * H2
 * Oracle
 
+todo: remove private part from  private[magnum] def existsById(id: ID)(using DbCon): Boolean
 todo: Factory db support
 todo: testing of other databases: Oracle, MSSQL, DB2, SQLlite, Cassandra, Clickhouse, H2
 todo: documentation

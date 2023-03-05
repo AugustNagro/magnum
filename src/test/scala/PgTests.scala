@@ -23,7 +23,10 @@ class PgTests extends FunSuite, TestContainersFixtures:
 
   case class Car(model: String, @Id id: Long, topSpeed: Int) derives DbReader
 
-  val carSchema = DbSchema[Car, Car, Long](SqlNameMapper.CamelToSnakeCase)
+  val carSchema = DbSchema[Car, Car, Long](
+    PostgresDbType,
+    SqlNameMapper.CamelToSnakeCase
+  )
 
   val carRepo = ImmutableRepo(carSchema)
 
@@ -119,8 +122,10 @@ class PgTests extends FunSuite, TestContainersFixtures:
       created: OffsetDateTime
   )
 
-  val person =
-    DbSchema[PersonCreator, Person, Long](SqlNameMapper.CamelToSnakeCase)
+  val person = DbSchema[PersonCreator, Person, Long](
+    PostgresDbType,
+    SqlNameMapper.CamelToSnakeCase
+  )
 
   // aliases should not affect generated queries
   val personRepo = Repo(person.alias("p"))

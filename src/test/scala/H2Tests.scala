@@ -14,8 +14,8 @@ class H2Tests extends FunSuite:
   case class Car(model: String, @Id id: Long, topSpeed: Int) derives DbReader
 
   val carSchema = DbSchema[Car, Car, Long](
-    SqlNameMapper.CamelToSnakeCase,
-    DbType.H2
+    H2DbType,
+    SqlNameMapper.CamelToSnakeCase
   )
 
   val carRepo = ImmutableRepo(carSchema)
@@ -110,8 +110,8 @@ class H2Tests extends FunSuite:
   )
 
   val person = DbSchema[PersonCreator, Person, Long](
-    SqlNameMapper.CamelToSnakeCase,
-    DbType.H2
+    H2DbType,
+    SqlNameMapper.CamelToSnakeCase
   )
 
   // aliases should not affect generated queries

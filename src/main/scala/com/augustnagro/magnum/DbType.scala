@@ -1,11 +1,18 @@
 package com.augustnagro.magnum
 
-enum DbType:
-  /** For any database that supports enough of the ISO SQL specification to
-    * implement all Repo methods
-    */
-  case SqlCompliant
-  case MySql
-  case H2
-  case Oracle
-  case Postgres
+import scala.reflect.ClassTag
+import scala.deriving.Mirror
+
+/** Factory for Repos */
+trait DbType:
+  def build[EC, E, ID, RES](
+      tableNameSql: String,
+      fieldNames: List[String],
+      ecFieldNames: List[String],
+      sqlNameMapper: SqlNameMapper,
+      idIndex: Int
+  )(using
+      dbReader: DbReader[E],
+      idClassTag: ClassTag[ID],
+      eMirror: Mirror.ProductOf[E]
+  ): RES

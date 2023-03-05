@@ -20,8 +20,8 @@ class OracleTests extends FunSuite, TestContainersFixtures:
   case class Car(model: String, @Id id: Long, topSpeed: Int) derives DbReader
 
   val carSchema = DbSchema[Car, Car, Long](
-    SqlNameMapper.CamelToSnakeCase,
-    DbType.Oracle
+    OracleDbType,
+    SqlNameMapper.CamelToSnakeCase
   )
 
   val carRepo = ImmutableRepo(carSchema)
@@ -120,8 +120,8 @@ class OracleTests extends FunSuite, TestContainersFixtures:
   )
 
   val person = DbSchema[PersonCreator, Person, Long](
-    SqlNameMapper.CamelToSnakeCase,
-    DbType.Oracle
+    OracleDbType,
+    SqlNameMapper.CamelToSnakeCase
   )
 
   // aliases should not affect generated queries

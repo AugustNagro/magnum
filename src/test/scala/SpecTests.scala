@@ -5,7 +5,7 @@ class SpecTests extends FunSuite:
 
   case class User(id: Long, name: String, age: Int)
 
-  val user = DbSchema[User, User, Long]()
+  val user = DbSchema[User, User, Long](PostgresDbType)
 
   val selectPart = "SELECT * FROM User "
 

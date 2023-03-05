@@ -20,8 +20,8 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
   case class Car(model: String, @Id id: Long, topSpeed: Int) derives DbReader
 
   val carSchema = DbSchema[Car, Car, Long](
-    sqlNameMapper = SqlNameMapper.CamelToSnakeCase,
-    dbType = DbType.MySql
+    dbType = MySqlDbType,
+    sqlNameMapper = SqlNameMapper.CamelToSnakeCase
   )
 
   val carRepo = ImmutableRepo(carSchema)
@@ -116,8 +116,8 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
   )
 
   val person = DbSchema[PersonCreator, Person, Long](
-    SqlNameMapper.CamelToSnakeCase,
-    DbType.MySql
+    MySqlDbType,
+    SqlNameMapper.CamelToSnakeCase
   )
 
   // aliases should not affect generated queries
