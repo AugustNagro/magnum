@@ -6,8 +6,9 @@ Supports any database with a JDBC driver, including:
 * Postgres
 * MySql
 * H2
+* Oracle
 
-todo: test containers..
+todo: Factory db support
 todo: testing of other databases: Oracle, MSSQL, DB2, SQLlite, Cassandra, Clickhouse, H2
 todo: documentation
 todo: sql.run method respect logging level and print query when appropriate.
