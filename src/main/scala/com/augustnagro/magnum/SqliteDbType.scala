@@ -7,7 +7,7 @@ import scala.deriving.Mirror
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Using}
 
-object PostgresDbType extends DbType:
+object SqliteDbType extends DbType:
   def buildDbSchema[EC, E, ID, RES](
       tableNameSql: String,
       fieldNames: List[String],
@@ -47,14 +47,13 @@ object PostgresDbType extends DbType:
     val existsByIdSql = s"SELECT 1 FROM $tableNameSql WHERE $idName = ?"
     val findAllSql = s"SELECT * FROM $tableNameSql"
     val findByIdSql = s"SELECT * FROM $tableNameSql WHERE $idName = ?"
-    val findAllByIdSql = s"SELECT * FROM $tableNameSql WHERE $idName = ANY(?)"
     val deleteByIdSql = s"DELETE FROM $tableNameSql WHERE $idName = ?"
-    val truncateSql = s"TRUNCATE TABLE $tableNameSql"
+    val truncateSql = s"DELETE FROM $tableNameSql"
     val insertSql =
       s"INSERT INTO $tableNameSql $ecInsertKeys VALUES $ecInsertQs"
     val updateSql = s"UPDATE $tableNameSql SET $updateKeys WHERE $idName = ?"
 
-    class PostgresSchema(
+    class SqliteSchema(
         tableAlias: String,
         schemaNames: IArray[DbSchemaName]
     ) extends DbSchema[EC, E, ID]:
@@ -68,7 +67,7 @@ object PostgresDbType extends DbType:
       def alias(tableAlias: String): this.type =
         val newSchemaNames =
           schemaNames.map(sn => sn.copy(tableAlias = tableAlias))
-        new PostgresSchema(
+        new SqliteSchema(
           tableAlias,
           newSchemaNames
         ).asInstanceOf[this.type]
@@ -93,7 +92,9 @@ object PostgresDbType extends DbType:
         Sql(findByIdSql, Vector(id)).run[E].headOption
 
       def findAllById(ids: Iterable[ID])(using DbCon): Vector[E] =
-        Sql(findAllByIdSql, Vector(ids.toArray)).run
+        throw UnsupportedOperationException(
+          "Sqlite does not support 'ANY' keyword, and does not support long IN parameter lists. Use findById in a loop instead."
+        )
 
       def delete(entity: E)(using DbCon): Unit =
         deleteById(
@@ -134,15 +135,22 @@ object PostgresDbType extends DbType:
           val insertValues =
             entityCreator.asInstanceOf[Product].productIterator.toVector
           logSql(insertSql, insertValues)
-          val ps = use(
-            con.connection
-              .prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)
-          )
+          val ps =
+            use(
+              con.connection
+                .prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)
+            )
           setValues(ps, insertValues)
           ps.executeUpdate()
           val rs = use(ps.getGeneratedKeys)
           rs.next()
-          dbReader.buildSingle(rs)
+          // unsafe cast, but next line will fail if wrong.
+          val id = rs.getObject(1).asInstanceOf[ID]
+          // unfortunately, sqlite only will return the primary key.
+          // it doesn't return default columns, and adding other columns to
+          // the insertGenKeys array doesn't change this behavior. So we need
+          // to query by ID after inserting.
+          findById(id).get
         ) match
           case Success(res) => res
           case Failure(ex) =>
@@ -162,7 +170,11 @@ object PostgresDbType extends DbType:
             ps.addBatch()
           ps.executeBatch()
           val rs = use(ps.getGeneratedKeys)
-          dbReader.build(rs)
+          val resBuilder = Vector.newBuilder[E]
+          while rs.next() do
+            val id = rs.getObject(1).asInstanceOf[ID]
+            resBuilder += findById(id).get
+          resBuilder.result()
         ) match
           case Success(res) => res
           case Failure(t) =>
@@ -202,5 +214,5 @@ object PostgresDbType extends DbType:
           case Success(_) => ()
           case Failure(t) =>
             throw SqlException(t, Sql(updateSql, Vector.empty))
-    end PostgresSchema
-    PostgresSchema(DbSchema.DefaultAlias, schemaNames).asInstanceOf[RES]
+    end SqliteSchema
+    SqliteSchema(DbSchema.DefaultAlias, schemaNames).asInstanceOf[RES]

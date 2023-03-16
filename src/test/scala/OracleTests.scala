@@ -108,7 +108,7 @@ class OracleTests extends FunSuite, TestContainersFixtures:
   case class PersonCreator(
       firstName: Option[String],
       lastName: String,
-      isAdmin: Boolean
+      isAdmin: String
   )
 
   case class Person(
@@ -120,8 +120,8 @@ class OracleTests extends FunSuite, TestContainersFixtures:
   )
 
   val person = DbSchema[PersonCreator, Person, Long](
-    OracleDbType,
-    SqlNameMapper.CamelToSnakeCase
+    dbType = OracleDbType,
+    sqlNameMapper = SqlNameMapper.CamelToSnakeCase
   )
 
   // aliases should not affect generated queries
@@ -132,6 +132,139 @@ class OracleTests extends FunSuite, TestContainersFixtures:
       val p = personRepo.findById(1L).get
       personRepo.delete(p)
       assertEquals(personRepo.findById(1L), None)
+
+  test("delete invalid"):
+    connect(ds()):
+      personRepo.delete(Person(23L, None, "", "N", OffsetDateTime.now))
+      assertEquals(8L, personRepo.count)
+
+  test("deleteById"):
+    connect(ds()):
+      personRepo.deleteById(1L)
+      personRepo.deleteById(2L)
+      personRepo.deleteById(1L)
+      assertEquals(personRepo.findAll.size, 6)
+
+  test("deleteAll"):
+    connect(ds()):
+      val p1 = personRepo.findById(1L).get
+      val p2 = p1.copy(id = 2L)
+      val p3 = p1.copy(id = 99L)
+      personRepo.deleteAll(Vector(p1, p2, p3))
+      assertEquals(6L, personRepo.count)
+
+  test("deleteAllById"):
+    connect(ds()):
+      personRepo.deleteAllById(Vector(1L, 2L, 1L))
+      assertEquals(6L, personRepo.count)
+
+  test("truncate"):
+    connect(ds()):
+      personRepo.truncate()
+      assertEquals(personRepo.count, 0L)
+
+  test("insert"):
+    connect(ds()):
+      personRepo.insert(
+        PersonCreator(
+          firstName = Some("John"),
+          lastName = "Smith",
+          isAdmin = "N"
+        )
+      )
+      personRepo.insert(
+        PersonCreator(
+          firstName = None,
+          lastName = "Prince",
+          isAdmin = "Y"
+        )
+      )
+      assertEquals(personRepo.count, 10L)
+      assertEquals(personRepo.findById(9L).get.lastName, "Smith")
+
+  test("insert invalid"):
+    intercept[SqlException]:
+      connect(ds()):
+        val invalidP = PersonCreator(None, null, "N")
+        personRepo.insert(invalidP)
+
+  test("update"):
+    connect(ds()):
+      val p = personRepo.findById(1L).get
+      val updated = p.copy(firstName = None)
+      personRepo.update(updated)
+      assertEquals(personRepo.findById(1L).get, updated)
+
+  test("update invalid"):
+    intercept[SqlException]:
+      connect(ds()):
+        val p = personRepo.findById(1L).get
+        val updated = p.copy(lastName = null)
+        personRepo.update(updated)
+
+  test("insertAll"):
+    connect(ds()):
+      val newPeople = Vector(
+        PersonCreator(
+          firstName = Some("Chandler"),
+          lastName = "Johnsored",
+          isAdmin = "Y"
+        ),
+        PersonCreator(
+          firstName = None,
+          lastName = "Odysseus",
+          isAdmin = "N"
+        ),
+        PersonCreator(
+          firstName = Some("Jorge"),
+          lastName = "Masvidal",
+          isAdmin = "Y"
+        )
+      )
+      personRepo.insertAll(newPeople)
+      assertEquals(personRepo.count, 11L)
+      assertEquals(
+        personRepo.findById(11L).get.lastName,
+        newPeople.last.lastName
+      )
+
+  test("updateAll"):
+    connect(ds()):
+      val newPeople = Vector(
+        personRepo.findById(1L).get.copy(lastName = "Peterson"),
+        personRepo.findById(2L).get.copy(lastName = "Moreno")
+      )
+      personRepo.updateAll(newPeople)
+      assertEquals(personRepo.findById(1L).get, newPeople(0))
+      assertEquals(personRepo.findById(2L).get, newPeople(1))
+
+  test("transact"):
+    val count = transact(ds()):
+      val p = PersonCreator(
+        firstName = Some("Chandler"),
+        lastName = "Brown",
+        isAdmin = "N"
+      )
+      personRepo.insert(p)
+      personRepo.count
+    assertEquals(count, 9L)
+
+  test("transact failed"):
+    val dataSource = ds()
+    val p = PersonCreator(
+      firstName = Some("Chandler"),
+      lastName = "Brown",
+      isAdmin = "N"
+    )
+    try
+      transact(dataSource):
+        personRepo.insert(p)
+        throw RuntimeException()
+      fail("should not reach")
+    catch
+      case _: Exception =>
+        transact(dataSource):
+          assertEquals(personRepo.count, 8L)
 
   val oracleContainer = ForAllContainerFixture(
     OracleContainer
@@ -154,71 +287,74 @@ class OracleTests extends FunSuite, TestContainersFixtures:
     ds.setPassword(oracle.password)
     // oracle doesn't support drop if exists,
     // or multi-statement queries
-    Using.resource(ds.getConnection())(con =>
-      val stmt = con.createStatement()
-      try stmt.execute("drop table car")
-      catch case _ => ()
-      stmt.execute(
-        """create table car (
+    Using
+      .Manager(use =>
+        val con = use(ds.getConnection())
+        val stmt = use(con.createStatement())
+        try stmt.execute("drop table car")
+        catch case _ => ()
+        stmt.execute(
+          """create table car (
           |  model varchar2(50) not null,
           |  id number generated always as identity,
           |  top_speed number
           |)""".stripMargin
-      )
-      stmt.execute(
-        """insert into car (model, top_speed)
+        )
+        stmt.execute(
+          """insert into car (model, top_speed)
           |values ('McLaren Senna', 208)""".stripMargin
-      )
-      stmt.execute(
-        """insert into car (model, top_speed)
+        )
+        stmt.execute(
+          """insert into car (model, top_speed)
           |values ('Ferrari F8 Tributo', 212)""".stripMargin
-      )
-      stmt.execute(
-        """insert into car (model, top_speed)
+        )
+        stmt.execute(
+          """insert into car (model, top_speed)
           |values ('Aston Martin Superleggera', 211)""".stripMargin
-      )
-      try stmt.execute("drop table person")
-      catch case _ => ()
-      stmt.execute(
-        """create table person (
+        )
+        try stmt.execute("drop table person")
+        catch case _ => ()
+        stmt.execute(
+          """create table person (
           |    id number generated always as identity,
           |    first_name varchar2(50),
           |    last_name varchar2(50) not null,
           |    is_admin varchar2(1) not null,
           |    created timestamp default current_timestamp
           |)""".stripMargin
-      )
-      stmt.execute(
-        """insert into person (first_name, last_name, is_admin, created) values
+        )
+        stmt.execute(
+          """insert into person (first_name, last_name, is_admin, created) values
           |('George', 'Washington', 'Y', current_timestamp)""".stripMargin
-      )
-      stmt.execute(
-        """insert into person (first_name, last_name, is_admin, created) values
+        )
+        stmt.execute(
+          """insert into person (first_name, last_name, is_admin, created) values
           |('Alexander', 'Hamilton', 'Y', current_timestamp)""".stripMargin
-      )
-      stmt.execute(
-        """insert into person (first_name, last_name, is_admin, created) values
+        )
+        stmt.execute(
+          """insert into person (first_name, last_name, is_admin, created) values
           |('John', 'Adams', 'Y', current_timestamp)""".stripMargin
-      )
-      stmt.execute(
-        """insert into person (first_name, last_name, is_admin, created) values
+        )
+        stmt.execute(
+          """insert into person (first_name, last_name, is_admin, created) values
           |('Benjamin', 'Franklin', 'Y', current_timestamp)""".stripMargin
-      )
-      stmt.execute(
-        """insert into person (first_name, last_name, is_admin, created) values
+        )
+        stmt.execute(
+          """insert into person (first_name, last_name, is_admin, created) values
           |('John', 'Jay', 'Y', current_timestamp)""".stripMargin
-      )
-      stmt.execute(
-        """insert into person (first_name, last_name, is_admin, created) values
+        )
+        stmt.execute(
+          """insert into person (first_name, last_name, is_admin, created) values
           |('Thomas', 'Jefferson', 'Y', current_timestamp)""".stripMargin
-      )
-      stmt.execute(
-        """insert into person (first_name, last_name, is_admin, created) values
+        )
+        stmt.execute(
+          """insert into person (first_name, last_name, is_admin, created) values
           |('James', 'Madison', 'Y', current_timestamp)""".stripMargin
-      )
-      stmt.execute(
-        """insert into person (first_name, last_name, is_admin, created) values
+        )
+        stmt.execute(
+          """insert into person (first_name, last_name, is_admin, created) values
           |(null, 'Nagro', 'N', current_timestamp)""".stripMargin
+        )
       )
-    )
+      .get
     ds

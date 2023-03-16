@@ -7,7 +7,7 @@ import scala.deriving.Mirror
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Using}
 
-object PostgresDbType extends DbType:
+object ClickhouseDbType extends DbType:
   def buildDbSchema[EC, E, ID, RES](
       tableNameSql: String,
       fieldNames: List[String],
@@ -21,6 +21,10 @@ object PostgresDbType extends DbType:
       idClassTag: ClassTag[ID],
       eMirror: Mirror.ProductOf[E]
   ): RES =
+    require(
+      eClassTag.runtimeClass == ecClassTag.runtimeClass,
+      "ClickHouse does not support generated keys, so EC must equal E"
+    )
     val schemaNames: IArray[DbSchemaName] = IArray
       .from(fieldNames)
       .map(fn =>
@@ -38,23 +42,16 @@ object PostgresDbType extends DbType:
     val ecInsertQs =
       IArray.fill(ecInsertFields.size)("?").mkString("(", ", ", ")")
 
-    val updateKeys: String = schemaNames
-      .map(sn => sn.sqlName + " = ?")
-      .patch(idIndex, IArray.empty[String], 1)
-      .mkString(", ")
-
     val countSql = s"SELECT count(*) FROM $tableNameSql"
     val existsByIdSql = s"SELECT 1 FROM $tableNameSql WHERE $idName = ?"
     val findAllSql = s"SELECT * FROM $tableNameSql"
     val findByIdSql = s"SELECT * FROM $tableNameSql WHERE $idName = ?"
-    val findAllByIdSql = s"SELECT * FROM $tableNameSql WHERE $idName = ANY(?)"
     val deleteByIdSql = s"DELETE FROM $tableNameSql WHERE $idName = ?"
     val truncateSql = s"TRUNCATE TABLE $tableNameSql"
     val insertSql =
       s"INSERT INTO $tableNameSql $ecInsertKeys VALUES $ecInsertQs"
-    val updateSql = s"UPDATE $tableNameSql SET $updateKeys WHERE $idName = ?"
 
-    class PostgresSchema(
+    class ClickHouseSchema(
         tableAlias: String,
         schemaNames: IArray[DbSchemaName]
     ) extends DbSchema[EC, E, ID]:
@@ -68,7 +65,7 @@ object PostgresDbType extends DbType:
       def alias(tableAlias: String): this.type =
         val newSchemaNames =
           schemaNames.map(sn => sn.copy(tableAlias = tableAlias))
-        new PostgresSchema(
+        new ClickHouseSchema(
           tableAlias,
           newSchemaNames
         ).asInstanceOf[this.type]
@@ -93,7 +90,7 @@ object PostgresDbType extends DbType:
         Sql(findByIdSql, Vector(id)).run[E].headOption
 
       def findAllById(ids: Iterable[ID])(using DbCon): Vector[E] =
-        Sql(findAllByIdSql, Vector(ids.toArray)).run
+        throw UnsupportedOperationException()
 
       def delete(entity: E)(using DbCon): Unit =
         deleteById(
@@ -134,15 +131,10 @@ object PostgresDbType extends DbType:
           val insertValues =
             entityCreator.asInstanceOf[Product].productIterator.toVector
           logSql(insertSql, insertValues)
-          val ps = use(
-            con.connection
-              .prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)
-          )
+          val ps = use(con.connection.prepareStatement(insertSql))
           setValues(ps, insertValues)
           ps.executeUpdate()
-          val rs = use(ps.getGeneratedKeys)
-          rs.next()
-          dbReader.buildSingle(rs)
+          entityCreator.asInstanceOf[E]
         ) match
           case Success(res) => res
           case Failure(ex) =>
@@ -153,54 +145,22 @@ object PostgresDbType extends DbType:
       )(using con: DbCon): Vector[E] =
         Using.Manager(use =>
           logSql(insertSql, Vector.empty)
-          val ps = use(
-            con.connection
-              .prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)
-          )
-          for ec <- entityCreators do
+          val ps = use(con.connection.prepareStatement(insertSql))
+          val res = entityCreators.toVector
+          for ec <- res do
             setValues(ps, ec.asInstanceOf[Product].productIterator.toVector)
             ps.addBatch()
           ps.executeBatch()
-          val rs = use(ps.getGeneratedKeys)
-          dbReader.build(rs)
+          res.asInstanceOf[Vector[E]]
         ) match
           case Success(res) => res
           case Failure(t) =>
             throw SqlException(t, Sql(insertSql, Vector.empty))
 
       def update(entity: E)(using DbCon): Unit =
-        val entityValues: Vector[Any] = entity
-          .asInstanceOf[Product]
-          .productIterator
-          .toVector
-        // put ID at the end
-        val updateValues =
-          entityValues
-            .patch(idIndex, Vector.empty, 1)
-            .appended(entityValues(idIndex))
-        Sql(updateSql, updateValues).runUpdate
+        throw UnsupportedOperationException()
 
       def updateAll(entities: Iterable[E])(using con: DbCon): Unit =
-        Using.Manager(use =>
-          logSql(updateSql, Vector.empty)
-          val ps = use(con.connection.prepareStatement(updateSql))
-          for entity <- entities do
-            val entityValues: Vector[Any] = entity
-              .asInstanceOf[Product]
-              .productIterator
-              .toVector
-            // put ID at the end
-            val updateValues = entityValues
-              .patch(idIndex, Vector.empty, 1)
-              .appended(entityValues(idIndex))
-
-            setValues(ps, updateValues)
-            ps.addBatch()
-
-          ps.executeBatch()
-        ) match
-          case Success(_) => ()
-          case Failure(t) =>
-            throw SqlException(t, Sql(updateSql, Vector.empty))
-    end PostgresSchema
-    PostgresSchema(DbSchema.DefaultAlias, schemaNames).asInstanceOf[RES]
+        throw UnsupportedOperationException()
+    end ClickHouseSchema
+    ClickHouseSchema(DbSchema.DefaultAlias, schemaNames).asInstanceOf[RES]

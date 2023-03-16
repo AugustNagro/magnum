@@ -4,21 +4,11 @@ import java.sql.{Connection, PreparedStatement, ResultSet, Statement}
 import java.time.OffsetDateTime
 import scala.collection.View
 import scala.deriving.Mirror
-import scala.compiletime.{
-  constValue,
-  constValueTuple,
-  erasedValue,
-  error,
-  summonInline
-}
-import scala.compiletime.ops.any.==
-import scala.compiletime.ops.boolean.&&
 import scala.reflect.ClassTag
-import scala.quoted.*
 import scala.util.{Failure, Success, Using}
 
 object H2DbType extends DbType:
-  def build[EC, E, ID, RES](
+  def buildDbSchema[EC, E, ID, RES](
       tableNameSql: String,
       fieldNames: List[String],
       ecFieldNames: List[String],
@@ -26,6 +16,8 @@ object H2DbType extends DbType:
       idIndex: Int
   )(using
       dbReader: DbReader[E],
+      ecClassTag: ClassTag[EC],
+      eClassTag: ClassTag[E],
       idClassTag: ClassTag[ID],
       eMirror: Mirror.ProductOf[E]
   ): RES =
@@ -132,6 +124,7 @@ object H2DbType extends DbType:
 
       def deleteAllById(ids: Iterable[ID])(using con: DbCon): Unit =
         Using.Manager(use =>
+          logSql(deleteByIdSql, Vector.empty)
           val ps = use(con.connection.prepareStatement(deleteByIdSql))
           for id <- ids do
             ps.setObject(1, id)
@@ -144,12 +137,12 @@ object H2DbType extends DbType:
 
       def insert(entityCreator: EC)(using con: DbCon): E =
         Using.Manager(use =>
+          val insertValues =
+            entityCreator.asInstanceOf[Product].productIterator.toVector
+          logSql(insertSql, insertValues)
           val ps =
             use(con.connection.prepareStatement(insertSql, insertGenKeys))
-          setValues(
-            ps,
-            entityCreator.asInstanceOf[Product].productIterator.toVector
-          )
+          setValues(ps, insertValues)
           ps.executeUpdate()
           val rs = use(ps.getGeneratedKeys)
           rs.next()
@@ -163,6 +156,7 @@ object H2DbType extends DbType:
           entityCreators: Iterable[EC]
       )(using con: DbCon): Vector[E] =
         Using.Manager(use =>
+          logSql(insertSql, Vector.empty)
           val ps =
             use(con.connection.prepareStatement(insertSql, insertGenKeys))
           for ec <- entityCreators do
@@ -190,6 +184,7 @@ object H2DbType extends DbType:
 
       def updateAll(entities: Iterable[E])(using con: DbCon): Unit =
         Using.Manager(use =>
+          logSql(updateSql, Vector.empty)
           val ps = use(con.connection.prepareStatement(updateSql))
           for entity <- entities do
             val entityValues: Vector[Any] = entity

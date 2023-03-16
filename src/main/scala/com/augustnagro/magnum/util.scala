@@ -1,16 +1,11 @@
 package com.augustnagro.magnum
 
+import java.lang.System.Logger.Level
 import java.sql.{Connection, PreparedStatement, ResultSet, Statement}
 import javax.sql.DataSource
 import scala.util.{Failure, Success, Using}
 import scala.deriving.Mirror
-import scala.compiletime.{
-  constValue,
-  constValueTuple,
-  erasedValue,
-  error,
-  summonInline
-}
+import scala.compiletime.{constValue, constValueTuple, erasedValue, error, summonInline}
 import scala.compiletime.ops.any.==
 import scala.compiletime.ops.boolean.&&
 import scala.reflect.ClassTag
@@ -145,3 +140,24 @@ private inline def getFromRow[Met](
     case _: Option[t] => Option(getFromRow[t](rs, columnIndex))
     case _ =>
       rs.getObject(columnIndex, summonInline[ClassTag[Met]].runtimeClass)
+
+private def logSql(sql: Sql): Unit = logSql(sql.query, sql.params)
+
+private val Log = System.getLogger(getClass.getName)
+
+private def logSql(query: String, params: Vector[Any]): Unit =
+  if Log.isLoggable(Level.TRACE) then
+    Log.log(
+      Level.TRACE,
+      s"""Executing Query:
+         |$query
+         |
+         |With values:
+         |$params""".stripMargin
+    )
+  else if Log.isLoggable(Level.DEBUG) then
+    Log.log(
+      Level.DEBUG,
+      s"""Executing Query:
+         |$query""".stripMargin
+    )

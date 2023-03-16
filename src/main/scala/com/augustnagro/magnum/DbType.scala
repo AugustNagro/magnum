@@ -5,7 +5,7 @@ import scala.deriving.Mirror
 
 /** Factory for Repos */
 trait DbType:
-  def build[EC, E, ID, RES](
+  def buildDbSchema[EC, E, ID, RES](
       tableNameSql: String,
       fieldNames: List[String],
       ecFieldNames: List[String],
@@ -13,6 +13,8 @@ trait DbType:
       idIndex: Int
   )(using
       dbReader: DbReader[E],
+      ecClassTag: ClassTag[EC],
+      eClassTag: ClassTag[E],
       idClassTag: ClassTag[ID],
       eMirror: Mirror.ProductOf[E]
   ): RES

@@ -4,21 +4,11 @@ import java.sql.{Connection, PreparedStatement, ResultSet, Statement}
 import java.time.OffsetDateTime
 import scala.collection.View
 import scala.deriving.Mirror
-import scala.compiletime.{
-  constValue,
-  constValueTuple,
-  erasedValue,
-  error,
-  summonInline
-}
-import scala.compiletime.ops.any.==
-import scala.compiletime.ops.boolean.&&
 import scala.reflect.ClassTag
-import scala.quoted.*
 import scala.util.{Failure, Success, Using}
 
 object OracleDbType extends DbType:
-  def build[EC, E, ID, RES](
+  def buildDbSchema[EC, E, ID, RES](
       tableNameSql: String,
       fieldNames: List[String],
       ecFieldNames: List[String],
@@ -26,6 +16,8 @@ object OracleDbType extends DbType:
       idIndex: Int
   )(using
       dbReader: DbReader[E],
+      ecClassTag: ClassTag[EC],
+      eClassTag: ClassTag[E],
       idClassTag: ClassTag[ID],
       eMirror: Mirror.ProductOf[E]
   ): RES =
@@ -45,6 +37,7 @@ object OracleDbType extends DbType:
     val ecInsertKeys: String = ecInsertFields.mkString("(", ", ", ")")
     val ecInsertQs =
       IArray.fill(ecInsertFields.size)("?").mkString("(", ", ", ")")
+    val insertGenKeys = Array.from(schemaNames).map(_.sqlName)
 
     val updateKeys: String = schemaNames
       .map(sn => sn.sqlName + " = ?")
@@ -127,6 +120,7 @@ object OracleDbType extends DbType:
 
       def deleteAllById(ids: Iterable[ID])(using con: DbCon): Unit =
         Using.Manager(use =>
+          logSql(deleteByIdSql, Vector.empty)
           val ps = use(con.connection.prepareStatement(deleteByIdSql))
           for id <- ids do
             ps.setObject(1, id)
@@ -139,14 +133,12 @@ object OracleDbType extends DbType:
 
       def insert(entityCreator: EC)(using con: DbCon): E =
         Using.Manager(use =>
-          val ps = use(
-            con.connection
-              .prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)
-          )
-          setValues(
-            ps,
+          val insertValues =
             entityCreator.asInstanceOf[Product].productIterator.toVector
-          )
+          logSql(insertSql, insertValues)
+          val ps =
+            use(con.connection.prepareStatement(insertSql, insertGenKeys))
+          setValues(ps, insertValues)
           ps.executeUpdate()
           val rs = use(ps.getGeneratedKeys)
           rs.next()
@@ -159,21 +151,8 @@ object OracleDbType extends DbType:
       def insertAll(
           entityCreators: Iterable[EC]
       )(using con: DbCon): Vector[E] =
-        Using.Manager(use =>
-          val ps = use(
-            con.connection
-              .prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)
-          )
-          for ec <- entityCreators do
-            setValues(ps, ec.asInstanceOf[Product].productIterator.toVector)
-            ps.addBatch()
-          ps.executeBatch()
-          val rs = use(ps.getGeneratedKeys)
-          dbReader.build(rs)
-        ) match
-          case Success(res) => res
-          case Failure(t) =>
-            throw SqlException(t, Sql(insertSql, Vector.empty))
+        // oracle jdbc does not support batch RETURNING
+        entityCreators.map(insert).toVector
 
       def update(entity: E)(using DbCon): Unit =
         val entityValues: Vector[Any] = entity
@@ -189,6 +168,7 @@ object OracleDbType extends DbType:
 
       def updateAll(entities: Iterable[E])(using con: DbCon): Unit =
         Using.Manager(use =>
+          logSql(updateSql, Vector.empty)
           val ps = use(con.connection.prepareStatement(updateSql))
           for entity <- entities do
             val entityValues: Vector[Any] = entity

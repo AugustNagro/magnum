@@ -1,22 +1,15 @@
 import com.augustnagro.magnum.*
-import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
-import com.dimafeng.testcontainers.{
-  ContainerDef,
-  JdbcDatabaseContainer,
-  PostgreSQLContainer
-}
-import munit.{FunSuite, Location, TestOptions}
-import org.postgresql.ds.PGSimpleDataSource
-import org.testcontainers.utility.DockerImageName
+import munit.FunSuite
+import org.sqlite.SQLiteDataSource
 
 import java.nio.file.{Files, Path}
 import java.sql.Connection
-import java.time.OffsetDateTime
+import java.time.{LocalDateTime, OffsetDateTime}
 import javax.sql.DataSource
 import scala.util.Using
 import scala.util.Using.Manager
 
-class PgTests extends FunSuite, TestContainersFixtures:
+class SqliteTests extends FunSuite:
 
   /*
   Immutable Repo Tests
@@ -25,7 +18,7 @@ class PgTests extends FunSuite, TestContainersFixtures:
   case class Car(model: String, @Id id: Long, topSpeed: Int) derives DbReader
 
   val carSchema = DbSchema[Car, Car, Long](
-    PostgresDbType,
+    SqliteDbType,
     SqlNameMapper.CamelToSnakeCase
   )
 
@@ -38,8 +31,9 @@ class PgTests extends FunSuite, TestContainersFixtures:
   )
 
   test("count"):
-    connect(ds()):
-      assertEquals(carRepo.count, 3L)
+    val count = connect(ds()):
+      carRepo.count
+    assertEquals(count, 3L)
 
   test("existsById"):
     connect(ds()):
@@ -63,11 +57,12 @@ class PgTests extends FunSuite, TestContainersFixtures:
       assertEquals(carRepo.findById(4L), None)
 
   test("findAllByIds"):
-    connect(ds()):
-      assertEquals(
-        carRepo.findAllById(Vector(1L, 3L)).map(_.id),
-        Vector(1L, 3L)
-      )
+    intercept[UnsupportedOperationException]:
+      connect(ds()):
+        assertEquals(
+          carRepo.findAllById(Vector(1L, 3L)).map(_.id),
+          Vector(1L, 3L)
+        )
 
   test("repeatable read transaction"):
     transact(ds(), withRepeatableRead):
@@ -120,11 +115,11 @@ class PgTests extends FunSuite, TestContainersFixtures:
       firstName: Option[String],
       lastName: String,
       isAdmin: Boolean,
-      created: OffsetDateTime
+      created: String
   )
 
   val person = DbSchema[PersonCreator, Person, Long](
-    PostgresDbType,
+    SqliteDbType,
     SqlNameMapper.CamelToSnakeCase
   )
 
@@ -139,7 +134,9 @@ class PgTests extends FunSuite, TestContainersFixtures:
 
   test("delete invalid"):
     connect(ds()):
-      personRepo.delete(Person(23L, None, "", false, OffsetDateTime.now))
+      personRepo.delete(
+        Person(23L, None, "", false, LocalDateTime.now.toString)
+      )
       assertEquals(8L, personRepo.count)
 
   test("deleteById"):
@@ -270,30 +267,48 @@ class PgTests extends FunSuite, TestContainersFixtures:
         transact(dataSource):
           assertEquals(personRepo.count, 8L)
 
-  val pgContainer = ForAllContainerFixture(
-    PostgreSQLContainer
-      .Def(dockerImageName = DockerImageName.parse("postgres:15.2"))
-      .createContainer()
-  )
-
-  override def munitFixtures: Seq[Fixture[_]] =
-    super.munitFixtures :+ pgContainer
+  lazy val sqliteDbPath = Files.createTempFile(null, ".db").toAbsolutePath
 
   def ds(): DataSource =
-    val ds = PGSimpleDataSource()
-    val pg = pgContainer()
-    ds.setUrl(pg.jdbcUrl)
-    ds.setUser(pg.username)
-    ds.setPassword(pg.password)
-    val carSql =
-      Files.readString(Path.of(getClass.getResource("/pg-car.sql").toURI))
-    val personSql =
-      Files.readString(Path.of(getClass.getResource("/pg-person.sql").toURI))
-
+    val ds = SQLiteDataSource()
+    ds.setUrl("jdbc:sqlite:" + sqliteDbPath)
     Manager(use =>
       val con = use(ds.getConnection)
       val stmt = use(con.createStatement)
-      stmt.execute(carSql)
-      stmt.execute(personSql)
+      stmt.execute("drop table if exists car")
+      stmt.execute(
+        """create table car (
+          |    model text not null,
+          |    id integer primary key,
+          |    top_speed integer
+          |)""".stripMargin
+      )
+      stmt.execute(
+        """insert into car (model, top_speed) values
+          |('McLaren Senna', 208),
+          |('Ferrari F8 Tributo', 212),
+          |('Aston Martin Superleggera', 211)""".stripMargin
+      )
+      stmt.execute("drop table if exists person")
+      stmt.execute(
+        """create table person (
+          |    id integer primary key,
+          |    first_name text,
+          |    last_name text not null,
+          |    is_admin integer not null,
+          |    created text default(datetime())
+          |)""".stripMargin
+      )
+      stmt.execute(
+        """insert into person (first_name, last_name, is_admin, created) values
+          |('George', 'Washington', true, datetime()),
+          |('Alexander', 'Hamilton', true, datetime()),
+          |('John', 'Adams', true, datetime()),
+          |('Benjamin', 'Franklin', true, datetime()),
+          |('John', 'Jay', true, datetime()),
+          |('Thomas', 'Jefferson', true, datetime()),
+          |('James', 'Madison', true, datetime()),
+          |(null, 'Nagro', false, datetime())""".stripMargin
+      )
     ).get
     ds

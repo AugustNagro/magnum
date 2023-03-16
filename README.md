@@ -1,16 +1,312 @@
 ## Magnum
 
-A 'new look' for Repository-style Database access.
+A 'new look' for Database access in Scala.
 
-Supports any database with a JDBC driver, including:
-* Postgres
-* MySql
-* H2
-* Oracle
+```scala
+import com.augustnagro.magnum.*
 
-todo: remove private part from  private[magnum] def existsById(id: ID)(using DbCon): Boolean
-todo: Factory db support
-todo: testing of other databases: Oracle, MSSQL, DB2, SQLlite, Cassandra, Clickhouse, H2
+case class User(
+  @Id id: Long,
+  firstName: Option[String],
+  lastName: String,
+  created: OffsetDateTime
+) derives DbReader
+
+// 'id' and 'created' columns are db-generated
+case class UserCreator(
+  firstName: Option[String],
+  lastName: String
+)
+
+object Schema:
+  val user = DbSchema[UserCreator, User, Long](
+    dbType = PostgresDbType,
+    sqlNameMapper = SqlNameMapper.CamelToSnakeCase
+  )
+  
+class UserRepo extends Repo(Schema.user):
+  def firstNamesForLast(lastName: String)(using DbCon): Vector[String] =
+    import Schema.user
+    sql"""
+      SELECT DISTINCT ${user.firstName}
+      FROM $user
+      WHERE ${user.lastName} = $lastName
+    """.run
+
+val repo = UserRepo()
+val ds: DataSource = ???
+
+transact(ds):
+  val uc = UserCreator(Some("Kip"), "Thorne")
+  val user: User = repo.insert(uc)
+  val firstNames = repo.firstNamesForLast("Thorne")
+```
+
+* [Installing](#installing)
+* [ScalaDoc](#scaladoc)
+* [Elevator Pitch](#elevator-pitch)
+* [Features](#features)
+* [Documentation](#documentation)
+
+## Installing
+
+## ScalaDoc
+
+## Elevator Pitch
+
+Database clients on the JVM fall into three categories.
+
+* Object Oriented Repositories (Spring-Data, Hibernate)
+* Functional DSLs (JOOQ, Slick, quill, zio-sql)
+* SQL String interpolators (Anorm, doobie, plain jdbc)
+
+Magnum utilizes the full power of Scala 3 to combine aspects of all three,
+providing a typesafe and refactorable SQL interface,
+which can express all SQL expressions, on all JDBC-supported databases
+
+## Features
+
+* Supports any database with a JDBC driver,
+including Postgres, MySql, Oracle, ClickHouse, H2, and Sqlite
+* Refactor-safe `sql" "` interpolator
+* Purely-functional API
+* Common queries (like insert, update, delete) generated at compile time
+* Impossible to hit N+1 query problem
+* Type-safe Transactions
+* Supports database-generated columns
+* Easy to use, performant, Loom-ready API (no Futures or Effect Systems)
+* Easy to define entities
+* Scales to complex SQL queries
+* Specifications for building dynamic queries, such as table filters with pagination
+* Supports high-performance [Seek pagination](https://blog.jooq.org/faster-sql-paging-with-jooq-using-the-seek-method/)
+* Performant batch-queries
+
+## Documentation
+
+### `connect` creates a database connection.
+
+`connect` takes two parameters; the database DataSource,
+and a context function f that uses the given `DbCon` connection.
+For example:
+
+```scala
+val ds: PGSimpleDataSource = ???
+
+val users = connect(ds)(getUsers)
+
+def getUsers(using DbCon): Vector[User] =
+  import Schema.user
+  sql"select ${user.all} from $user".run
+```
+
+### `transact` creates a database transaction.
+
+Like `connect`, `transact` accepts a DataSource and context function.
+The context function provides a `DbTx` instance.
+If the function throws, the transaction will be rolled back.
+
+`DbTx` extends `DbCon`, facilitating type-safe transactions.
+
+```scala
+val users = transact(ds):
+  runUpdateAndGetUsers()
+  
+def runUpdateAndGetUsers()(using DbTx): Vector[User] =
+  userRepo.deleteById(1L)
+  getUsers
+
+def getUsers(using DbCon): Vector[User] =
+  import Schema.user
+  sql"select ${user.all} from $user".run
+```
+
+You can also customize the transaction's JDBC Connection.
+
+```scala
+transact(ds(), withRepeatableRead)(???)
+
+def withRepeatableRead(con: Connection): Unit =
+  con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
+```
+
+### `DbReader` reads values from from JDBC ResultSets
+
+Methods on the sql interpolator require implicit DbReaders.
+In the below example, `.run` only compiles because the User class `derives DbReader`.
+
+```scala
+case class User(
+  @Id id: Long,
+  firstName: Option[String],
+  lastName: String
+  created: OffsetDateTime
+) derives DbReader
+
+def getUsers(using DbCon): Vector[User] =
+  import Schema.user
+  sql"select ${user.all} from $user".run
+```
+
+There are implicit DbReaders defined for many types, such as strings, ints, etc.
+
+```scala
+def getUserCnt(using DbCon): Long =
+  sql"select count(*) from ${Schema.user}".run[Long].head
+```
+
+### DbSchemas
+
+A DbSchema defines the schema mapping for a database entity.
+
+In the below example, 
+
+```scala
+object Schema:
+  val user = DbSchema[UserCreator, User, Long](
+    dbType = PostgresDbType,
+    sqlNameMapper = SqlNameMapper.CamelToSnakeCase
+  )
+```
+
+The first type parameter defines the Entity-Creator,
+which should omit any fields that are auto-generated by the database.
+The entity-creator class must be an 'effective' subset of the entity class,
+but it does not have to subclass the entity. This is verified at compile time.
+
+The second type parameter is the Entity class.
+The Entity class should `derive DbReader`,
+If the Entity's ID is not the first field, annotate it with `@Id`.
+Finally, if an Entity's field is nullable, you may use the Option type.
+
+The third type parameter is the ID type.
+If the Entity does not have a logical ID, use Null.
+
+Parameter dbType defines which database the schema is for,
+and sqlNameMapper defines how the table & column names are mapped.
+CamelToSnakeCase converts the CamelCase scala names to snake_case in the SQL.
+
+Note: Do not fix the type of a DbSchema value. For example, this fails to compile:
+
+### Immutable Repositories
+
+`ImmutableRepo` is like a Spring-Data Repository, and auto-generates the following methods at compile-time:
+
+```scala
+  def count(using DbCon): Long
+  def existsById(id: ID)(using DbCon): Boolean
+  def findAll(using DbCon): Vector[E]
+  def findAll(spec: Spec[E])(using DbCon): Vector[E]
+  def findById(id: ID)(using DbCon): Option[E]
+  def findAllById(ids: Iterable[ID])(using DbCon): Vector[E]
+```
+
+It is a best practice to encapsulate your SQL in repositories.
+Some databases cannot support every method, and will throw UnsupportedOperationException.
+
+### Repositories
+
+`Repo` is like a Spring-Data Repository, and auto-generates the following methods at compile-time:
+
+```scala
+  def count(using DbCon): Long
+  def existsById(id: ID)(using DbCon): Boolean
+  def findAll(using DbCon): Vector[E]
+  def findAll(spec: Spec[E])(using DbCon): Vector[E]
+  def findById(id: ID)(using DbCon): Option[E]
+  def findAllById(ids: Iterable[ID])(using DbCon): Vector[E]
+  
+  def delete(entity: E)(using DbCon): Unit
+  def deleteById(id: ID)(using DbCon): Unit
+  def truncate()(using DbCon): Unit
+  def deleteAll(entities: Iterable[E])(using DbCon): Unit
+  def deleteAllById(ids: Iterable[ID])(using DbCon): Unit
+  def insert(entityCreator: EC)(using DbCon): E
+  def insertAll(entityCreators: Iterable[EC])(using DbCon): Vector[E]
+  def update(entity: E)(using DbCon): Unit
+  def updateAll(entities: Iterable[E])(using DbCon): Unit
+```
+
+It is a best practice to encapsulate your SQL in repositories.
+Some databases cannot support every method, and will throw UnsupportedOperationException.
+Also note that Repo extends ImmutableRepo.
+
+### Sql Interpolator
+
+The `sql` interpolator can express any sql expression.
+You can interpolate values without the risk of SQL-injection attacks.
+
+```
+connect(ds()):
+  val car = carSchema.alias("c")
+  val minSpeed = 210
+  val query: Sql =
+    sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
+
+  assertNoDiff(
+    query.query,
+    "select c.model, c.id, c.top_speed from car c where c.top_speed > ?"
+  )
+  val allCars = query.run[Car]
+```
+
+Combined with DbSchema, you can build queries that are easy to refactor,
+and fail to compile when an Entity field is changed or removed.
+
+Sql has methods
+
+`def run[E](using con: DbCon, dbReader: DbReader[E]): Vector[E]` and
+
+`def runUpdate(using con: DbCon): Int`,
+
+You can also use the runBatch method in package `com.augustnagro.magnum`.
+
+```
+connect(ds):
+  val users: Vector[User] = ???
+  runBatch(users)(user =>
+    sql"..." 
+  )
+```
+
+### Specifications
+
+Specifications help you write safe, dynamic queries.
+An example use-case would be a search results page that allows users to sort and filter the paginated data.
+
+If you need to perform joins to get the data needed, first create a database view.
+
+Next, create an entity class that derives DbReader.
+
+Finally, use the Spec class to create a specification.
+
+Here's an example:
+
+```scala
+import Schema.user
+val age = 3
+val name = "John"
+val sql: Sql = Spec(user)
+  .where(sql"${user.age} > $age")
+  .orderBy(user.age)
+  .limit(10)
+  .seek(user.name, SeekDir.Lt, name, SortOrder.Desc)
+  .build
+
+assertEquals(
+  spec.query,
+  "SELECT * FROM user WHERE (age > ?) AND (name < ?) ORDER BY age ASC NULLS LAST, name DESC NULLS LAST LIMIT 10"
+)
+```
+
+Note that [seek pagination](https://blog.jooq.org/faster-sql-paging-with-jooq-using-the-seek-method/) is supported.
+
+
+### Logging SQL queries
+
+If you set the java.util Logging level to DEBUG, all SQL queries will be logged.
+Setting to TRACE will log SQL queries and their parameters.
+
+
 todo: documentation
 todo: sql.run method respect logging level and print query when appropriate.
 todo: good error messages

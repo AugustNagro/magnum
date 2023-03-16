@@ -183,14 +183,16 @@ object DbSchema:
       dbType: Expr[DbType]
   )(using Quotes): Expr[Any] =
     val dbReader = Expr.summon[DbReader[E]].get
+    val eClassTag = Expr.summon[ClassTag[E]].get
+    val ecClassTag = Expr.summon[ClassTag[EC]].get
     val idClassTag = Expr.summon[ClassTag[ID]].get
     val eMirror = Expr.summon[Mirror.ProductOf[E]].get
     '{
-      $dbType.build[EC, E, ID, RES](
+      $dbType.buildDbSchema[EC, E, ID, RES](
         $tableNameSql,
         $fieldNames,
         $ecFieldNames,
         $sqlNameMapper,
         ${ idAnnotIndex[E] }
-      )(using $dbReader, $idClassTag, $eMirror)
+      )(using $dbReader, $ecClassTag, $eClassTag, $idClassTag, $eMirror)
     }

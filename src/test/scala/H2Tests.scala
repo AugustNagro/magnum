@@ -8,6 +8,7 @@ import java.time.OffsetDateTime
 import javax.sql.DataSource
 import scala.util.Properties.propOrNone
 import scala.util.Using
+import scala.util.Using.Manager
 
 class H2Tests extends FunSuite:
 
@@ -267,8 +268,10 @@ class H2Tests extends FunSuite:
       Files.readString(Path.of(getClass.getResource("/h2-car.sql").toURI))
     val personSql =
       Files.readString(Path.of(getClass.getResource("/h2-person.sql").toURI))
-    Using.resource(ds.getConnection)(con =>
-      con.prepareStatement(carSql).execute()
-      con.prepareStatement(personSql).execute()
+    Manager(use =>
+      val con = use(ds.getConnection)
+      val stmt = use(con.createStatement)
+      stmt.execute(carSql)
+      stmt.execute(personSql)
     )
     ds
