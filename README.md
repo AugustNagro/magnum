@@ -1,6 +1,19 @@
 ## Magnum
 
-A 'new look' for Database access in Scala.
+
+Historically, database clients on the JVM fall into three categories.
+
+* Object Oriented Repositories (Spring-Data, Hibernate)
+* Functional DSLs (JOOQ, Slick, quill, zio-sql)
+* SQL String interpolators (Anorm, doobie, plain jdbc)
+
+Magnum utilizes the full power of Scala 3 to combine aspects of all three,
+providing a typesafe and refactorable SQL interface,
+which can express all SQL expressions, on all JDBC-supported databases.
+
+Like in Zoolander (the movie), Magnum represents a 'new look' for Database access in Scala.
+
+## Example
 
 ```scala
 import com.augustnagro.magnum.*
@@ -44,25 +57,12 @@ transact(ds):
 
 * [Installing](#installing)
 * [ScalaDoc](#scaladoc)
-* [Elevator Pitch](#elevator-pitch)
 * [Features](#features)
 * [Documentation](#documentation)
 
 ## Installing
 
 ## ScalaDoc
-
-## Elevator Pitch
-
-Database clients on the JVM fall into three categories.
-
-* Object Oriented Repositories (Spring-Data, Hibernate)
-* Functional DSLs (JOOQ, Slick, quill, zio-sql)
-* SQL String interpolators (Anorm, doobie, plain jdbc)
-
-Magnum utilizes the full power of Scala 3 to combine aspects of all three,
-providing a typesafe and refactorable SQL interface,
-which can express all SQL expressions, on all JDBC-supported databases
 
 ## Features
 
