@@ -14,6 +14,7 @@ import java.sql.Connection
 import java.time.OffsetDateTime
 import javax.sql.DataSource
 import scala.util.Using
+import scala.util.Using.Manager
 
 class MySqlTests extends FunSuite, TestContainersFixtures:
 
@@ -284,8 +285,9 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
       Files.readString(Path.of(getClass.getResource("/mysql-car.sql").toURI))
     val personSql =
       Files.readString(Path.of(getClass.getResource("/mysql-person.sql").toURI))
-    Using.resource(ds.getConnection)(con =>
-      con.prepareStatement(carSql).execute()
-      con.prepareStatement(personSql).execute()
-    )
+    Manager(use =>
+      val con = use(ds.getConnection)
+      use(con.prepareStatement(carSql)).execute()
+      use(con.prepareStatement(personSql)).execute()
+    ).get
     ds
