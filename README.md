@@ -306,10 +306,8 @@ Note that [seek pagination](https://blog.jooq.org/faster-sql-paging-with-jooq-us
 If you set the java.util Logging level to DEBUG, all SQL queries will be logged.
 Setting to TRACE will log SQL queries and their parameters.
 
-
-todo: documentation
-todo: sql.run method respect logging level and print query when appropriate.
-todo: good error messages
+## Developing
+The tests are written using TestContainers, which requires Docker be installed.
 
 Todo: Comparison with existing frameworks:
 

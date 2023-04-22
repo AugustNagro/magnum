@@ -26,7 +26,8 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
       model: String,
       @Id id: UUID,
       topSpeed: Int,
-      created: OffsetDateTime
+      created: OffsetDateTime,
+      vin: Option[Int]
   ) derives DbReader
 
   val carSchema = DbSchema[Car, Car, UUID](
@@ -41,19 +42,22 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
       "McLaren Senna",
       UUID.fromString("a88a32f1-1e4a-41b9-9fb0-e9a8aba2428a"),
       208,
-      OffsetDateTime.of(2023, 3, 5, 2, 26, 0, 0, ZoneOffset.UTC)
+      OffsetDateTime.of(2023, 3, 5, 2, 26, 0, 0, ZoneOffset.UTC),
+      Some(123)
     ),
     Car(
       "Ferrari F8 Tributo",
       UUID.fromString("e4895170-5b54-4e3b-b857-b95d45d3550c"),
       212,
-      OffsetDateTime.of(2023, 3, 5, 2, 27, 0, 0, ZoneOffset.UTC)
+      OffsetDateTime.of(2023, 3, 5, 2, 27, 0, 0, ZoneOffset.UTC),
+      Some(124)
     ),
     Car(
       "Aston Martin Superleggera",
       UUID.fromString("460798da-917d-442f-a987-a7e6528ddf17"),
       211,
-      OffsetDateTime.of(2023, 3, 5, 2, 28, 0, 0, ZoneOffset.UTC)
+      OffsetDateTime.of(2023, 3, 5, 2, 28, 0, 0, ZoneOffset.UTC),
+      None
     )
   )
 
@@ -99,7 +103,7 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
 
       assertNoDiff(
         query.query,
-        "select model, id, top_speed, created from car where top_speed > ?"
+        "select model, id, top_speed, created, vin from car where top_speed > ?"
       )
       assertEquals(query.params, Vector(minSpeed))
       assertEquals(
@@ -116,9 +120,13 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
 
       assertNoDiff(
         query.query,
-        "select c.model, c.id, c.top_speed, c.created from car c where c.top_speed > ?"
+        "select c.model, c.id, c.top_speed, c.created, c.vin from car c where c.top_speed > ?"
       )
       assertEquals(query.run[Car], allCars.tail)
+
+  test("reads null int as None and not Some(0)"):
+    connect(ds()):
+      assertEquals(carRepo.findAll.last.vin, None)
 
   /*
   Repo Tests

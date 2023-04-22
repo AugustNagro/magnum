@@ -5,7 +5,13 @@ import java.sql.{Connection, PreparedStatement, ResultSet, Statement}
 import javax.sql.DataSource
 import scala.util.{Failure, Success, Using}
 import scala.deriving.Mirror
-import scala.compiletime.{constValue, constValueTuple, erasedValue, error, summonInline}
+import scala.compiletime.{
+  constValue,
+  constValueTuple,
+  erasedValue,
+  error,
+  summonInline
+}
 import scala.compiletime.ops.any.==
 import scala.compiletime.ops.boolean.&&
 import scala.reflect.ClassTag
@@ -137,7 +143,9 @@ private inline def getFromRow[Met](
       scala.math.BigInt(
         rs.getObject(columnIndex, classOf[java.math.BigInteger])
       )
-    case _: Option[t] => Option(getFromRow[t](rs, columnIndex))
+    case _: Option[t] =>
+      if rs.getObject(columnIndex) == null then None
+      else Some(getFromRow[t](rs, columnIndex))
     case _ =>
       rs.getObject(columnIndex, summonInline[ClassTag[Met]].runtimeClass)
 

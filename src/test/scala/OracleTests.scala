@@ -17,7 +17,8 @@ class OracleTests extends FunSuite, TestContainersFixtures:
   Immutable Repo Tests
    */
 
-  case class Car(model: String, @Id id: Long, topSpeed: Int) derives DbReader
+  case class Car(model: String, @Id id: Long, topSpeed: Int, vin: Option[Int])
+      derives DbReader
 
   val carSchema = DbSchema[Car, Car, Long](
     OracleDbType,
@@ -27,9 +28,9 @@ class OracleTests extends FunSuite, TestContainersFixtures:
   val carRepo = ImmutableRepo(carSchema)
 
   val allCars = Vector(
-    Car("McLaren Senna", 1L, 208),
-    Car("Ferrari F8 Tributo", 2L, 212),
-    Car("Aston Martin Superleggera", 3L, 211)
+    Car("McLaren Senna", 1L, 208, Some(123)),
+    Car("Ferrari F8 Tributo", 2L, 212, Some(124)),
+    Car("Aston Martin Superleggera", 3L, 211, None)
   )
 
   test("count"):
@@ -81,7 +82,7 @@ class OracleTests extends FunSuite, TestContainersFixtures:
 
       assertNoDiff(
         query.query,
-        "select model, id, top_speed from car where top_speed > ?"
+        "select model, id, top_speed, vin from car where top_speed > ?"
       )
       assertEquals(query.params, Vector(minSpeed))
       assertEquals(
@@ -98,9 +99,13 @@ class OracleTests extends FunSuite, TestContainersFixtures:
 
       assertNoDiff(
         query.query,
-        "select c.model, c.id, c.top_speed from car c where c.top_speed > ?"
+        "select c.model, c.id, c.top_speed, c.vin from car c where c.top_speed > ?"
       )
       assertEquals(query.run[Car], allCars.tail)
+
+  test("reads null int as None and not Some(0)"):
+    connect(ds()):
+      assertEquals(carRepo.findById(3L).get.vin, None)
 
   /*
   Repo Tests
@@ -297,20 +302,21 @@ class OracleTests extends FunSuite, TestContainersFixtures:
           """create table car (
           |  model varchar2(50) not null,
           |  id number generated always as identity,
-          |  top_speed number
+          |  top_speed number,
+          |  vin number
           |)""".stripMargin
         )
         stmt.execute(
-          """insert into car (model, top_speed)
-          |values ('McLaren Senna', 208)""".stripMargin
+          """insert into car (model, top_speed, vin)
+          |values ('McLaren Senna', 208, 123)""".stripMargin
         )
         stmt.execute(
-          """insert into car (model, top_speed)
-          |values ('Ferrari F8 Tributo', 212)""".stripMargin
+          """insert into car (model, top_speed, vin)
+          |values ('Ferrari F8 Tributo', 212, 124)""".stripMargin
         )
         stmt.execute(
-          """insert into car (model, top_speed)
-          |values ('Aston Martin Superleggera', 211)""".stripMargin
+          """insert into car (model, top_speed, vin)
+          |values ('Aston Martin Superleggera', 211, null)""".stripMargin
         )
         try stmt.execute("drop table person")
         catch case _ => ()
