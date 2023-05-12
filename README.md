@@ -309,6 +309,9 @@ Setting to TRACE will log SQL queries and their parameters.
 ## Developing
 The tests are written using TestContainers, which requires Docker be installed.
 
+Todo: Scala 3 Enum support
+Todo: Vector, List, etc mapping to Sql array
+Todo: optimize mysql (and other) inserts
 Todo: Comparison with existing frameworks:
 
 Table that compares frameworks:
