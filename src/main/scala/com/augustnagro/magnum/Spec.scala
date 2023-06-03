@@ -1,13 +1,14 @@
 package com.augustnagro.magnum
 
+import java.sql.PreparedStatement
 import java.util.StringJoiner
 
 class Spec[E] private (
-                        tableName: String,
-                        predicates: List[Frag],
-                        limit: Option[Int],
-                        offset: Option[Int],
-                        sorts: List[Sort]
+    tableName: String,
+    predicates: List[Frag],
+    limit: Option[Int],
+    offset: Option[Int],
+    sorts: List[Sort]
 ):
 
   def where(sql: Frag): Spec[E] =
@@ -27,22 +28,28 @@ class Spec[E] private (
   def offset(offset: Int): Spec[E] =
     new Spec(tableName, predicates, limit, Some(offset), sorts)
 
-  def seek(
+  def seek[V](
       column: String,
       seekDirection: SeekDir,
-      value: Any,
+      value: V,
       columnSort: SortOrder,
       nullOrder: NullOrder = NullOrder.Last
-  ): Spec[E] =
+  )(using codec: DbCodec[V]): Spec[E] =
     val sort = Sort(column, columnSort, nullOrder)
-    val pred = Frag(s"$column ${seekDirection.sql} ?", Vector(value))
+    val pred =
+      Frag(
+        s"$column ${seekDirection.sql} ?",
+        Vector(value),
+        (ps, pos) => codec.writeSingle(value, ps, pos)
+      )
     new Spec(tableName, pred :: predicates, limit, offset, sort :: sorts)
 
   def build: Frag =
     val whereClause = StringJoiner(" AND ", "WHERE ", "").setEmptyValue("")
     val allParams = Vector.newBuilder[Any]
 
-    for Frag(query, params) <- predicates.reverse if query.nonEmpty do
+    val validFrags = predicates.reverse.filter(_.query.nonEmpty)
+    for Frag(query, params, _) <- validFrags do
       whereClause.add("(" + query + ")")
       allParams ++= params
 
@@ -59,7 +66,13 @@ class Spec[E] private (
     for l <- limit do finalSj.add("LIMIT " + l)
     for o <- offset do finalSj.add("OFFSET " + o)
 
-    Frag(finalSj.toString, allParams.result())
+    val writerFn = (ps: PreparedStatement, pos: Int) =>
+      var i = pos
+      for f <- validFrags do
+        f.writer(ps, i)
+        i += f.params.size
+
+    Frag(finalSj.toString, allParams.result(), writerFn)
 
 object Spec:
   def apply[E](tableName: String): Spec[E] =

@@ -325,13 +325,7 @@ object DbCodec:
             val cols: IArray[Int] = $colsExpr
             def readSingle(rs: ResultSet, pos: Int): E =
               ${
-                productReadSingle[E, mets](
-                  '{ rs },
-                  mp,
-                  Vector.empty,
-                  '{ pos },
-                  '{ 0 }
-                )
+                productReadSingle[E, mets]('{ rs }, mp, Vector.empty, '{ pos })
               }
             def writeSingle(e: E, ps: PreparedStatement, pos: Int): Unit =
               ${
@@ -372,10 +366,10 @@ object DbCodec:
 
   private def buildSqlNameMap[
       E: Type,
-      Mels <: Tuple: Type,
-      Mets <: Tuple: Type
-  ](using Quotes): Expr[Seq[(String, E)]] =
-    import quotes.reflect.*
+      Mels: Type,
+      Mets: Type
+  ](using q: Quotes): Expr[Seq[(String, E)]] =
+    import q.reflect.*
     val tableAnnot = TypeRepr.of[Table]
     val defaultNameMapper: Expr[SqlNameMapper] =
       TypeRepr
@@ -390,25 +384,34 @@ object DbCodec:
           '{ SqlNameMapper.SameCase }
 
     val sumValueExprs: Vector[Expr[E]] = sumValues[E, Mets]()
-    val scalaNames = Type.valueOfTuple[Mels].get
+    val scalaNames = getScalaNames[Mels]()
 
     val sqlNameAnnot = TypeRepr.of[SqlName]
-    val sqlNameExprs: Vector[Expr[(String, E)]] = scalaNames.productIterator
+    val sqlNameExprs: Vector[Expr[(String, E)]] = scalaNames
       .zip(sumValueExprs)
       .map((scalaName, sumExpr) =>
         val symbol = TypeRepr.of[E].typeSymbol.fieldMember(scalaName.toString)
         symbol.annotations.find(term => term.tpe =:= sqlNameAnnot) match
           case Some(term) =>
             val sqlNameExpr: Expr[SqlName] = term.asExprOf[SqlName]
-            '{ $sqlNameExpr.name.toString -> $sumExpr }
+            '{ ($sqlNameExpr.name.toString, $sumExpr) }
           case None =>
             val scalaNameExpr = Expr(scalaName.toString)
             '{ ($defaultNameMapper.toColumnName($scalaNameExpr), $sumExpr) }
       )
-      .toVector
     Expr.ofSeq(sqlNameExprs)
 
-  private def sumValues[E: Type, Mets <: Tuple: Type](
+  private def getScalaNames[Mels: Type](res: Vector[String] = Vector.empty)(
+      using Quotes
+  ): Vector[String] =
+    import quotes.reflect.*
+    Type.of[Mels] match
+      case '[mel *: melTail] =>
+        val melString = Type.valueOfConstant[mel & String].get
+        getScalaNames[melTail](res :+ melString)
+      case '[EmptyTuple] => res
+
+  private def sumValues[E: Type, Mets: Type](
       res: Vector[Expr[E]] = Vector.empty
   )(using Quotes): Vector[Expr[E]] =
     import quotes.reflect.*
@@ -416,7 +419,9 @@ object DbCodec:
       case '[met *: metTail] =>
         val expr = Expr.summon[Mirror.ProductOf[met & E]] match
           case Some(m) if isSingleton[met] => '{ $m.fromProduct(EmptyTuple) }
-          case None => error("Can only derive simple (non-adt) enums")
+          case None =>
+            report.error("Can only derive simple (non-adt) enums")
+            '{ ??? }
         sumValues[E, metTail](res :+ expr)
       case '[EmptyTuple] => res
 
@@ -430,10 +435,6 @@ object DbCodec:
           }) =>
         tupleArity[mets]() == 0
       case None => false
-
-//  private def buildSqlNamesImpl[Mels: Type](
-//      defaultNameMapper: Expr[SqlNameMapper]
-//  )(using Quotes): Expr[Vector[String]] =
 
   private def tupleArity[T: Type](res: Int = 0)(using Quotes): Int =
     import quotes.reflect.*
@@ -460,8 +461,7 @@ object DbCodec:
       rs: Expr[ResultSet],
       m: Expr[Mirror.ProductOf[E]],
       res: Vector[Expr[Any]],
-      pos: Expr[Int],
-      i: Expr[Int]
+      pos: Expr[Int]
   )(using Quotes): Expr[E] =
     import quotes.reflect.*
     Type.of[Mets] match
@@ -469,16 +469,16 @@ object DbCodec:
         Expr.summon[DbCodec[met]] match
           case Some(codecExpr) =>
             '{
-              val iValue = $i
-              val metValue = $codecExpr.readSingle($rs, $pos + iValue)
-              val newI = iValue + $codecExpr.cols.length
+              val posValue = $pos
+              val codec = $codecExpr
+              val metValue = codec.readSingle($rs, posValue)
+              val newPos = posValue + codec.cols.length
               ${
                 productReadSingle[E, metTail](
                   rs,
                   m,
                   res :+ '{ metValue },
-                  pos,
-                  '{ newI }
+                  '{ newPos }
                 )
               }
             }
@@ -489,26 +489,26 @@ object DbCodec:
                   s"Could not find DbCodec for ${TypeRepr.of[met].show}. Defaulting to ResultSet::[get|set]Object"
                 )
                 '{
-                  val iValue = $i
+                  val posValue = $pos
                   val metValue = $rs.getObject(
-                    $pos + iValue,
+                    posValue,
                     $clsTagExpr.runtimeClass.asInstanceOf[Class[met]]
                   )
-                  val newI = iValue + 1
+                  val newPos = posValue + 1
                   ${
                     productReadSingle[E, metTail](
                       rs,
                       m,
                       res :+ '{ metValue },
-                      pos,
-                      '{ newI }
+                      '{ newPos }
                     )
                   }
                 }
               case None =>
-                error(
+                report.error(
                   "Could not find DbCodec or ClassTag for ${TypeRepr.of[met].show}"
                 )
+                '{ ??? }
       case '[EmptyTuple] =>
         '{
           val product = ${ Expr.ofTupleFromSeq(res) }
@@ -528,22 +528,27 @@ object DbCodec:
           case Some(codecExpr) =>
             '{
               val iValue = $i
+              val posValue = $pos
               val metValue = $e
                 .asInstanceOf[Product]
                 .productElement(iValue)
                 .asInstanceOf[met]
-              $codecExpr.writeSingle(metValue, $ps, $pos + iValue)
-              val newI = iValue + $codecExpr.cols.length
-              ${ productWriteSingle[E, metTail](e, ps, pos, '{ newI }) }
+              val codec = $codecExpr
+              codec.writeSingle(metValue, $ps, posValue)
+              val newPos = posValue + $codecExpr.cols.length
+              val newI = iValue + 1
+              ${ productWriteSingle[E, metTail](e, ps, '{ newPos }, '{ newI }) }
             }
           case None =>
             '{
               val iValue = $i
+              val posValue = $pos
               val metValue = $e
                 .asInstanceOf[Product]
                 .productElement(iValue)
-              $ps.setObject($pos + iValue, metValue)
+              $ps.setObject(posValue, metValue)
+              val newPos = posValue + 1
               val newI = iValue + 1
-              ${ productWriteSingle[E, metTail](e, ps, pos, '{ newI }) }
+              ${ productWriteSingle[E, metTail](e, ps, '{ newPos }, '{ newI }) }
             }
       case '[EmptyTuple] => '{}

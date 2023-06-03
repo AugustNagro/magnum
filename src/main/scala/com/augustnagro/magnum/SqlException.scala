@@ -16,4 +16,6 @@ class SqlException(query: String, params: Iterable[Any], t: Throwable = null)
            |${t.getMessage}
            |""".stripMargin,
       t
-    )
+    ):
+
+  def this(frag: Frag, t: Throwable) = this(frag.query, frag.params, t)

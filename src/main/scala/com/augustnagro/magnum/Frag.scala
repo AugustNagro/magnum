@@ -5,6 +5,10 @@ import java.sql.{PreparedStatement, ResultSet, Statement}
 import scala.util.{Failure, Success, Using}
 
 /** Sql fragment */
-case class Frag(query: String, params: Vector[Any]):
-  def query[E](using codec: DbCodec[E]): Query[E] = Query(this, codec)
+case class Frag(
+    query: String,
+    params: Seq[Any],
+    writer: (ps: PreparedStatement, pos: Int) => Unit
+):
+  def query[E](using reader: DbCodec[E]): Query[E] = Query(this, reader)
   def update: Update = Update(this)

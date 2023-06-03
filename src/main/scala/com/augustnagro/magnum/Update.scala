@@ -7,8 +7,8 @@ case class Update(frag: Frag):
   def runUpdate(using con: DbCon): Int =
     logSql(frag)
     Using(con.connection.prepareStatement(frag.query))(ps =>
-      setValues(ps, frag.params)
+      frag.writer(ps, 0)
       ps.executeUpdate()
     ) match
       case Success(res) => res
-      case Failure(t)   => throw SqlException(frag.query, frag.params, t)
+      case Failure(t)   => throw SqlException(frag, t)
