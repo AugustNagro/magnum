@@ -4,9 +4,9 @@ import scala.util.{Failure, Success, Using}
 
 case class Update(frag: Frag):
   /** Exactly like [[java.sql.PreparedStatement]].executeUpdate */
-  def runUpdate(using con: DbCon): Int =
+  def run()(using con: DbCon): Int =
     logSql(frag)
-    Using(con.connection.prepareStatement(frag.query))(ps =>
+    Using(con.connection.prepareStatement(frag.sqlString))(ps =>
       frag.writer(ps, 0)
       ps.executeUpdate()
     ) match

@@ -1,6 +1,6 @@
 package com.augustnagro.magnum
 
-class SqlException(query: String, params: Iterable[Any], t: Throwable = null)
+class SqlException(query: String, params: Any, t: Throwable = null)
     extends RuntimeException(
       if Log.isLoggable(System.Logger.Level.TRACE) then
         s"""Error executing query:
@@ -8,7 +8,7 @@ class SqlException(query: String, params: Iterable[Any], t: Throwable = null)
            |With message:
            |${t.getMessage}
            |And values:
-           |${params.mkString("[", ", ", "]")}
+           |${logSqlParams(params)}
            |""".stripMargin
       else s"""Error executing query:
            |$query
@@ -18,4 +18,4 @@ class SqlException(query: String, params: Iterable[Any], t: Throwable = null)
       t
     ):
 
-  def this(frag: Frag, t: Throwable) = this(frag.query, frag.params, t)
+  def this(frag: Frag, t: Throwable) = this(frag.sqlString, frag.params, t)

@@ -26,7 +26,7 @@ trait RepoDefaults[EC, E, ID]:
 
 object RepoDefaults:
 
-  inline given [EC: DbCodec, E: DbCodec, ID: ClassTag]
+  inline given [EC: DbCodec: Mirror.Of, E: DbCodec: Mirror.Of, ID: ClassTag]
       : RepoDefaults[EC, E, ID] = ${ genImpl[EC, E, ID] }
 
   private def genImpl[EC: Type, E: Type, ID: Type](using
@@ -55,52 +55,97 @@ object RepoDefaults:
 
     // todo handle None
     Expr.summon[Mirror.Of[E]] match
-      case '{
+      case Some('{
             $eMirror: Mirror.Of[E] {
               type MirroredLabel = eLabel
               type MirroredElemLabels = eMels
             }
-          } =>
+          }) =>
         Expr.summon[Mirror.Of[EC]] match
-          case '{
+          case Some('{
                 $ecMirror: Mirror.Of[EC] {
                   type MirroredElemLabels = ecMels
                 }
-              } =>
-            val tableName = Type.valueOfConstant[eLabel & String].get
-            val tableNameSql = '{ $nameMapper.toTableName(tableName) }
+              }) =>
+            val tableName = Expr(Type.valueOfConstant[eLabel & String].get)
+            val tableNameSql = '{ $nameMapper.toTableName($tableName) }
             val eElemNames = elemNames[eMels]()
             val eElemNamesSql = Expr.ofSeq(
               eElemNames.map(elemName =>
                 sqlNameAnnot[E](elemName) match
                   case Some(sqlName) => '{ $sqlName.name }
-                  case None          => '{ $nameMapper.toColumnName(elemName) }
+                  case None =>
+                    '{ $nameMapper.toColumnName(${ Expr(elemName) }) }
               )
             )
+            val eElemCodecs = getEElemCodecs[E]
             val ecElemNames = elemNames[ecMels]()
             val ecElemNamesSql = Expr.ofSeq(
               ecElemNames.map(elemName =>
                 sqlNameAnnot[E](elemName) match
                   case Some(sqlName) => '{ $sqlName.name }
-                  case None          => '{ $nameMapper.toColumnName(elemName) }
+                  case None =>
+                    '{ $nameMapper.toColumnName(${ Expr(elemName) }) }
               )
             )
             val idIndex = idAnnotIndex[E]
             val eCodec = Expr.summon[DbCodec[E]].get
             val ecCodec = Expr.summon[DbCodec[EC]].get
+            val idCodec = Expr.summon[DbCodec[ID]].get
             val eClassTag = Expr.summon[ClassTag[E]].get
             val ecClassTag = Expr.summon[ClassTag[EC]].get
-            val idClassTag = Expr.summon[ClassTag[Id]].get
+            val idClassTag = Expr.summon[ClassTag[ID]].get
             '{
               $table.dbType.buildRepoDefaults[EC, E, ID](
                 $tableNameSql,
-                eElemNames,
+                ${ Expr(eElemNames) },
                 $eElemNamesSql,
-                ecElemNames,
+                $eElemCodecs,
+                ${ Expr(ecElemNames) },
                 $ecElemNamesSql,
                 $idIndex
-              )(using $eCodec, $ecCodec, $eClassTag, $ecClassTag, $idClassTag)
+              )(using
+                $eCodec,
+                $ecCodec,
+                $idCodec,
+                $eClassTag,
+                $ecClassTag,
+                $idClassTag
+              )
             }
+          case _ =>
+            report.error(
+              s"A Mirror is required to derive RepoDefaults for ${TypeRepr.of[EC].show}"
+            )
+            '{ ??? }
+      case _ =>
+        report.error(
+          s"A Mirror is required to derive RepoDefaults for ${TypeRepr.of[E].show}"
+        )
+        '{ ??? }
+
+  private def getEElemCodecs[E: Type](using Quotes): Expr[Seq[DbCodec[?]]] =
+    import quotes.reflect.*
+    Expr.summon[Mirror.ProductOf[E]] match
+      case Some('{
+            $m: Mirror.ProductOf[E] {
+              type MirroredElemTypes = mets
+            }
+          }) =>
+        getProductCodecs[mets]()
+      case None =>
+        val sumCodec = Expr.summon[DbCodec[E]].get
+        '{ Seq($sumCodec) }
+
+  private def getProductCodecs[Mets: Type](
+      res: Vector[Expr[DbCodec[?]]] = Vector.empty
+  )(using Quotes): Expr[Seq[DbCodec[?]]] =
+    Type.of[Mets] match
+      case '[met *: metTail] =>
+        Expr.summon[DbCodec[met]] match
+          case Some(codec) => getProductCodecs[metTail](res :+ codec)
+          case None => getProductCodecs[metTail](res :+ '{ DbCodec.AnyCodec })
+      case '[EmptyTuple] => Expr.ofSeq(res)
 
   private def idAnnotIndex[E: Type](using Quotes): Expr[Int] =
     import quotes.reflect.*
@@ -138,9 +183,7 @@ object RepoDefaults:
       .fieldMember(elemName)
       .annotations
       .find(term => term.tpe =:= sqlNameAnnot)
-      .map(term => term.asExpr[SqlName])
-
-//  private def genImplTyped[EC: Type, E: Type, ]
+      .map(term => term.asExprOf[SqlName])
 
   private def assertECIsSubsetOfE[EC: Type, E: Type](using Quotes): Unit =
     import quotes.reflect.*

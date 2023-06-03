@@ -102,7 +102,7 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
         sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
 
       assertNoDiff(
-        query.query,
+        query.sqlString,
         "select model, id, top_speed, created, vin from car where top_speed > ?"
       )
       assertEquals(query.params, Vector(minSpeed))
@@ -119,7 +119,7 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
         sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
 
       assertNoDiff(
-        query.query,
+        query.sqlString,
         "select c.model, c.id, c.top_speed, c.created, c.vin from car c where c.top_speed > ?"
       )
       assertEquals(query.run[Car], allCars.tail)

@@ -3,7 +3,7 @@ package com.augustnagro.magnum
 import java.sql.PreparedStatement
 import java.util.StringJoiner
 
-class Spec[E] private (
+class Spec[E: DbCodec] private (
     tableName: String,
     predicates: List[Frag],
     limit: Option[Int],
@@ -44,11 +44,11 @@ class Spec[E] private (
       )
     new Spec(tableName, pred :: predicates, limit, offset, sort :: sorts)
 
-  def build: Frag =
+  def build: Query[E] =
     val whereClause = StringJoiner(" AND ", "WHERE ", "").setEmptyValue("")
     val allParams = Vector.newBuilder[Any]
 
-    val validFrags = predicates.reverse.filter(_.query.nonEmpty)
+    val validFrags = predicates.reverse.filter(_.sqlString.nonEmpty)
     for Frag(query, params, _) <- validFrags do
       whereClause.add("(" + query + ")")
       allParams ++= params
@@ -72,8 +72,8 @@ class Spec[E] private (
         f.writer(ps, i)
         i += f.params.size
 
-    Frag(finalSj.toString, allParams.result(), writerFn)
+    Frag(finalSj.toString, allParams.result(), writerFn).query[E]
 
 object Spec:
-  def apply[E](tableName: String): Spec[E] =
+  def apply[E: DbCodec](tableName: String): Spec[E] =
     new Spec(tableName, Nil, None, None, Nil)

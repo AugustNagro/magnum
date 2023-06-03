@@ -120,78 +120,45 @@ private def sqlWriter(
           '{ ??? }
     case Seq() => '{}
 
-//    if args.isEmpty then return Frag(sc.parts.mkString, Vector.empty)
-//    val resQuery = StringBuilder().append(sc.parts(0))
-//    val resParams = Vector.newBuilder[Any]
-//    for i <- args.indices do
-//      args(i) match
-//        case param =>
-//          resQuery.append('?')
-//          resParams += param
-//      resQuery.append(sc.parts(i + 1))
-//    Frag(resQuery.result(), resParams.result())
-
-// todo batchQuery
-// todo batchUpdate
-def runBatch[T, E](values: Iterable[T])(
-    f: T => Frag
-)(using con: DbCon, dbReader: DbCodec[E]): Vector[E] =
-  if values.isEmpty then return Vector.empty
-  val firstFrag = f(values.head)
+def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
+    con: DbCon
+): BatchUpdateResult =
+  val it = values.iterator
+  if !it.hasNext then return BatchUpdateResult.Success(0)
+  val firstUpdate = f(it.next())
+  val firstFrag = firstUpdate.frag
 
   Using.Manager(use =>
-    val ps = use(
-      con.connection
-        .prepareStatement(firstFrag.query, Statement.RETURN_GENERATED_KEYS)
-    )
+    val ps = use(con.connection.prepareStatement(firstFrag.sqlString))
     firstFrag.writer(ps, 0)
     ps.addBatch()
-    for v <- values.tail do
-      val frag = f(v)
+
+    while it.hasNext do
+      val frag = f(it.next()).frag
       assert(
-        frag.query == firstFrag.query,
+        frag.sqlString == firstFrag.sqlString,
         "all queries must be the same for batch PreparedStatement"
       )
       frag.writer(ps, 0)
       ps.addBatch()
-
-    ps.executeBatch()
-    val genRs = use(ps.getGeneratedKeys)
-    dbReader.read(genRs)
+    batchUpdateResult(ps.executeBatch())
   ) match
     case Success(res) => res
-    case Failure(t)   => throw SqlException(firstFrag, t)
+    case Failure(ex)  => throw SqlException(firstFrag, ex)
 
-// todo change to use Codecs, make sql" a macro and store codec list in Frag
-//private def setValues(
-//    ps: PreparedStatement,
-//    params: Iterable[Any]
-//): Unit =
-//  var i = 1
-//  val it = params.iterator
-//  while it.hasNext do
-//    val javaObject = it.next() match
-//      case bd: scala.math.BigDecimal => bd.bigDecimal
-//      case bi: scala.math.BigInt     => bi.bigInteger
-//      case o: Option[?]              => o.orNull
-//      case x                         => x
-//    ps.setObject(i, javaObject)
-//    i += 1
-
-private def logSql(sql: Frag): Unit = logSql(sql.query, sql.params)
+private def logSql(sql: Frag): Unit = logSql(sql.sqlString, sql.params)
 
 private val Log = System.getLogger(getClass.getName)
 
-private def logSql(query: String, params: Iterable[Any]): Unit =
+private def logSql(query: String, params: Any): Unit =
   if Log.isLoggable(Level.TRACE) then
-    val paramsString = params.mkString("[", ", ", "]")
     Log.log(
       Level.TRACE,
       s"""Executing Query:
          |$query
          |
          |With values:
-         |$paramsString""".stripMargin
+         |${logSqlParams(params)}""".stripMargin
     )
   else if Log.isLoggable(Level.DEBUG) then
     Log.log(
@@ -199,6 +166,19 @@ private def logSql(query: String, params: Iterable[Any]): Unit =
       s"""Executing Query:
          |$query""".stripMargin
     )
+
+private def logSqlParams(params: Any): String =
+  params match
+    case p: Product => p.productIterator.mkString("(", ", ", ")")
+    case it: Iterable[?] =>
+      it.headOption match
+        case Some(h: Product) =>
+          it.asInstanceOf[Iterable[Product]]
+            .map(_.productIterator.mkString("(", ", ", ")"))
+            .mkString("[\n", ",\n", "]\n")
+        case _ =>
+          it.mkString("(", ", ", ")")
+    case x => x.toString
 
 private def batchUpdateResult(updateCounts: Array[Int]): BatchUpdateResult =
   boundary:

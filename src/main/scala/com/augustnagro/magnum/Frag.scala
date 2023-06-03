@@ -2,13 +2,17 @@ package com.augustnagro.magnum
 
 import java.lang.System.Logger.Level
 import java.sql.{PreparedStatement, ResultSet, Statement}
+import scala.collection.immutable.ArraySeq
 import scala.util.{Failure, Success, Using}
 
 /** Sql fragment */
 case class Frag(
-    query: String,
-    params: Seq[Any],
-    writer: (ps: PreparedStatement, pos: Int) => Unit
+    sqlString: String,
+    params: Seq[Any] = Seq.empty,
+    writer: (ps: PreparedStatement, pos: Int) => Unit = Frag.emptyWriter
 ):
   def query[E](using reader: DbCodec[E]): Query[E] = Query(this, reader)
   def update: Update = Update(this)
+
+object Frag:
+  private val emptyWriter = (ps: PreparedStatement, pos: Int) => ()

@@ -4,10 +4,10 @@ import scala.util.{Failure, Success, Using}
 
 case class Query[E](frag: Frag, reader: DbCodec[E]):
 
-  def run(using con: DbCon): Vector[E] =
+  def run()(using con: DbCon): Vector[E] =
     logSql(frag)
     Using.Manager(use =>
-      val ps = use(con.connection.prepareStatement(frag.query))
+      val ps = use(con.connection.prepareStatement(frag.sqlString))
       frag.writer(ps, 0)
       val rs = use(ps.executeQuery())
       reader.read(rs)
