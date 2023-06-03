@@ -134,7 +134,7 @@ object DbCodec:
         ps: PreparedStatement,
         pos: Int
     ): Unit =
-      ps.setBytes(pos, bytes.toArray)
+      ps.setBytes(pos, IArray.genericWrapArray(bytes).toArray)
 
   given SqlDateReader: DbCodec[java.sql.Date] with
     val cols: IArray[Int] = IArray(Types.DATE)
@@ -419,7 +419,7 @@ object DbCodec:
       case '[met *: metTail] =>
         val expr = Expr.summon[Mirror.ProductOf[met & E]] match
           case Some(m) if isSingleton[met] => '{ $m.fromProduct(EmptyTuple) }
-          case None =>
+          case _ =>
             report.error("Can only derive simple (non-adt) enums")
             '{ ??? }
         sumValues[E, metTail](res :+ expr)
@@ -434,7 +434,7 @@ object DbCodec:
             }
           }) =>
         tupleArity[mets]() == 0
-      case None => false
+      case _ => false
 
   private def tupleArity[T: Type](res: Int = 0)(using Quotes): Int =
     import quotes.reflect.*

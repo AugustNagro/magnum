@@ -7,15 +7,15 @@ import scala.deriving.Mirror
 trait DbType:
   def buildRepoDefaults[EC, E, ID](
       tableNameSql: String,
-      fieldNames: List[String],
-      fieldNamesSql: List[String],
-      ecFieldNames: List[String],
-      ecFieldNamesSql: List[String],
+      eElemNames: Seq[String],
+      eElemNamesSql: Seq[String],
+      ecElemNames: Seq[String],
+      ecElemNamesSql: Seq[String],
       idIndex: Int
   )(using
-      dbCodec: DbCodec[E],
-      ecClassTag: ClassTag[EC],
+      eCodec: DbCodec[E],
+      ecCodec: DbCodec[EC],
       eClassTag: ClassTag[E],
-      idClassTag: ClassTag[ID],
-      eMirror: Mirror.ProductOf[E]
+      ecClassTag: ClassTag[EC],
+      idClassTag: ClassTag[ID]
   ): RepoDefaults[EC, E, ID]
