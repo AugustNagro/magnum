@@ -6,24 +6,5 @@ import scala.util.{Failure, Success, Using}
 
 /** Sql fragment */
 case class Frag(query: String, params: Vector[Any]):
-
-  def run[E](using con: DbCon, dbReader: DbCodec[E]): Vector[E] =
-    logSql(this)
-    Using.Manager(use =>
-      val ps = use(con.connection.prepareStatement(query))
-      setValues(ps, params)
-      val rs = use(ps.executeQuery())
-      dbReader.read(rs)
-    ) match
-      case Success(res) => res
-      case Failure(t)   => throw SqlException(query, params, t)
-
-  /** Exactly like [[java.sql.PreparedStatement]].executeUpdate */
-  def runUpdate(using con: DbCon): Int =
-    logSql(this)
-    Using(con.connection.prepareStatement(query))(ps =>
-      setValues(ps, params)
-      ps.executeUpdate()
-    ) match
-      case Success(res) => res
-      case Failure(t)   => throw SqlException(query, params, t)
+  def query[E](using codec: DbCodec[E]): Query[E] = Query(this, codec)
+  def update: Update = Update(this)

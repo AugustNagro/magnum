@@ -104,6 +104,7 @@ def runBatch[T, E](values: Iterable[T])(
     case Success(res) => res
     case Failure(t)   => throw SqlException(t, firstSql.query, values)
 
+// todo change to use Codecs, make sql" a macro and store codec list in Frag
 private def setValues(
     ps: PreparedStatement,
     params: Iterable[Any]
@@ -118,42 +119,6 @@ private def setValues(
       case x                         => x
     ps.setObject(i, javaObject)
     i += 1
-
-private inline def getFromRow[Met](
-    rs: ResultSet,
-    columnIndex: Int
-): Any =
-  inline erasedValue[Met] match
-    case _: String                => rs.getString(columnIndex)
-    case _: Boolean               => rs.getBoolean(columnIndex)
-    case _: Byte                  => rs.getByte(columnIndex)
-    case _: Short                 => rs.getShort(columnIndex)
-    case _: Int                   => rs.getInt(columnIndex)
-    case _: Long                  => rs.getLong(columnIndex)
-    case _: Float                 => rs.getFloat(columnIndex)
-    case _: Double                => rs.getDouble(columnIndex)
-    case _: Array[Byte]           => rs.getBytes(columnIndex)
-    case _: java.sql.Date         => rs.getDate(columnIndex)
-    case _: java.sql.Time         => rs.getTime(columnIndex)
-    case _: java.sql.Timestamp    => rs.getTimestamp(columnIndex)
-    case _: java.sql.Ref          => rs.getRef(columnIndex)
-    case _: java.sql.Blob         => rs.getBlob(columnIndex)
-    case _: java.sql.Clob         => rs.getClob(columnIndex)
-    case _: java.net.URL          => rs.getURL(columnIndex)
-    case _: java.sql.RowId        => rs.getRowId(columnIndex)
-    case _: java.sql.NClob        => rs.getNClob(columnIndex)
-    case _: java.sql.SQLXML       => rs.getSQLXML(columnIndex)
-    case _: scala.math.BigDecimal => BigDecimal(rs.getBigDecimal(columnIndex))
-    case _: java.math.BigDecimal  => rs.getBigDecimal(columnIndex)
-    case _: scala.math.BigInt =>
-      scala.math.BigInt(
-        rs.getObject(columnIndex, classOf[java.math.BigInteger])
-      )
-    case _: Option[t] =>
-      if rs.getObject(columnIndex) == null then None
-      else Some(getFromRow[t](rs, columnIndex))
-    case _ =>
-      rs.getObject(columnIndex, summonInline[ClassTag[Met]].runtimeClass)
 
 private def logSql(sql: Frag): Unit = logSql(sql.query, sql.params)
 

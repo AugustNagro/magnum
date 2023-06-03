@@ -399,8 +399,8 @@ object DbCodec:
         val symbol = TypeRepr.of[E].typeSymbol.fieldMember(scalaName.toString)
         symbol.annotations.find(term => term.tpe =:= sqlNameAnnot) match
           case Some(term) =>
-            val sqlNameExpr = term.asExprOf[SqlName]
-            '{ ($sqlNameExpr.name, $sumExpr) }
+            val sqlNameExpr: Expr[SqlName] = term.asExprOf[SqlName]
+            '{ $sqlNameExpr.name.toString -> $sumExpr }
           case None =>
             val scalaNameExpr = Expr(scalaName.toString)
             '{ ($defaultNameMapper.toColumnName($scalaNameExpr), $sumExpr) }
