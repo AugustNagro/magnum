@@ -1,9 +1,10 @@
 package com.augustnagro.magnum
 
+import com.augustnagro.magnum.SqlException
 import java.lang.System.Logger.Level
 import java.sql.{Connection, PreparedStatement, ResultSet, Statement}
 import javax.sql.DataSource
-import scala.util.{Failure, Success, Using}
+import scala.util.{Failure, Success, Using, boundary}
 import scala.deriving.Mirror
 import scala.compiletime.{
   constValue,
@@ -50,11 +51,11 @@ def transact[T](dataSource: DataSource, connectionConfig: Connection => Unit)(
   )
 
 extension (sc: StringContext)
-  def sql(args: Any*): Sql =
-    if args.isEmpty then return Sql(sc.parts.mkString, Vector.empty)
+  def sql(args: Any*): Frag =
+    if args.isEmpty then return Frag(sc.parts.mkString, Vector.empty)
     val resQuery = StringBuilder().append(sc.parts(0))
     val resParams = Vector.newBuilder[Any]
-    for i <- 0 until args.length do
+    for i <- args.indices do
       args(i) match
         case dbSchema: DbSchema[?, ?, ?] =>
           resQuery.append(dbSchema.tableWithAlias)
@@ -66,15 +67,17 @@ extension (sc: StringContext)
           resQuery.append('?')
           resParams += param
       resQuery.append(sc.parts(i + 1))
-    Sql(resQuery.result(), resParams.result())
+    Frag(resQuery.result(), resParams.result())
 
 private def schemaNameToSql(sn: DbSchemaName): String =
   if sn.tableAlias.isEmpty then sn.sqlName
   else sn.tableAlias + "." + sn.sqlName
 
+// todo batchQuery
+// todo batchUpdate
 def runBatch[T, E](values: Iterable[T])(
-    f: T => Sql
-)(using con: DbCon, dbReader: DbReader[E]): Vector[E] =
+    f: T => Frag
+)(using con: DbCon, dbReader: DbCodec[E]): Vector[E] =
   if values.isEmpty then return Vector.empty
   val firstSql = f(values.head)
 
@@ -96,22 +99,25 @@ def runBatch[T, E](values: Iterable[T])(
 
     ps.executeBatch()
     val genRs = use(ps.getGeneratedKeys)
-    dbReader.build(genRs)
+    dbReader.read(genRs)
   ) match
     case Success(res) => res
-    case Failure(t)   => throw SqlException(t, firstSql)
+    case Failure(t)   => throw SqlException(t, firstSql.query, values)
 
 private def setValues(
     ps: PreparedStatement,
-    params: Vector[Any]
+    params: Iterable[Any]
 ): Unit =
-  for (p, i) <- params.zipWithIndex do
-    val javaObject = p match
+  var i = 1
+  val it = params.iterator
+  while it.hasNext do
+    val javaObject = it.next() match
       case bd: scala.math.BigDecimal => bd.bigDecimal
       case bi: scala.math.BigInt     => bi.bigInteger
       case o: Option[?]              => o.orNull
       case x                         => x
-    ps.setObject(i + 1, javaObject)
+    ps.setObject(i, javaObject)
+    i += 1
 
 private inline def getFromRow[Met](
     rs: ResultSet,
@@ -149,19 +155,20 @@ private inline def getFromRow[Met](
     case _ =>
       rs.getObject(columnIndex, summonInline[ClassTag[Met]].runtimeClass)
 
-private def logSql(sql: Sql): Unit = logSql(sql.query, sql.params)
+private def logSql(sql: Frag): Unit = logSql(sql.query, sql.params)
 
 private val Log = System.getLogger(getClass.getName)
 
-private def logSql(query: String, params: Vector[Any]): Unit =
+private def logSql(query: String, params: Iterable[Any]): Unit =
   if Log.isLoggable(Level.TRACE) then
+    val paramsString = params.mkString("[", ", ", "]")
     Log.log(
       Level.TRACE,
       s"""Executing Query:
          |$query
          |
          |With values:
-         |$params""".stripMargin
+         |$paramsString""".stripMargin
     )
   else if Log.isLoggable(Level.DEBUG) then
     Log.log(
@@ -169,3 +176,16 @@ private def logSql(query: String, params: Vector[Any]): Unit =
       s"""Executing Query:
          |$query""".stripMargin
     )
+
+private def batchUpdateResult(updateCounts: Array[Int]): BatchUpdateResult =
+  boundary:
+    val updatedRows = updateCounts.foldLeft(0L)((res, c) =>
+      c match
+        case rowCount if rowCount >= 0 =>
+          res + rowCount
+        case Statement.SUCCESS_NO_INFO =>
+          boundary.break(BatchUpdateResult.SuccessNoInfo)
+        case errorCode =>
+          throw RuntimeException(s"Received JDBC error code $errorCode")
+    )
+    BatchUpdateResult.Success(updatedRows)

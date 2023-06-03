@@ -28,7 +28,7 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
       topSpeed: Int,
       created: OffsetDateTime,
       vin: Option[Int]
-  ) derives DbReader
+  ) derives DbCodec
 
   val carSchema = DbSchema[Car, Car, UUID](
     ClickhouseDbType,
@@ -210,7 +210,7 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
   test("only allows EC =:= E"):
     intercept[IllegalArgumentException]:
       case class UserCreator(name: String)
-      case class User(id: UUID, name: String) derives DbReader
+      case class User(id: UUID, name: String) derives DbCodec
       val userSchema = DbSchema[UserCreator, User, UUID](
         ClickhouseDbType
       )

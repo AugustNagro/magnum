@@ -17,6 +17,7 @@ import scala.reflect.ClassTag
 import scala.quoted.*
 import scala.util.{Failure, Success, Using}
 
+/*
 trait DbSchema[EC, E, ID] extends Selectable:
   def selectDynamic(scalaName: String): DbSchemaName
   def all: IArray[DbSchemaName]
@@ -30,17 +31,21 @@ trait DbSchema[EC, E, ID] extends Selectable:
   private[magnum] def findAll(spec: Spec[E])(using DbCon): Vector[E]
   private[magnum] def findById(id: ID)(using DbCon): Option[E]
   private[magnum] def findAllById(ids: Iterable[ID])(using DbCon): Vector[E]
-  private[magnum] def delete(entity: E)(using DbCon): Unit
-  private[magnum] def deleteById(id: ID)(using DbCon): Unit
-  private[magnum] def truncate()(using DbCon): Unit
-  private[magnum] def deleteAll(entities: Iterable[E])(using DbCon): Unit
-  private[magnum] def deleteAllById(ids: Iterable[ID])(using DbCon): Unit
-  private[magnum] def insert(entityCreator: EC)(using DbCon): E
+  private[magnum] def delete(entity: E)(using DbCon): Boolean
+  private[magnum] def deleteById(id: ID)(using DbCon): Boolean
+  private[magnum] def truncate()(using DbCon): Int
+  private[magnum] def deleteAll(entities: Iterable[E])(using DbCon): BatchUpdateResult
+  private[magnum] def deleteAllById(ids: Iterable[ID])(using DbCon): BatchUpdateResult
+  private[magnum] def insert(entityCreator: EC)(using DbCon): Unit
   private[magnum] def insertAll(entityCreators: Iterable[EC])(using
       DbCon
+  ): Unit
+  private[magnum] def insertReturning(entityCreator: EC)(using DbCon): E
+  private[magnum] def insertAllReturning(entityCreators: Iterable[EC])(using
+      DbCon
   ): Vector[E]
-  private[magnum] def update(entity: E)(using DbCon): Unit
-  private[magnum] def updateAll(entities: Iterable[E])(using DbCon): Unit
+  private[magnum] def update(entity: E)(using DbCon): Boolean
+  private[magnum] def updateAll(entities: Iterable[E])(using DbCon): BatchUpdateResult
 
 object DbSchema:
   val DefaultAlias = ""
@@ -49,10 +54,10 @@ object DbSchema:
       dbType: DbType,
       sqlNameMapper: SqlNameMapper = SqlNameMapper.SameCase
   )(using
-      ecMirror: Mirror.ProductOf[EC],
-      eMirror: Mirror.ProductOf[E],
-      dbReader: DbReader[E],
-      idCls: ClassTag[ID]
+    Mirror.ProductOf[EC],
+    Mirror.ProductOf[E],
+    DbCodec[E],
+    ClassTag[ID]
   ) = ${ dbSchemaImpl[EC, E, ID]('{ dbType }, '{ sqlNameMapper }) }
 
   private def assertECIsSubsetOfE[EC: Type, E: Type](using Quotes): Unit =
@@ -182,7 +187,7 @@ object DbSchema:
       sqlNameMapper: Expr[SqlNameMapper],
       dbType: Expr[DbType]
   )(using Quotes): Expr[Any] =
-    val dbReader = Expr.summon[DbReader[E]].get
+    val dbReader = Expr.summon[DbCodec[E]].get
     val eClassTag = Expr.summon[ClassTag[E]].get
     val ecClassTag = Expr.summon[ClassTag[EC]].get
     val idClassTag = Expr.summon[ClassTag[ID]].get
@@ -196,3 +201,5 @@ object DbSchema:
         ${ idAnnotIndex[E] }
       )(using $dbReader, $ecClassTag, $eClassTag, $idClassTag, $eMirror)
     }
+
+ */

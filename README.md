@@ -327,3 +327,6 @@ Table that compares frameworks:
 * Scales to complex SQL queries?
 * Specifications for building dynamic queries?
 * Performant Batch queries
+
+## Todo
+Configurable Scala -> JDBC field mapping (via static annotation)

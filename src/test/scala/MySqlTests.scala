@@ -19,7 +19,7 @@ import scala.util.Using.Manager
 class MySqlTests extends FunSuite, TestContainersFixtures:
 
   case class Car(model: String, @Id id: Long, topSpeed: Int, vin: Option[Int])
-      derives DbReader
+      derives DbCodec
 
   val carSchema = DbSchema[Car, Car, Long](
     dbType = MySqlDbType,

@@ -3,18 +3,19 @@ package com.augustnagro.magnum
 import scala.reflect.ClassTag
 import scala.deriving.Mirror
 
-/** Factory for Repos */
+/** Factory for Repo default methods */
 trait DbType:
-  def buildDbSchema[EC, E, ID, RES](
+  def buildRepoDefaults[EC, E, ID](
       tableNameSql: String,
       fieldNames: List[String],
+      fieldNamesSql: List[String],
       ecFieldNames: List[String],
-      sqlNameMapper: SqlNameMapper,
+      ecFieldNamesSql: List[String],
       idIndex: Int
   )(using
-      dbReader: DbReader[E],
+      dbCodec: DbCodec[E],
       ecClassTag: ClassTag[EC],
       eClassTag: ClassTag[E],
       idClassTag: ClassTag[ID],
       eMirror: Mirror.ProductOf[E]
-  ): RES
+  ): RepoDefaults[EC, E, ID]

@@ -5,9 +5,9 @@ import java.time.OffsetDateTime
 import scala.collection.View
 import scala.deriving.Mirror
 import scala.reflect.ClassTag
-import scala.util.{Failure, Success, Using}
+import scala.util.{Failure, Success, Using, boundary}
 
-object ClickhouseDbType extends DbType:
+object ClickhouseDbType /*extends DbType:
   def buildDbSchema[EC, E, ID, RES](
       tableNameSql: String,
       fieldNames: List[String],
@@ -15,11 +15,11 @@ object ClickhouseDbType extends DbType:
       sqlNameMapper: SqlNameMapper,
       idIndex: Int
   )(using
-      dbReader: DbReader[E],
-      ecClassTag: ClassTag[EC],
-      eClassTag: ClassTag[E],
-      idClassTag: ClassTag[ID],
-      eMirror: Mirror.ProductOf[E]
+    dbReader: DbCodec[E],
+    ecClassTag: ClassTag[EC],
+    eClassTag: ClassTag[E],
+    idClassTag: ClassTag[ID],
+    eMirror: Mirror.ProductOf[E]
   ): RES =
     require(
       eClassTag.runtimeClass == ecClassTag.runtimeClass,
@@ -92,7 +92,7 @@ object ClickhouseDbType extends DbType:
       def findAllById(ids: Iterable[ID])(using DbCon): Vector[E] =
         throw UnsupportedOperationException()
 
-      def delete(entity: E)(using DbCon): Unit =
+      def delete(entity: E)(using DbCon): Boolean =
         deleteById(
           entity
             .asInstanceOf[Product]
@@ -100,67 +100,94 @@ object ClickhouseDbType extends DbType:
             .asInstanceOf[ID]
         )
 
-      def deleteById(id: ID)(using DbCon): Unit =
-        Sql(deleteByIdSql, Vector(id)).runUpdate
+      def deleteById(id: ID)(using DbCon): Boolean =
+        Sql(deleteByIdSql, Vector(id)).runUpdate > 0
 
-      def truncate()(using DbCon): Unit =
+      def truncate()(using DbCon): Int =
         Sql(truncateSql, Vector.empty).runUpdate
 
-      def deleteAll(entities: Iterable[E])(using DbCon): Unit =
+      def deleteAll(entities: Iterable[E])(using DbCon): BatchUpdateResult =
         deleteAllById(
           entities.map(e =>
             e.asInstanceOf[Product].productElement(idIndex).asInstanceOf[ID]
           )
         )
 
-      def deleteAllById(ids: Iterable[ID])(using con: DbCon): Unit =
-        Using.Manager(use =>
-          logSql(deleteByIdSql, Vector.empty)
-          val ps = use(con.connection.prepareStatement(deleteByIdSql))
+      def deleteAllById(ids: Iterable[ID])(using
+          con: DbCon
+      ): BatchUpdateResult =
+        logSql(deleteByIdSql, ids)
+        Using(con.connection.prepareStatement(deleteByIdSql))(ps =>
           for id <- ids do
             ps.setObject(1, id)
             ps.addBatch()
-          ps.executeBatch()
+          batchUpdateResult(ps.executeBatch())
+        ) match
+          case Success(res) => res
+          case Failure(t) =>
+            throw SqlException(deleteByIdSql, ids, t)
+
+      def insert(entityCreator: EC)(using con: DbCon): Unit =
+        val insertValues = ProductIterable(entityCreator.asInstanceOf[Product])
+        logSql(insertSql, insertValues)
+        Using(con.connection.prepareStatement(insertSql))(ps =>
+          setValues(ps, insertValues)
+          ps.executeUpdate()
         ) match
           case Success(_) => ()
-          case Failure(t) =>
-            throw SqlException(t, Sql(deleteByIdSql, Vector.empty))
+          case Failure(ex) =>
+            throw SqlException(insertSql, insertValues, ex)
 
-      def insert(entityCreator: EC)(using con: DbCon): E =
-        Using.Manager(use =>
-          val insertValues =
-            entityCreator.asInstanceOf[Product].productIterator.toVector
-          logSql(insertSql, insertValues)
-          val ps = use(con.connection.prepareStatement(insertSql))
+      def insertAll(entityCreators: Iterable[EC])(using con: DbCon): Unit =
+        val batchInsertValues = entityCreators
+          .map(ec => ProductIterable(ec.asInstanceOf[Product]))
+        logSql(insertSql, batchInsertValues)
+        Using(con.connection.prepareStatement(insertSql))(ps =>
+          for insertValues <- batchInsertValues do
+            setValues(ps, insertValues)
+            ps.addBatch()
+          batchUpdateResult(ps.executeBatch())
+        ) match
+          case Success(_) => ()
+          case Failure(ex) =>
+            throw SqlException(insertSql, batchInsertValues, ex)
+
+      def insertReturning(entityCreator: EC)(using con: DbCon): E =
+        val insertValues = ProductIterable(entityCreator.asInstanceOf[Product])
+        logSql(insertSql, insertValues)
+        Using(con.connection.prepareStatement(insertSql))(ps =>
           setValues(ps, insertValues)
           ps.executeUpdate()
           entityCreator.asInstanceOf[E]
         ) match
           case Success(res) => res
           case Failure(ex) =>
-            throw SqlException(ex, Sql(insertSql, Vector.empty))
+            throw SqlException(insertSql, insertValues, ex)
 
-      def insertAll(
+      def insertAllReturning(
           entityCreators: Iterable[EC]
       )(using con: DbCon): Vector[E] =
-        Using.Manager(use =>
-          logSql(insertSql, Vector.empty)
-          val ps = use(con.connection.prepareStatement(insertSql))
-          val res = entityCreators.toVector
-          for ec <- res do
-            setValues(ps, ec.asInstanceOf[Product].productIterator.toVector)
+        val batchInsertValues = entityCreators
+          .map(ec => ProductIterable(ec.asInstanceOf[Product]))
+        logSql(insertSql, batchInsertValues)
+        Using(con.connection.prepareStatement(insertSql))(ps =>
+          for insertValues <- batchInsertValues do
+            setValues(ps, insertValues)
             ps.addBatch()
           ps.executeBatch()
-          res.asInstanceOf[Vector[E]]
+          entityCreators.toVector.asInstanceOf[Vector[E]]
         ) match
           case Success(res) => res
-          case Failure(t) =>
-            throw SqlException(t, Sql(insertSql, Vector.empty))
+          case Failure(ex) =>
+            throw SqlException(insertSql, batchInsertValues, ex)
 
-      def update(entity: E)(using DbCon): Unit =
+      def update(entity: E)(using DbCon): Boolean =
         throw UnsupportedOperationException()
 
-      def updateAll(entities: Iterable[E])(using con: DbCon): Unit =
+      def updateAll(entities: Iterable[E])(using con: DbCon): BatchUpdateResult =
         throw UnsupportedOperationException()
+
     end ClickHouseSchema
     ClickHouseSchema(DbSchema.DefaultAlias, schemaNames).asInstanceOf[RES]
+
+*/

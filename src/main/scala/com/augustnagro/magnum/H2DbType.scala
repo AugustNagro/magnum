@@ -7,7 +7,7 @@ import scala.deriving.Mirror
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Using}
 
-object H2DbType extends DbType:
+object H2DbType /*extends DbType:
   def buildDbSchema[EC, E, ID, RES](
       tableNameSql: String,
       fieldNames: List[String],
@@ -15,11 +15,11 @@ object H2DbType extends DbType:
       sqlNameMapper: SqlNameMapper,
       idIndex: Int
   )(using
-      dbReader: DbReader[E],
-      ecClassTag: ClassTag[EC],
-      eClassTag: ClassTag[E],
-      idClassTag: ClassTag[ID],
-      eMirror: Mirror.ProductOf[E]
+    dbReader: DbCodec[E],
+    ecClassTag: ClassTag[EC],
+    eClassTag: ClassTag[E],
+    idClassTag: ClassTag[ID],
+    eMirror: Mirror.ProductOf[E]
   ): RES =
     val schemaNames: IArray[DbSchemaName] = IArray
       .from(fieldNames)
@@ -146,7 +146,7 @@ object H2DbType extends DbType:
           ps.executeUpdate()
           val rs = use(ps.getGeneratedKeys)
           rs.next()
-          dbReader.buildSingle(rs)
+          dbReader.readSingle(rs)
         ) match
           case Success(res) => res
           case Failure(ex) =>
@@ -164,7 +164,7 @@ object H2DbType extends DbType:
             ps.addBatch()
           ps.executeBatch()
           val rs = use(ps.getGeneratedKeys)
-          dbReader.build(rs)
+          dbReader.read(rs)
         ) match
           case Success(res) => res
           case Failure(t) =>
@@ -206,3 +206,5 @@ object H2DbType extends DbType:
             throw SqlException(t, Sql(updateSql, Vector.empty))
     end H2Schema
     H2Schema(DbSchema.DefaultAlias, schemaNames).asInstanceOf[RES]
+
+*/

@@ -3,47 +3,46 @@ package com.augustnagro.magnum
 import java.util.StringJoiner
 
 class Spec[E] private (
-    schema: DbSchema[?, E, ?],
-    predicates: List[Sql],
-    limit: Option[Int],
-    offset: Option[Int],
-    sorts: List[Sort]
+                        tableName: String,
+                        predicates: List[Frag],
+                        limit: Option[Int],
+                        offset: Option[Int],
+                        sorts: List[Sort]
 ):
 
-  def where(sql: Sql): Spec[E] =
-    new Spec(schema, sql :: predicates, limit, offset, sorts)
+  def where(sql: Frag): Spec[E] =
+    new Spec(tableName, sql :: predicates, limit, offset, sorts)
 
   def orderBy(
-      column: DbSchemaName,
+      column: String,
       direction: SortOrder = SortOrder.Asc,
       nullOrder: NullOrder = NullOrder.Last
   ): Spec[E] =
-    val sort = Sort(toSql(column), direction, nullOrder)
-    new Spec(schema, predicates, limit, offset, sort :: sorts)
+    val sort = Sort(column, direction, nullOrder)
+    new Spec(tableName, predicates, limit, offset, sort :: sorts)
 
   def limit(limit: Int): Spec[E] =
-    new Spec(schema, predicates, Some(limit), offset, sorts)
+    new Spec(tableName, predicates, Some(limit), offset, sorts)
 
   def offset(offset: Int): Spec[E] =
-    new Spec(schema, predicates, limit, Some(offset), sorts)
+    new Spec(tableName, predicates, limit, Some(offset), sorts)
 
   def seek(
-      column: DbSchemaName,
+      column: String,
       seekDirection: SeekDir,
       value: Any,
       columnSort: SortOrder,
       nullOrder: NullOrder = NullOrder.Last
   ): Spec[E] =
-    val colSql = toSql(column)
-    val sort = Sort(colSql, columnSort, nullOrder)
-    val pred = Sql(s"$colSql ${seekDirection.sql} ?", Vector(value))
-    new Spec(schema, pred :: predicates, limit, offset, sort :: sorts)
+    val sort = Sort(column, columnSort, nullOrder)
+    val pred = Frag(s"$column ${seekDirection.sql} ?", Vector(value))
+    new Spec(tableName, pred :: predicates, limit, offset, sort :: sorts)
 
-  def build: Sql =
+  def build: Frag =
     val whereClause = StringJoiner(" AND ", "WHERE ", "").setEmptyValue("")
     val allParams = Vector.newBuilder[Any]
 
-    for Sql(query, params) <- predicates.reverse if query.nonEmpty do
+    for Frag(query, params) <- predicates.reverse if query.nonEmpty do
       whereClause.add("(" + query + ")")
       allParams ++= params
 
@@ -51,7 +50,7 @@ class Spec[E] private (
     for Sort(col, dir, nullOrder) <- sorts.reverse do
       orderByClause.add(col + " " + dir.sql + " " + nullOrder.sql)
 
-    val selectPart = "SELECT * FROM " + schema.tableWithAlias + " "
+    val selectPart = "SELECT * FROM " + tableName + " "
     val finalSj = StringJoiner(" ", selectPart, "")
     val whereClauseStr = whereClause.toString
     if whereClauseStr.nonEmpty then finalSj.add(whereClauseStr)
@@ -60,12 +59,8 @@ class Spec[E] private (
     for l <- limit do finalSj.add("LIMIT " + l)
     for o <- offset do finalSj.add("OFFSET " + o)
 
-    Sql(finalSj.toString, allParams.result())
-
-  private def toSql(column: DbSchemaName): String =
-    if column.tableAlias.isEmpty then column.sqlName
-    else column.tableAlias + "." + column.sqlName
+    Frag(finalSj.toString, allParams.result())
 
 object Spec:
-  def apply[E](schema: DbSchema[?, E, ?]): Spec[E] =
-    new Spec(schema, Nil, None, None, Nil)
+  def apply[E](tableName: String): Spec[E] =
+    new Spec(tableName, Nil, None, None, Nil)

@@ -27,7 +27,7 @@ class PgTests extends FunSuite, TestContainersFixtures:
       @Id id: Long,
       topSpeed: Int,
       vin: Option[Int]
-  ) derives DbReader
+  ) derives DbCodec
 
   val carSchema = DbSchema[Car, Car, Long](
     PostgresDbType,

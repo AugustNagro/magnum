@@ -7,7 +7,7 @@ import scala.deriving.Mirror
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Using}
 
-object MySqlDbType extends DbType:
+object MySqlDbType /*extends DbType:
   def buildDbSchema[EC, E, ID, RES](
       tableNameSql: String,
       fieldNames: List[String],
@@ -15,11 +15,11 @@ object MySqlDbType extends DbType:
       sqlNameMapper: SqlNameMapper,
       idIndex: Int
   )(using
-      dbReader: DbReader[E],
-      ecClassTag: ClassTag[EC],
-      eClassTag: ClassTag[E],
-      idClassTag: ClassTag[ID],
-      eMirror: Mirror.ProductOf[E]
+    dbReader: DbCodec[E],
+    ecClassTag: ClassTag[EC],
+    eClassTag: ClassTag[E],
+    idClassTag: ClassTag[ID],
+    eMirror: Mirror.ProductOf[E]
   ): RES =
     val schemaNames: IArray[DbSchemaName] = IArray
       .from(fieldNames)
@@ -211,3 +211,5 @@ object MySqlDbType extends DbType:
             throw SqlException(t, Sql(updateSql, Vector.empty))
     end MySqlSchema
     MySqlSchema(DbSchema.DefaultAlias, schemaNames).asInstanceOf[RES]
+
+*/

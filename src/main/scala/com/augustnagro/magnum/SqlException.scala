@@ -1,11 +1,19 @@
 package com.augustnagro.magnum
 
-class SqlException(t: Throwable, sql: Sql)
+class SqlException(query: String, params: Iterable[Any], t: Throwable = null)
     extends RuntimeException(
-      s"""Error executing query:
-         |${sql.query}
-         |With message:
-         |${t.getMessage}
-         |""".stripMargin,
+      if Log.isLoggable(System.Logger.Level.TRACE) then
+        s"""Error executing query:
+           |$query
+           |With message:
+           |${t.getMessage}
+           |And values:
+           |${params.mkString("[", ", ", "]")}
+           |""".stripMargin
+      else s"""Error executing query:
+           |$query
+           |With message:
+           |${t.getMessage}
+           |""".stripMargin,
       t
     )

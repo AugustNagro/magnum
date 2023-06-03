@@ -13,7 +13,7 @@ import scala.util.Using.Manager
 class H2Tests extends FunSuite:
 
   case class Car(model: String, @Id id: Long, topSpeed: Int, vin: Option[Int])
-      derives DbReader
+      derives DbCodec
 
   val carSchema = DbSchema[Car, Car, Long](
     H2DbType,
