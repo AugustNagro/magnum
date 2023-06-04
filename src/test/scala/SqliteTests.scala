@@ -9,26 +9,30 @@ import javax.sql.DataSource
 import scala.util.Using
 import scala.util.Using.Manager
 
-class SqliteTests /* extends FunSuite:
+class SqliteTests extends FunSuite:
 
   /*
   Immutable Repo Tests
    */
 
-  case class Car(model: String, @Id id: Long, topSpeed: Int, vin: Option[Int])
-      derives DbCodec
+  enum Color derives DbCodec:
+    case Red, Green, Blue
 
-  val carSchema = DbSchema[Car, Car, Long](
-    SqliteDbType,
-    SqlNameMapper.CamelToSnakeCase
-  )
+  @Table(SqliteDbType, SqlNameMapper.CamelToSnakeCase)
+  case class Car(
+      model: String,
+      @Id id: Long,
+      topSpeed: Int,
+      @SqlName("vin") vinNumber: Option[Int],
+      color: Color
+  ) derives DbCodec
 
-  val carRepo = ImmutableRepo(carSchema)
+  val carRepo = ImmutableRepo[Car, Long]
 
   val allCars = Vector(
-    Car("McLaren Senna", 1L, 208, Some(123)),
-    Car("Ferrari F8 Tributo", 2L, 212, Some(124)),
-    Car("Aston Martin Superleggera", 3L, 211, None)
+    Car("McLaren Senna", 1L, 208, Some(123), Color.Red),
+    Car("Ferrari F8 Tributo", 2L, 212, Some(124), Color.Green),
+    Car("Aston Martin Superleggera", 3L, 211, None, Color.Blue)
   )
 
   test("count"):
@@ -48,8 +52,9 @@ class SqliteTests /* extends FunSuite:
 
   test("findAll spec"):
     connect(ds()):
-      val spec = Spec(carSchema)
-        .where(sql"${carSchema.topSpeed} > 211")
+      val topSpeed = 211
+      val spec = Spec[Car]
+        .where(sql"top_speed > $topSpeed")
       assertEquals(carRepo.findAll(spec), Vector(allCars(1)))
 
   test("findById"):
@@ -74,37 +79,25 @@ class SqliteTests /* extends FunSuite:
 
   test("select query"):
     connect(ds()):
-      val car = carSchema
-      val minSpeed = 210
-      val query =
-        sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
-
+      val minSpeed: Int = 210
+      val query = sql"select * from car where top_speed > $minSpeed".query[Car]
       assertNoDiff(
-        query.sqlString,
-        "select model, id, top_speed, vin from car where top_speed > ?"
+        query.frag.sqlString,
+        "select * from car where top_speed > ?"
       )
-      assertEquals(query.params, Vector(minSpeed))
-      assertEquals(
-        query.run[Car],
-        allCars.tail
-      )
+      assertEquals(query.frag.params, Vector(minSpeed))
+      assertEquals(query.run(), allCars.tail)
 
-  test("select query with aliasing"):
+  test("tuple select"):
     connect(ds()):
-      val car = carSchema.alias("c")
-      val minSpeed = 210
-      val query =
-        sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
-
-      assertNoDiff(
-        query.sqlString,
-        "select c.model, c.id, c.top_speed, c.vin from car c where c.top_speed > ?"
-      )
-      assertEquals(query.run[Car], allCars.tail)
+      val tuples = sql"select model, color from car where id = 2"
+        .query[(String, Color)]
+        .run()
+      assertEquals(tuples, Vector(allCars(1).model -> allCars(1).color))
 
   test("reads null int as None and not Some(0)"):
     connect(ds()):
-      assertEquals(carRepo.findById(3L).get.vin, None)
+      assertEquals(carRepo.findById(3L).get.vinNumber, None)
 
   /*
   Repo Tests
@@ -113,23 +106,18 @@ class SqliteTests /* extends FunSuite:
       firstName: Option[String],
       lastName: String,
       isAdmin: Boolean
-  )
+  ) derives DbCodec
 
+  @Table(SqliteDbType, SqlNameMapper.CamelToSnakeCase)
   case class Person(
       id: Long,
       firstName: Option[String],
       lastName: String,
       isAdmin: Boolean,
       created: String
-  )
+  ) derives DbCodec
 
-  val person = DbSchema[PersonCreator, Person, Long](
-    SqliteDbType,
-    SqlNameMapper.CamelToSnakeCase
-  )
-
-  // aliases should not affect generated queries
-  val personRepo = Repo(person.alias("p"))
+  val personRepo = Repo[PersonCreator, Person, Long]
 
   test("delete"):
     connect(ds()):
@@ -187,6 +175,44 @@ class SqliteTests /* extends FunSuite:
       )
       assertEquals(personRepo.count, 10L)
       assertEquals(personRepo.findById(9L).get.lastName, "Smith")
+
+  test("insertReturning"):
+    connect(ds()):
+      val person = personRepo.insertReturning(
+        PersonCreator(
+          firstName = Some("John"),
+          lastName = "Smith",
+          isAdmin = false
+        )
+      )
+      assertEquals(person.id, 9L)
+      assertEquals(person.lastName, "Smith")
+
+  test("insertAllReturning"):
+    intercept[UnsupportedOperationException]:
+      connect(ds()):
+        val newPc = Vector(
+          PersonCreator(
+            firstName = Some("Chandler"),
+            lastName = "Johnsored",
+            isAdmin = true
+          ),
+          PersonCreator(
+            firstName = None,
+            lastName = "Odysseus",
+            isAdmin = false
+          ),
+          PersonCreator(
+            firstName = Some("Jorge"),
+            lastName = "Masvidal",
+            isAdmin = true
+          )
+        )
+        val people = personRepo.insertAllReturning(newPc)
+        assertEquals(personRepo.count, 11L)
+        println(people)
+        assertEquals(people.size, 3)
+        assertEquals(people.last.lastName, newPc.last.lastName)
 
   test("insert invalid"):
     intercept[SqlException]:
@@ -283,39 +309,39 @@ class SqliteTests /* extends FunSuite:
       stmt.execute("drop table if exists car")
       stmt.execute(
         """create table car (
-          |    model text not null,
-          |    id integer primary key,
-          |    top_speed integer,
-          |    vin integer
-          |)""".stripMargin
+            |    model text not null,
+            |    id integer primary key,
+            |    top_speed integer,
+            |    vin integer,
+            |    color text check (color in ('Red', 'Green', 'Blue')) not null
+            |)""".stripMargin
       )
       stmt.execute(
-        """insert into car (model, top_speed, vin) values
-          |('McLaren Senna', 208, 123),
-          |('Ferrari F8 Tributo', 212, 124),
-          |('Aston Martin Superleggera', 211, null)""".stripMargin
+        """insert into car (model, top_speed, vin, color) values
+            |('McLaren Senna', 208, 123, 'Red'),
+            |('Ferrari F8 Tributo', 212, 124, 'Green'),
+            |('Aston Martin Superleggera', 211, null, 'Blue')""".stripMargin
       )
       stmt.execute("drop table if exists person")
       stmt.execute(
         """create table person (
-          |    id integer primary key,
-          |    first_name text,
-          |    last_name text not null,
-          |    is_admin integer not null,
-          |    created text default(datetime())
-          |)""".stripMargin
+            |    id integer primary key,
+            |    first_name text,
+            |    last_name text not null,
+            |    is_admin integer not null,
+            |    created text default(datetime())
+            |)""".stripMargin
       )
       stmt.execute(
         """insert into person (first_name, last_name, is_admin, created) values
-          |('George', 'Washington', true, datetime()),
-          |('Alexander', 'Hamilton', true, datetime()),
-          |('John', 'Adams', true, datetime()),
-          |('Benjamin', 'Franklin', true, datetime()),
-          |('John', 'Jay', true, datetime()),
-          |('Thomas', 'Jefferson', true, datetime()),
-          |('James', 'Madison', true, datetime()),
-          |(null, 'Nagro', false, datetime())""".stripMargin
+            |('George', 'Washington', true, datetime()),
+            |('Alexander', 'Hamilton', true, datetime()),
+            |('John', 'Adams', true, datetime()),
+            |('Benjamin', 'Franklin', true, datetime()),
+            |('John', 'Jay', true, datetime()),
+            |('Thomas', 'Jefferson', true, datetime()),
+            |('James', 'Madison', true, datetime()),
+            |(null, 'Nagro', false, datetime())""".stripMargin
       )
     ).get
     ds
-*/
