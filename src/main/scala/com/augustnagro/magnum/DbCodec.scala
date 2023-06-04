@@ -6,7 +6,14 @@ import java.time.{LocalDate, LocalDateTime, LocalTime, OffsetDateTime}
 import java.util.UUID
 import scala.annotation.implicitNotFound
 import scala.deriving.Mirror
-import scala.compiletime.{constValue, constValueTuple, erasedValue, error, summonFrom, summonInline}
+import scala.compiletime.{
+  constValue,
+  constValueTuple,
+  erasedValue,
+  error,
+  summonFrom,
+  summonInline
+}
 import scala.quoted.*
 import scala.reflect.ClassTag
 
@@ -182,7 +189,7 @@ object DbCodec:
     def queryRepr: String = "?"
 
   given OffsetDateTimeCodec: DbCodec[OffsetDateTime] with
-    val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
+    val cols: IArray[Int] = IArray(Types.TIMESTAMP_WITH_TIMEZONE)
     def readSingle(rs: ResultSet, pos: Int): OffsetDateTime =
       rs.getObject(pos, classOf[OffsetDateTime])
     def writeSingle(dt: OffsetDateTime, ps: PreparedStatement, pos: Int): Unit =
@@ -265,7 +272,7 @@ object DbCodec:
     ): Unit =
       ps.setBigDecimal(pos, bd.underlying)
     def queryRepr: String = "?"
-    
+
   given UUIDCodec: DbCodec[UUID] with
     def queryRepr: String = "?"
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
