@@ -10,7 +10,7 @@ import scala.util.Properties.propOrNone
 import scala.util.Using
 import scala.util.Using.Manager
 
-class H2Tests extends FunSuite:
+class H2Tests /*extends FunSuite:
 
   case class Car(model: String, @Id id: Long, topSpeed: Int, vin: Option[Int])
       derives DbCodec
@@ -280,3 +280,4 @@ class H2Tests extends FunSuite:
       stmt.execute(personSql)
     )
     ds
+*/

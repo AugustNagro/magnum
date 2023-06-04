@@ -59,7 +59,7 @@ extension (inline sc: StringContext)
 private def sqlImpl(sc: Expr[StringContext], args: Expr[Seq[Any]])(using
     Quotes
 ): Expr[Frag] =
-  import quotes.reflect.*
+  import quotes.reflect.report
   val argsExprs: Seq[Expr[Any]] = args match
     case Varargs(ae) => ae
   val stringExprs: Seq[Expr[String]] = sc match

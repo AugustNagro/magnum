@@ -26,8 +26,15 @@ trait RepoDefaults[EC, E, ID]:
 
 object RepoDefaults:
 
-  inline given [EC: DbCodec: Mirror.Of, E: DbCodec: Mirror.Of, ID: ClassTag]
-      : RepoDefaults[EC, E, ID] = ${ genImpl[EC, E, ID] }
+  inline given genImmutableRepo[E: DbCodec: Mirror.Of, ID: ClassTag]
+      : RepoDefaults[E, E, ID] =
+    genRepo[E, E, ID]
+
+  inline given genRepo[
+      EC: DbCodec: Mirror.Of,
+      E: DbCodec: Mirror.Of,
+      ID: ClassTag
+  ]: RepoDefaults[EC, E, ID] = ${ genImpl[EC, E, ID] }
 
   private def genImpl[EC: Type, E: Type, ID: Type](using
       Quotes
@@ -67,7 +74,7 @@ object RepoDefaults:
                   type MirroredElemLabels = ecMels
                 }
               }) =>
-            val tableName = Expr(Type.valueOfConstant[eLabel & String].get)
+            val tableName = Expr(Type.valueOfConstant[eLabel].get.toString)
             val tableNameSql = '{ $nameMapper.toTableName($tableName) }
             val eElemNames = elemNames[eMels]()
             val eElemNamesSql = Expr.ofSeq(
@@ -133,7 +140,7 @@ object RepoDefaults:
             }
           }) =>
         getProductCodecs[mets]()
-      case None =>
+      case _ =>
         val sumCodec = Expr.summon[DbCodec[E]].get
         '{ Seq($sumCodec) }
 
@@ -167,7 +174,7 @@ object RepoDefaults:
     import quotes.reflect.*
     Type.of[Mels] match
       case '[mel *: melTail] =>
-        val melString = Type.valueOfConstant[mel & String].get
+        val melString = Type.valueOfConstant[mel].get.toString
         elemNames[melTail](melString :: res)
       case '[EmptyTuple] =>
         res.reverse

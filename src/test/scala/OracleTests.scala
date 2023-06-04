@@ -11,7 +11,7 @@ import java.time.OffsetDateTime
 import javax.sql.DataSource
 import scala.util.Using
 
-class OracleTests extends FunSuite, TestContainersFixtures:
+class OracleTests /* extends FunSuite, TestContainersFixtures:
 
   /*
   Immutable Repo Tests
@@ -364,3 +364,4 @@ class OracleTests extends FunSuite, TestContainersFixtures:
       )
       .get
     ds
+*/

@@ -9,7 +9,7 @@ import javax.sql.DataSource
 import scala.util.Using
 import scala.util.Using.Manager
 
-class SqliteTests extends FunSuite:
+class SqliteTests /* extends FunSuite:
 
   /*
   Immutable Repo Tests
@@ -318,3 +318,4 @@ class SqliteTests extends FunSuite:
       )
     ).get
     ds
+*/

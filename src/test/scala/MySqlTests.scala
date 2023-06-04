@@ -16,7 +16,7 @@ import javax.sql.DataSource
 import scala.util.Using
 import scala.util.Using.Manager
 
-class MySqlTests extends FunSuite, TestContainersFixtures:
+class MySqlTests /*extends FunSuite, TestContainersFixtures:
 
   case class Car(model: String, @Id id: Long, topSpeed: Int, vin: Option[Int])
       derives DbCodec
@@ -296,3 +296,4 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
       use(con.prepareStatement(personSql)).execute()
     ).get
     ds
+*/

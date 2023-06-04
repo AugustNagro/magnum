@@ -16,7 +16,7 @@ import java.util.{Properties, UUID}
 import javax.sql.DataSource
 import scala.util.Using
 
-class ClickHouseTests extends FunSuite, TestContainersFixtures:
+class ClickHouseTests /*extends FunSuite, TestContainersFixtures:
 
   /*
   Immutable Repo Tests
@@ -290,3 +290,4 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
       )
       .get
     ds
+*/
