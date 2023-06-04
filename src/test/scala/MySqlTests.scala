@@ -16,22 +16,26 @@ import javax.sql.DataSource
 import scala.util.Using
 import scala.util.Using.Manager
 
-class MySqlTests /*extends FunSuite, TestContainersFixtures:
+class MySqlTests extends FunSuite, TestContainersFixtures:
 
-  case class Car(model: String, @Id id: Long, topSpeed: Int, vin: Option[Int])
-      derives DbCodec
+  enum Color derives DbCodec:
+    case Red, Green, Blue
 
-  val carSchema = DbSchema[Car, Car, Long](
-    dbType = MySqlDbType,
-    sqlNameMapper = SqlNameMapper.CamelToSnakeCase
-  )
+  @Table(MySqlDbType, SqlNameMapper.CamelToSnakeCase)
+  case class Car(
+      model: String,
+      @Id id: Long,
+      topSpeed: Int,
+      @SqlName("vin") vinNumber: Option[Int],
+      color: Color
+  ) derives DbCodec
 
-  val carRepo = ImmutableRepo(carSchema)
+  val carRepo = ImmutableRepo[Car, Long]
 
   val allCars = Vector(
-    Car("McLaren Senna", 1L, 208, Some(123)),
-    Car("Ferrari F8 Tributo", 2L, 212, Some(124)),
-    Car("Aston Martin Superleggera", 3L, 211, None)
+    Car("McLaren Senna", 1L, 208, Some(123), Color.Red),
+    Car("Ferrari F8 Tributo", 2L, 212, Some(124), Color.Green),
+    Car("Aston Martin Superleggera", 3L, 211, None, Color.Blue)
   )
 
   test("count"):
@@ -49,8 +53,9 @@ class MySqlTests /*extends FunSuite, TestContainersFixtures:
 
   test("findAll spec"):
     connect(ds()):
-      val spec = Spec(carSchema)
-        .where(sql"${carSchema.topSpeed} > 211")
+      val topSpeed = 211
+      val spec = Spec[Car]
+        .where(sql"top_speed > $topSpeed")
       assertEquals(carRepo.findAll(spec), Vector(allCars(1)))
 
   test("findById"):
@@ -75,59 +80,45 @@ class MySqlTests /*extends FunSuite, TestContainersFixtures:
 
   test("select query"):
     connect(ds()):
-      val car = carSchema
-      val minSpeed = 210
-      val query =
-        sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
-
+      val minSpeed: Int = 210
+      val query = sql"select * from car where top_speed > $minSpeed".query[Car]
       assertNoDiff(
-        query.sqlString,
-        "select model, id, top_speed, vin from car where top_speed > ?"
+        query.frag.sqlString,
+        "select * from car where top_speed > ?"
       )
-      assertEquals(query.params, Vector(minSpeed))
-      assertEquals(
-        query.run[Car],
-        allCars.tail
-      )
+      assertEquals(query.frag.params, Vector(minSpeed))
+      assertEquals(query.run(), allCars.tail)
 
-  test("select query with aliasing"):
+  test("tuple select"):
     connect(ds()):
-      val car = carSchema.alias("c")
-      val minSpeed = 210
-      val query =
-        sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
-
-      assertNoDiff(
-        query.sqlString,
-        "select c.model, c.id, c.top_speed, c.vin from car c where c.top_speed > ?"
-      )
-      assertEquals(query.run[Car], allCars.tail)
+      val tuples = sql"select model, color from car where id = 2"
+        .query[(String, Color)]
+        .run()
+      assertEquals(tuples, Vector(allCars(1).model -> allCars(1).color))
 
   test("reads null int as None and not Some(0)"):
     connect(ds()):
-      assertEquals(carRepo.findById(3L).get.vin, None)
+      assertEquals(carRepo.findById(3L).get.vinNumber, None)
 
+  /*
+   Repo Tests
+   */
   case class PersonCreator(
       firstName: Option[String],
       lastName: String,
       isAdmin: Boolean
-  )
+  ) derives DbCodec
 
+  @Table(MySqlDbType, SqlNameMapper.CamelToSnakeCase)
   case class Person(
       id: Long,
       firstName: Option[String],
       lastName: String,
       isAdmin: Boolean,
       created: OffsetDateTime
-  )
+  ) derives DbCodec
 
-  val person = DbSchema[PersonCreator, Person, Long](
-    MySqlDbType,
-    SqlNameMapper.CamelToSnakeCase
-  )
-
-  // aliases should not affect generated queries
-  val personRepo = Repo(person.alias("p"))
+  val personRepo = Repo[PersonCreator, Person, Long]
 
   test("delete"):
     connect(ds()):
@@ -152,12 +143,18 @@ class MySqlTests /*extends FunSuite, TestContainersFixtures:
       val p1 = personRepo.findById(1L).get
       val p2 = p1.copy(id = 2L)
       val p3 = p1.copy(id = 99L)
-      personRepo.deleteAll(Vector(p1, p2, p3))
+      assertEquals(
+        personRepo.deleteAll(Vector(p1, p2, p3)),
+        BatchUpdateResult.Success(2)
+      )
       assertEquals(6L, personRepo.count)
 
   test("deleteAllById"):
     connect(ds()):
-      personRepo.deleteAllById(Vector(1L, 2L, 1L))
+      assertEquals(
+        personRepo.deleteAllById(Vector(1L, 2L, 1L)),
+        BatchUpdateResult.Success(2)
+      )
       assertEquals(6L, personRepo.count)
 
   test("truncate"):
@@ -185,6 +182,42 @@ class MySqlTests /*extends FunSuite, TestContainersFixtures:
       assertEquals(personRepo.count, 10L)
       assertEquals(personRepo.findById(9L).get.lastName, "Smith")
 
+  test("insertReturning"):
+    connect(ds()):
+      val person = personRepo.insertReturning(
+        PersonCreator(
+          firstName = Some("John"),
+          lastName = "Smith",
+          isAdmin = false
+        )
+      )
+      assertEquals(person.id, 9L)
+      assertEquals(person.lastName, "Smith")
+
+  test("insertAllReturning"):
+    connect(ds()):
+      val newPc = Vector(
+        PersonCreator(
+          firstName = Some("Chandler"),
+          lastName = "Johnsored",
+          isAdmin = true
+        ),
+        PersonCreator(
+          firstName = None,
+          lastName = "Odysseus",
+          isAdmin = false
+        ),
+        PersonCreator(
+          firstName = Some("Jorge"),
+          lastName = "Masvidal",
+          isAdmin = true
+        )
+      )
+      val people = personRepo.insertAllReturning(newPc)
+      assertEquals(personRepo.count, 11L)
+      assertEquals(people.size, 3)
+      assertEquals(people.last.lastName, newPc.last.lastName)
+
   test("insert invalid"):
     intercept[SqlException]:
       connect(ds()):
@@ -194,7 +227,7 @@ class MySqlTests /*extends FunSuite, TestContainersFixtures:
   test("update"):
     connect(ds()):
       val p = personRepo.findById(1L).get
-      val updated = p.copy(firstName = None)
+      val updated = p.copy(firstName = None, isAdmin = false)
       personRepo.update(updated)
       assertEquals(personRepo.findById(1L).get, updated)
 
@@ -238,7 +271,10 @@ class MySqlTests /*extends FunSuite, TestContainersFixtures:
         personRepo.findById(1L).get.copy(lastName = "Peterson"),
         personRepo.findById(2L).get.copy(lastName = "Moreno")
       )
-      personRepo.updateAll(newPeople)
+      assertEquals(
+        personRepo.updateAll(newPeople),
+        BatchUpdateResult.Success(2)
+      )
       assertEquals(personRepo.findById(1L).get, newPeople(0))
       assertEquals(personRepo.findById(2L).get, newPeople(1))
 
@@ -296,4 +332,3 @@ class MySqlTests /*extends FunSuite, TestContainersFixtures:
       use(con.prepareStatement(personSql)).execute()
     ).get
     ds
-*/
