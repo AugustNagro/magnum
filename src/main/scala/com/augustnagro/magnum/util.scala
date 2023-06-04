@@ -62,8 +62,8 @@ private def sqlImpl(sc: Expr[StringContext], args: Expr[Seq[Any]])(using
   import quotes.reflect.report
   val argsExprs: Seq[Expr[Any]] = args match
     case Varargs(ae) => ae
-  val stringExprs: Seq[Expr[String]] = sc match
-    case '{ StringContext(${ Varargs(strings) }: _*) } => strings
+//  val stringExprs: Seq[Expr[String]] = sc match
+//    case '{ StringContext(${ Varargs(strings) }: _*) } => strings
 
   val paramsExpr = Expr.ofSeq(argsExprs)
   val questionVarargs = Varargs(Vector.fill(argsExprs.size)(Expr("?")))
@@ -71,7 +71,7 @@ private def sqlImpl(sc: Expr[StringContext], args: Expr[Seq[Any]])(using
 
   '{
     val argValues = $args
-    val writer = (ps: PreparedStatement, pos: Int) => {
+    val writer: FragWriter = (ps: PreparedStatement, pos: Int) => {
       ${ sqlWriter('{ ps }, '{ pos }, '{ argValues }, argsExprs, '{ 0 }) }
     }
     Frag($queryExpr, argValues, writer)
@@ -83,20 +83,19 @@ private def sqlWriter(
     args: Expr[Seq[Any]],
     argsExprs: Seq[Expr[Any]],
     iExpr: Expr[Int]
-)(using Quotes): Expr[Unit] =
+)(using Quotes): Expr[Int] =
   import quotes.reflect.*
   argsExprs match
     case head +: tail =>
       head match
         case '{ $arg: tp } =>
-          val writerCodec = summonWriter[tp]
+          val codecExpr = summonWriter[tp]
           '{
             val i = $iExpr
             val argValue = $args(i).asInstanceOf[tp]
             val pos = $posExpr
-            val codec = $writerCodec
+            val codec = $codecExpr
             codec.writeSingle(argValue, $psExpr, pos)
-
             val newPos = pos + codec.cols.length
             val newI = i + 1
             ${ sqlWriter(psExpr, '{ newPos }, args, tail, '{ newI }) }
@@ -104,7 +103,23 @@ private def sqlWriter(
         case _ =>
           report.error("Args must be explicit", head)
           '{ ??? }
-    case Seq() => '{}
+    case Seq() => posExpr
+
+//private def summonWriters(
+//    argsExprs: Seq[Expr[Any]],
+//    res: Vector[Expr[DbCodec[Any]]] = Vector.empty
+//)(using Quotes): Expr[Seq[DbCodec[Any]]] =
+//  import quotes.reflect.*
+//  argsExprs match
+//    case head +: tail =>
+//      head match
+//        case '{ $arg: tp } =>
+//          val writer = summonWriter[tp]
+//          summonWriters(tail, res :+ writer)
+//        case _ =>
+//          report.error("Args must be explicit", head)
+//          '{ ??? }
+//    case Seq() => Expr.ofSeq(res)
 
 private def summonWriter[T: Type](using Quotes): Expr[DbCodec[T]] =
   import quotes.reflect.*
@@ -135,7 +150,7 @@ def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
 
   Using.Manager(use =>
     val ps = use(con.connection.prepareStatement(firstFrag.sqlString))
-    firstFrag.writer(ps, 1)
+    firstFrag.writer.write(ps, 1)
     ps.addBatch()
 
     while it.hasNext do
@@ -144,7 +159,7 @@ def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
         frag.sqlString == firstFrag.sqlString,
         "all queries must be the same for batch PreparedStatement"
       )
-      frag.writer(ps, 1)
+      frag.writer.write(ps, 1)
       ps.addBatch()
     batchUpdateResult(ps.executeBatch())
   ) match

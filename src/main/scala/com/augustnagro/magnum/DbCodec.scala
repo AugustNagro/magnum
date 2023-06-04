@@ -2,7 +2,7 @@ package com.augustnagro.magnum
 
 import java.net.URL
 import java.sql.{JDBCType, PreparedStatement, ResultSet, Types}
-import java.time.{LocalDate, LocalDateTime, LocalTime}
+import java.time.{LocalDate, LocalDateTime, LocalTime, OffsetDateTime}
 import scala.annotation.implicitNotFound
 import scala.deriving.Mirror
 import scala.compiletime.{
@@ -20,7 +20,15 @@ import scala.reflect.ClassTag
   */
 trait DbCodec[E]:
 
-  /** The `java.sql.Types` constant for every column of entity E. For mapping
+  /** Syntax used when querying the db. For example,
+    *
+    * DbSchema[Int].queryRepr == "?"
+    *
+    * DbSchema[(String, Boolean)].queryRepr = "(?, ?)"
+    */
+  def queryRepr: String
+
+  /** The `java.sql.Types` constant for every "?" in `queryRepr`. For mapping
     * database-specific types, Types.JAVA_OBJECT is recommended.
     */
   def cols: IArray[Int]
@@ -60,8 +68,6 @@ trait DbCodec[E]:
     for e <- entities do
       writeSingle(e, ps)
       ps.addBatch()
-
-  def queryRepr: String
 
 object DbCodec:
 
@@ -179,6 +185,14 @@ object DbCodec:
         ps: PreparedStatement,
         pos: Int
     ): Unit = ps.setTimestamp(pos, t)
+    def queryRepr: String = "?"
+
+  given OffsetDateTimeCodec: DbCodec[OffsetDateTime] with
+    val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
+    def readSingle(rs: ResultSet, pos: Int): OffsetDateTime =
+      rs.getObject(pos, classOf[OffsetDateTime])
+    def writeSingle(dt: OffsetDateTime, ps: PreparedStatement, pos: Int): Unit =
+      ps.setObject(pos, dt)
     def queryRepr: String = "?"
 
   given SqlRefCodec: DbCodec[java.sql.Ref] with
@@ -461,7 +475,7 @@ object DbCodec:
     import quotes.reflect.*
     Type.of[Mels] match
       case '[mel *: melTail] =>
-        val melString = Type.valueOfConstant[mel & String].get
+        val melString = Type.valueOfConstant[mel].get.toString
         getScalaNames[melTail](res :+ melString)
       case '[EmptyTuple] => res
 
@@ -471,8 +485,9 @@ object DbCodec:
     import quotes.reflect.*
     Type.of[Mets] match
       case '[met *: metTail] =>
-        val expr = Expr.summon[Mirror.ProductOf[met & E]] match
-          case Some(m) if isSingleton[met] => '{ $m.fromProduct(EmptyTuple) }
+        val expr = Expr.summon[Mirror.ProductOf[met]] match
+          case Some(m) if isSingleton[met] =>
+            '{ $m.fromProduct(EmptyTuple).asInstanceOf[E] }
           case _ =>
             report.error("Can only derive simple (non-adt) enums")
             '{ ??? }

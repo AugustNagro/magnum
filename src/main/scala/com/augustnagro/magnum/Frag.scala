@@ -9,10 +9,11 @@ import scala.util.{Failure, Success, Using}
 case class Frag(
     sqlString: String,
     params: Seq[Any] = Seq.empty,
-    writer: (ps: PreparedStatement, pos: Int) => Unit = Frag.emptyWriter
+    writer: FragWriter = Frag.emptyWriter
 ):
   def query[E](using reader: DbCodec[E]): Query[E] = Query(this, reader)
   def update: Update = Update(this)
 
 object Frag:
-  private val emptyWriter = (ps: PreparedStatement, pos: Int) => ()
+  private val emptyWriter: FragWriter =
+    (ps: PreparedStatement, pos: Int) => 0

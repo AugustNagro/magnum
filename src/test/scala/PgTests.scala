@@ -22,20 +22,24 @@ class PgTests extends FunSuite, TestContainersFixtures:
   Immutable Repo Tests
    */
 
+  enum Color derives DbCodec:
+    case Red, Green, Blue
+
   @Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
   case class Car(
       model: String,
       @Id id: Long,
       topSpeed: Int,
-      @SqlName("vin") vinNumber: Option[Int]
+      @SqlName("vin") vinNumber: Option[Int],
+      color: Color
   ) derives DbCodec
 
   val carRepo = ImmutableRepo[Car, Long]
 
   val allCars = Vector(
-    Car("McLaren Senna", 1L, 208, Some(123)),
-    Car("Ferrari F8 Tributo", 2L, 212, Some(124)),
-    Car("Aston Martin Superleggera", 3L, 211, None)
+    Car("McLaren Senna", 1L, 208, Some(123), Color.Red),
+    Car("Ferrari F8 Tributo", 2L, 212, Some(124), Color.Green),
+    Car("Aston Martin Superleggera", 3L, 211, None, Color.Blue)
   )
 
   test("count"):
@@ -52,11 +56,12 @@ class PgTests extends FunSuite, TestContainersFixtures:
       carRepo.findAll
     assertEquals(cars, allCars)
 
-//  test("findAll spec"):
-//    connect(ds()):
-//      val spec = Spec(carSchema)
-//        .where(sql"${carSchema.topSpeed} > 211")
-//      assertEquals(carRepo.findAll(spec), Vector(allCars(1)))
+  test("findAll spec"):
+    connect(ds()):
+      val topSpeed = 211
+      val spec = Spec[Car]
+        .where(sql"top_speed > $topSpeed")
+      assertEquals(carRepo.findAll(spec), Vector(allCars(1)))
 
   test("findById"):
     connect(ds()):
@@ -89,11 +94,16 @@ class PgTests extends FunSuite, TestContainersFixtures:
       assertEquals(query.frag.params, Vector(minSpeed))
       assertEquals(query.run(), allCars.tail)
 
+  test("tuple select"):
+    connect(ds()):
+      val tuples = sql"select model, color from car where id = 2"
+        .query[(String, Color)]
+        .run()
+      assertEquals(tuples, Vector(allCars(1).model -> allCars(1).color))
+
   test("reads null int as None and not Some(0)"):
     connect(ds()):
       assertEquals(carRepo.findById(3L).get.vinNumber, None)
-
-  /*
 
   /*
   Repo Tests
@@ -102,28 +112,24 @@ class PgTests extends FunSuite, TestContainersFixtures:
       firstName: Option[String],
       lastName: String,
       isAdmin: Boolean
-  )
+  ) derives DbCodec
 
+  @Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
   case class Person(
       id: Long,
       firstName: Option[String],
       lastName: String,
       isAdmin: Boolean,
       created: OffsetDateTime
-  )
-
-  val person = DbSchema[PersonCreator, Person, Long](
-    PostgresDbType,
-    SqlNameMapper.CamelToSnakeCase
-  )
+  ) derives DbCodec
 
   // aliases should not affect generated queries
-  val personRepo = Repo(person.alias("p"))
+  val personRepo = Repo[PersonCreator, Person, Long]
 
   test("delete"):
     connect(ds()):
       val p = personRepo.findById(1L).get
-      personRepo.delete(p)
+      assert(personRepo.delete(p))
       assertEquals(personRepo.findById(1L), None)
 
   test("delete invalid"):
@@ -133,9 +139,9 @@ class PgTests extends FunSuite, TestContainersFixtures:
 
   test("deleteById"):
     connect(ds()):
-      personRepo.deleteById(1L)
-      personRepo.deleteById(2L)
-      personRepo.deleteById(1L)
+      assert(personRepo.deleteById(1L))
+      assert(personRepo.deleteById(2L))
+      assert(!personRepo.deleteById(1L))
       assertEquals(personRepo.findAll.size, 6)
 
   test("deleteAll"):
@@ -143,12 +149,18 @@ class PgTests extends FunSuite, TestContainersFixtures:
       val p1 = personRepo.findById(1L).get
       val p2 = p1.copy(id = 2L)
       val p3 = p1.copy(id = 99L)
-      personRepo.deleteAll(Vector(p1, p2, p3))
+      assertEquals(
+        personRepo.deleteAll(Vector(p1, p2, p3)),
+        BatchUpdateResult.Success(2)
+      )
       assertEquals(6L, personRepo.count)
 
   test("deleteAllById"):
     connect(ds()):
-      personRepo.deleteAllById(Vector(1L, 2L, 1L))
+      assertEquals(
+        personRepo.deleteAllById(Vector(1L, 2L, 1L)),
+        BatchUpdateResult.Success(2)
+      )
       assertEquals(6L, personRepo.count)
 
   test("truncate"):
@@ -175,6 +187,42 @@ class PgTests extends FunSuite, TestContainersFixtures:
       assertEquals(personRepo.count, 10L)
       assertEquals(personRepo.findById(9L).get.lastName, "Smith")
 
+  test("insertReturning"):
+    connect(ds()):
+      val person = personRepo.insertReturning(
+        PersonCreator(
+          firstName = Some("John"),
+          lastName = "Smith",
+          isAdmin = false
+        )
+      )
+      assertEquals(person.id, 9L)
+      assertEquals(person.lastName, "Smith")
+
+  test("insertReturningAll"):
+    connect(ds()):
+      val newPc = Vector(
+        PersonCreator(
+          firstName = Some("Chandler"),
+          lastName = "Johnsored",
+          isAdmin = true
+        ),
+        PersonCreator(
+          firstName = None,
+          lastName = "Odysseus",
+          isAdmin = false
+        ),
+        PersonCreator(
+          firstName = Some("Jorge"),
+          lastName = "Masvidal",
+          isAdmin = true
+        )
+      )
+      val people = personRepo.insertAllReturning(newPc)
+      assertEquals(personRepo.count, 11L)
+      assertEquals(people.size, 3)
+      assertEquals(people.last.lastName, newPc.last.lastName)
+
   test("insert invalid"):
     intercept[SqlException]:
       connect(ds()):
@@ -185,7 +233,7 @@ class PgTests extends FunSuite, TestContainersFixtures:
     connect(ds()):
       val p = personRepo.findById(1L).get
       val updated = p.copy(firstName = None)
-      personRepo.update(updated)
+      assert(personRepo.update(updated))
       assertEquals(personRepo.findById(1L).get, updated)
 
   test("update invalid"):
@@ -227,7 +275,10 @@ class PgTests extends FunSuite, TestContainersFixtures:
         personRepo.findById(1L).get.copy(lastName = "Peterson"),
         personRepo.findById(2L).get.copy(lastName = "Moreno")
       )
-      personRepo.updateAll(newPeople)
+      assertEquals(
+        personRepo.updateAll(newPeople),
+        BatchUpdateResult.Success(2)
+      )
       assertEquals(personRepo.findById(1L).get, newPeople(0))
       assertEquals(personRepo.findById(2L).get, newPeople(1))
 
@@ -259,7 +310,6 @@ class PgTests extends FunSuite, TestContainersFixtures:
         transact(dataSource):
           assertEquals(personRepo.count, 8L)
 
-   */
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
       .Def(dockerImageName = DockerImageName.parse("postgres:15.2"))

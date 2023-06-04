@@ -8,7 +8,7 @@ case class Query[E](frag: Frag, reader: DbCodec[E]):
     logSql(frag)
     Using.Manager(use =>
       val ps = use(con.connection.prepareStatement(frag.sqlString))
-      frag.writer(ps, 1)
+      frag.writer.write(ps, 1)
       val rs = use(ps.executeQuery())
       reader.read(rs)
     ) match

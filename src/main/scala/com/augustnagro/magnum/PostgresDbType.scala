@@ -63,8 +63,9 @@ object PostgresDbType extends DbType:
     val compositeId = idCodec.cols.distinct.size != 1
     val idFirstTypeName = JDBCType.valueOf(idCodec.cols.head).getName
 
-    def idWriter(id: ID): (PreparedStatement, Int) => Unit =
-      idCodec.writeSingle(id, _, _)
+    def idWriter(id: ID): FragWriter = (ps: PreparedStatement, pos: Int) =>
+      idCodec.writeSingle(id, ps, pos)
+      pos + idCodec.cols.length
 
     new RepoDefaults[EC, E, ID]:
       def count(using con: DbCon): Long = countQuery.run().head
@@ -77,7 +78,11 @@ object PostgresDbType extends DbType:
 
       def findAll(using DbCon): Vector[E] = findAllQuery.run()
 
-      def findAll(spec: Spec[E])(using DbCon): Vector[E] = spec.build.run()
+      def findAll(spec: Spec[E])(using DbCon): Vector[E] =
+        val f = spec.build
+        Frag(s"SELECT * FROM $tableNameSql ${f.sqlString}", f.params, f.writer)
+          .query[E]
+          .run()
 
       def findById(id: ID)(using DbCon): Option[E] =
         Frag(findByIdSql, IArray(id), idWriter(id))
@@ -98,6 +103,7 @@ object PostgresDbType extends DbType:
             val sqlArray =
               ps.getConnection.createArrayOf(idFirstTypeName, idsArray)
             ps.setArray(pos, sqlArray)
+            pos + 1
         ).query[E].run()
 
       def delete(entity: E)(using DbCon): Boolean =
@@ -112,7 +118,7 @@ object PostgresDbType extends DbType:
         Frag(deleteByIdSql, IArray(id), idWriter(id)).update
           .run() > 0
 
-      def truncate()(using DbCon): Int =
+      def truncate()(using DbCon): Unit =
         truncateUpdate.run()
 
       def deleteAll(entities: Iterable[E])(using DbCon): BatchUpdateResult =
@@ -161,6 +167,7 @@ object PostgresDbType extends DbType:
           ecCodec.writeSingle(entityCreator, ps)
           ps.executeUpdate()
           val rs = use(ps.getGeneratedKeys)
+          rs.next()
           eCodec.readSingle(rs)
         ) match
           case Success(res) => res

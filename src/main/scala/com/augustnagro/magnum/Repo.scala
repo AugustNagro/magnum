@@ -22,7 +22,7 @@ open class Repo[EC, E, ID](using defaults: RepoDefaults[EC, E, ID])
   def deleteById(id: ID)(using DbCon): Boolean = defaults.deleteById(id)
 
   /** Deletes ALL entities */
-  def truncate()(using DbCon): Int = defaults.truncate()
+  def truncate()(using DbCon): Unit = defaults.truncate()
 
   /** Delete all provided entities */
   def deleteAll(entities: Iterable[E])(using DbCon): BatchUpdateResult =

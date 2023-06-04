@@ -3,8 +3,7 @@ package com.augustnagro.magnum
 import java.sql.PreparedStatement
 import java.util.StringJoiner
 
-class Spec[E: DbCodec] private (
-    tableName: String,
+class Spec[E] private (
     predicates: List[Frag],
     limit: Option[Int],
     offset: Option[Int],
@@ -12,7 +11,7 @@ class Spec[E: DbCodec] private (
 ):
 
   def where(sql: Frag): Spec[E] =
-    new Spec(tableName, sql :: predicates, limit, offset, sorts)
+    new Spec(sql :: predicates, limit, offset, sorts)
 
   def orderBy(
       column: String,
@@ -20,13 +19,13 @@ class Spec[E: DbCodec] private (
       nullOrder: NullOrder = NullOrder.Last
   ): Spec[E] =
     val sort = Sort(column, direction, nullOrder)
-    new Spec(tableName, predicates, limit, offset, sort :: sorts)
+    new Spec(predicates, limit, offset, sort :: sorts)
 
   def limit(limit: Int): Spec[E] =
-    new Spec(tableName, predicates, Some(limit), offset, sorts)
+    new Spec(predicates, Some(limit), offset, sorts)
 
   def offset(offset: Int): Spec[E] =
-    new Spec(tableName, predicates, limit, Some(offset), sorts)
+    new Spec(predicates, limit, Some(offset), sorts)
 
   def seek[V](
       column: String,
@@ -40,11 +39,13 @@ class Spec[E: DbCodec] private (
       Frag(
         s"$column ${seekDirection.sql} ?",
         Vector(value),
-        (ps, pos) => codec.writeSingle(value, ps, pos)
+        (ps, pos) =>
+          codec.writeSingle(value, ps, pos)
+          pos + codec.cols.length
       )
-    new Spec(tableName, pred :: predicates, limit, offset, sort :: sorts)
+    new Spec(pred :: predicates, limit, offset, sort :: sorts)
 
-  def build: Query[E] =
+  def build: Frag =
     val whereClause = StringJoiner(" AND ", "WHERE ", "").setEmptyValue("")
     val allParams = Vector.newBuilder[Any]
 
@@ -57,8 +58,7 @@ class Spec[E: DbCodec] private (
     for Sort(col, dir, nullOrder) <- sorts.reverse do
       orderByClause.add(col + " " + dir.sql + " " + nullOrder.sql)
 
-    val selectPart = "SELECT * FROM " + tableName + " "
-    val finalSj = StringJoiner(" ", selectPart, "")
+    val finalSj = StringJoiner(" ")
     val whereClauseStr = whereClause.toString
     if whereClauseStr.nonEmpty then finalSj.add(whereClauseStr)
     val orderByClauseStr = orderByClause.toString
@@ -66,14 +66,13 @@ class Spec[E: DbCodec] private (
     for l <- limit do finalSj.add("LIMIT " + l)
     for o <- offset do finalSj.add("OFFSET " + o)
 
-    val writerFn = (ps: PreparedStatement, pos: Int) =>
-      var i = pos
-      for f <- validFrags do
-        f.writer(ps, i)
-        i += f.params.size
+    val fragWriter: FragWriter = (ps: PreparedStatement, startingPos: Int) =>
+      validFrags.foldLeft(startingPos)((pos, frag) =>
+        pos + frag.writer.write(ps, pos)
+      )
 
-    Frag(finalSj.toString, allParams.result(), writerFn).query[E]
+    Frag(finalSj.toString, allParams.result(), fragWriter)
 
 object Spec:
-  def apply[E: DbCodec](tableName: String): Spec[E] =
-    new Spec(tableName, Nil, None, None, Nil)
+  def apply[E]: Spec[E] =
+    new Spec(Nil, None, None, Nil)
