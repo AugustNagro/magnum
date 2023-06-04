@@ -11,26 +11,30 @@ import java.time.OffsetDateTime
 import javax.sql.DataSource
 import scala.util.Using
 
-class OracleTests /* extends FunSuite, TestContainersFixtures:
+class OracleTests extends FunSuite, TestContainersFixtures:
 
   /*
   Immutable Repo Tests
    */
 
-  case class Car(model: String, @Id id: Long, topSpeed: Int, vin: Option[Int])
-      derives DbCodec
+  enum Color derives DbCodec:
+    case Red, Green, Blue
 
-  val carSchema = DbSchema[Car, Car, Long](
-    OracleDbType,
-    SqlNameMapper.CamelToSnakeCase
-  )
+  @Table(OracleDbType, SqlNameMapper.CamelToSnakeCase)
+  case class Car(
+      model: String,
+      @Id id: Long,
+      topSpeed: Int,
+      @SqlName("vin") vinNumber: Option[Int],
+      color: Color
+  ) derives DbCodec
 
-  val carRepo = ImmutableRepo(carSchema)
+  val carRepo = ImmutableRepo[Car, Long]
 
   val allCars = Vector(
-    Car("McLaren Senna", 1L, 208, Some(123)),
-    Car("Ferrari F8 Tributo", 2L, 212, Some(124)),
-    Car("Aston Martin Superleggera", 3L, 211, None)
+    Car("McLaren Senna", 1L, 208, Some(123), Color.Red),
+    Car("Ferrari F8 Tributo", 2L, 212, Some(124), Color.Green),
+    Car("Aston Martin Superleggera", 3L, 211, None, Color.Blue)
   )
 
   test("count"):
@@ -49,8 +53,9 @@ class OracleTests /* extends FunSuite, TestContainersFixtures:
 
   test("findAll spec"):
     connect(ds()):
-      val spec = Spec(carSchema)
-        .where(sql"${carSchema.topSpeed} > 211")
+      val topSpeed = 211
+      val spec = Spec[Car]
+        .where(sql"top_speed > $topSpeed")
       assertEquals(carRepo.findAll(spec), Vector(allCars(1)))
 
   test("findById"):
@@ -75,37 +80,25 @@ class OracleTests /* extends FunSuite, TestContainersFixtures:
 
   test("select query"):
     connect(ds()):
-      val car = carSchema
-      val minSpeed = 210
-      val query =
-        sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
-
+      val minSpeed: Int = 210
+      val query = sql"select * from car where top_speed > $minSpeed".query[Car]
       assertNoDiff(
-        query.sqlString,
-        "select model, id, top_speed, vin from car where top_speed > ?"
+        query.frag.sqlString,
+        "select * from car where top_speed > ?"
       )
-      assertEquals(query.params, Vector(minSpeed))
-      assertEquals(
-        query.run[Car],
-        allCars.tail
-      )
+      assertEquals(query.frag.params, Vector(minSpeed))
+      assertEquals(query.run(), allCars.tail)
 
-  test("select query with aliasing"):
+  test("tuple select"):
     connect(ds()):
-      val car = carSchema.alias("c")
-      val minSpeed = 210
-      val query =
-        sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
-
-      assertNoDiff(
-        query.sqlString,
-        "select c.model, c.id, c.top_speed, c.vin from car c where c.top_speed > ?"
-      )
-      assertEquals(query.run[Car], allCars.tail)
+      val tuples = sql"select model, color from car where id = 2"
+        .query[(String, Color)]
+        .run()
+      assertEquals(tuples, Vector(allCars(1).model -> allCars(1).color))
 
   test("reads null int as None and not Some(0)"):
     connect(ds()):
-      assertEquals(carRepo.findById(3L).get.vin, None)
+      assertEquals(carRepo.findById(3L).get.vinNumber, None)
 
   /*
   Repo Tests
@@ -114,23 +107,18 @@ class OracleTests /* extends FunSuite, TestContainersFixtures:
       firstName: Option[String],
       lastName: String,
       isAdmin: String
-  )
+  ) derives DbCodec
 
+  @Table(OracleDbType, SqlNameMapper.CamelToSnakeCase)
   case class Person(
       id: Long,
       firstName: Option[String],
       lastName: String,
       isAdmin: String,
       created: OffsetDateTime
-  )
+  ) derives DbCodec
 
-  val person = DbSchema[PersonCreator, Person, Long](
-    dbType = OracleDbType,
-    sqlNameMapper = SqlNameMapper.CamelToSnakeCase
-  )
-
-  // aliases should not affect generated queries
-  val personRepo = Repo(person.alias("p"))
+  val personRepo = Repo[PersonCreator, Person, Long]
 
   test("delete"):
     connect(ds()):
@@ -155,12 +143,18 @@ class OracleTests /* extends FunSuite, TestContainersFixtures:
       val p1 = personRepo.findById(1L).get
       val p2 = p1.copy(id = 2L)
       val p3 = p1.copy(id = 99L)
-      personRepo.deleteAll(Vector(p1, p2, p3))
+      assertEquals(
+        personRepo.deleteAll(Vector(p1, p2, p3)),
+        BatchUpdateResult.Success(2)
+      )
       assertEquals(6L, personRepo.count)
 
   test("deleteAllById"):
     connect(ds()):
-      personRepo.deleteAllById(Vector(1L, 2L, 1L))
+      assertEquals(
+        personRepo.deleteAllById(Vector(1L, 2L, 1L)),
+        BatchUpdateResult.Success(2)
+      )
       assertEquals(6L, personRepo.count)
 
   test("truncate"):
@@ -186,6 +180,42 @@ class OracleTests /* extends FunSuite, TestContainersFixtures:
       )
       assertEquals(personRepo.count, 10L)
       assertEquals(personRepo.findById(9L).get.lastName, "Smith")
+
+  test("insertReturning"):
+    connect(ds()):
+      val person = personRepo.insertReturning(
+        PersonCreator(
+          firstName = Some("John"),
+          lastName = "Smith",
+          isAdmin = "N"
+        )
+      )
+      assertEquals(person.id, 9L)
+      assertEquals(person.lastName, "Smith")
+
+  test("insertAllReturning"):
+    connect(ds()):
+      val newPc = Vector(
+        PersonCreator(
+          firstName = Some("Chandler"),
+          lastName = "Johnsored",
+          isAdmin = "Y"
+        ),
+        PersonCreator(
+          firstName = None,
+          lastName = "Odysseus",
+          isAdmin = "N"
+        ),
+        PersonCreator(
+          firstName = Some("Jorge"),
+          lastName = "Masvidal",
+          isAdmin = "Y"
+        )
+      )
+      val people = personRepo.insertAllReturning(newPc)
+      assertEquals(personRepo.count, 11L)
+      assertEquals(people.size, 3)
+      assertEquals(people.last.lastName, newPc.last.lastName)
 
   test("insert invalid"):
     intercept[SqlException]:
@@ -239,7 +269,10 @@ class OracleTests /* extends FunSuite, TestContainersFixtures:
         personRepo.findById(1L).get.copy(lastName = "Peterson"),
         personRepo.findById(2L).get.copy(lastName = "Moreno")
       )
-      personRepo.updateAll(newPeople)
+      assertEquals(
+        personRepo.updateAll(newPeople),
+        BatchUpdateResult.Success(2)
+      )
       assertEquals(personRepo.findById(1L).get, newPeople(0))
       assertEquals(personRepo.findById(2L).get, newPeople(1))
 
@@ -303,20 +336,21 @@ class OracleTests /* extends FunSuite, TestContainersFixtures:
           |  model varchar2(50) not null,
           |  id number generated always as identity,
           |  top_speed number,
-          |  vin number
+          |  vin number,
+          |  color varchar2(50) not null check (color in ('Red', 'Green', 'Blue'))
           |)""".stripMargin
         )
         stmt.execute(
-          """insert into car (model, top_speed, vin)
-          |values ('McLaren Senna', 208, 123)""".stripMargin
+          """insert into car (model, top_speed, vin, color)
+          |values ('McLaren Senna', 208, 123, 'Red')""".stripMargin
         )
         stmt.execute(
-          """insert into car (model, top_speed, vin)
-          |values ('Ferrari F8 Tributo', 212, 124)""".stripMargin
+          """insert into car (model, top_speed, vin, color)
+          |values ('Ferrari F8 Tributo', 212, 124, 'Green')""".stripMargin
         )
         stmt.execute(
-          """insert into car (model, top_speed, vin)
-          |values ('Aston Martin Superleggera', 211, null)""".stripMargin
+          """insert into car (model, top_speed, vin, color)
+          |values ('Aston Martin Superleggera', 211, null, 'Blue')""".stripMargin
         )
         try stmt.execute("drop table person")
         catch case _ => ()
@@ -364,4 +398,3 @@ class OracleTests /* extends FunSuite, TestContainersFixtures:
       )
       .get
     ds
-*/
