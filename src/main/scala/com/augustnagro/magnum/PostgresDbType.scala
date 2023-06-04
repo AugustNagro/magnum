@@ -98,7 +98,7 @@ object PostgresDbType extends DbType:
         Frag(
           findAllByIdSql,
           IArray(idsArray),
-          (ps: PreparedStatement, pos) =>
+          (ps, pos) =>
             val sqlArray =
               ps.getConnection.createArrayOf(idFirstTypeName, idsArray)
             ps.setArray(pos, sqlArray)

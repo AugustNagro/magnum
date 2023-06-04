@@ -230,7 +230,7 @@ class PgTests extends FunSuite, TestContainersFixtures:
   test("update"):
     connect(ds()):
       val p = personRepo.findById(1L).get
-      val updated = p.copy(firstName = None)
+      val updated = p.copy(firstName = None, isAdmin = false)
       personRepo.update(updated)
       assertEquals(personRepo.findById(1L).get, updated)
 
