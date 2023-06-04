@@ -89,36 +89,41 @@ private def sqlWriter(
     case head +: tail =>
       head match
         case '{ $arg: tp } =>
-          Expr.summon[DbCodec[tp]] match
-            case Some(codecExpr) =>
-              '{
-                val i = $iExpr
-                val argValue = $args(i).asInstanceOf[tp]
-                val pos = $posExpr
-                val codec = $codecExpr
-                codec.writeSingle(argValue, $psExpr, pos)
+          val writerCodec = summonWriter[tp]
+          '{
+            val i = $iExpr
+            val argValue = $args(i).asInstanceOf[tp]
+            val pos = $posExpr
+            val codec = $writerCodec
+            codec.writeSingle(argValue, $psExpr, pos)
 
-                val newPos = pos + codec.cols.length
-                val newI = i + 1
-                ${ sqlWriter(psExpr, '{ newPos }, args, tail, '{ newI }) }
-              }
-            case None =>
-              report.info(
-                s"Could not find given DbCodec for ${TypeRepr.of[tp].show}. Using PreparedStatement::setObject instead."
-              )
-              '{
-                val i = $iExpr
-                val argValue = $args(i)
-                val pos = $posExpr
-                $psExpr.setObject(pos, argValue)
-                val newPos = pos + 1
-                val newI = i + 1
-                ${ sqlWriter(psExpr, '{ newPos }, args, tail, '{ newI }) }
-              }
+            val newPos = pos + codec.cols.length
+            val newI = i + 1
+            ${ sqlWriter(psExpr, '{ newPos }, args, tail, '{ newI }) }
+          }
         case _ =>
           report.error("Args must be explicit", head)
           '{ ??? }
     case Seq() => '{}
+
+private def summonWriter[T: Type](using Quotes): Expr[DbCodec[T]] =
+  import quotes.reflect.*
+  TypeRepr
+    .of[T]
+    .baseClasses
+    .view
+    .init // remove the 'Any' class at the end of the list, since we want to warn if using DbCodec[Any]
+    .flatMap(symbol =>
+      symbol.typeRef.asType match
+        case '[tpe] => Expr.summon[DbCodec[tpe]]
+    )
+    .map(codec => '{ $codec.asInstanceOf[DbCodec[T]] })
+    .headOption
+    .getOrElse:
+      report.info(
+        s"Could not find given DbCodec for ${TypeRepr.of[T].show}. Using PreparedStatement::setObject instead."
+      )
+      '{ DbCodec.AnyCodec.asInstanceOf[DbCodec[T]] }
 
 def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
     con: DbCon
@@ -130,7 +135,7 @@ def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
 
   Using.Manager(use =>
     val ps = use(con.connection.prepareStatement(firstFrag.sqlString))
-    firstFrag.writer(ps, 0)
+    firstFrag.writer(ps, 1)
     ps.addBatch()
 
     while it.hasNext do
@@ -139,7 +144,7 @@ def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
         frag.sqlString == firstFrag.sqlString,
         "all queries must be the same for batch PreparedStatement"
       )
-      frag.writer(ps, 0)
+      frag.writer(ps, 1)
       ps.addBatch()
     batchUpdateResult(ps.executeBatch())
   ) match

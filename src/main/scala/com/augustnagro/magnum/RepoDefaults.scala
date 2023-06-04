@@ -42,6 +42,7 @@ object RepoDefaults:
     import quotes.reflect.*
     assertECIsSubsetOfE[EC, E]
 
+    val idIndex = idAnnotIndex[E]
     val tableAnnot = TypeRepr.of[Table]
     val table: Expr[Table] =
       TypeRepr
@@ -95,7 +96,6 @@ object RepoDefaults:
                     '{ $nameMapper.toColumnName(${ Expr(elemName) }) }
               )
             )
-            val idIndex = idAnnotIndex[E]
             val eCodec = Expr.summon[DbCodec[E]].get
             val ecCodec = Expr.summon[DbCodec[EC]].get
             val idCodec = Expr.summon[DbCodec[ID]].get
@@ -154,16 +154,16 @@ object RepoDefaults:
           case None => getProductCodecs[metTail](res :+ '{ DbCodec.AnyCodec })
       case '[EmptyTuple] => Expr.ofSeq(res)
 
-  private def idAnnotIndex[E: Type](using Quotes): Expr[Int] =
-    import quotes.reflect.*
-    val idAnnot = TypeRepr.of[Id]
+  private def idAnnotIndex[E: Type](using q: Quotes): Expr[Int] =
+    import q.reflect.*
+    val idAnnot = TypeRepr.of[Id].typeSymbol
     val index = TypeRepr
       .of[E]
       .typeSymbol
-      .caseFields
-      .indexWhere(sym =>
-        sym.annotations.exists(term => term.tpe =:= idAnnot)
-      ) match
+      .primaryConstructor
+      .paramSymss
+      .head
+      .indexWhere(sym => sym.hasAnnotation(idAnnot)) match
       case -1 => 0
       case x  => x
     Expr(index)
@@ -183,13 +183,15 @@ object RepoDefaults:
       Quotes
   ): Option[Expr[SqlName]] =
     import quotes.reflect.*
-    val sqlNameAnnot = TypeRepr.of[SqlName]
+    val annot = TypeRepr.of[SqlName].typeSymbol
     TypeRepr
       .of[T]
       .typeSymbol
-      .fieldMember(elemName)
-      .annotations
-      .find(term => term.tpe =:= sqlNameAnnot)
+      .primaryConstructor
+      .paramSymss
+      .head
+      .find(sym => sym.name == elemName && sym.hasAnnotation(annot))
+      .flatMap(sym => sym.getAnnotation(annot))
       .map(term => term.asExprOf[SqlName])
 
   private def assertECIsSubsetOfE[EC: Type, E: Type](using Quotes): Unit =

@@ -70,7 +70,7 @@ object PostgresDbType extends DbType:
       def count(using con: DbCon): Long = countQuery.run().head
 
       def existsById(id: ID)(using DbCon): Boolean =
-        Frag(existsByIdSql, IArray(id), idCodec.writeSingle(id, _, _))
+        Frag(existsByIdSql, IArray(id), idWriter(id))
           .query[Int]
           .run()
           .nonEmpty
@@ -195,7 +195,7 @@ object PostgresDbType extends DbType:
             .patch(idIndex, Vector.empty, 1)
             .appended(entityValues(idIndex))
 
-          var pos = 0
+          var pos = 1
           for (field, codec) <- updateValues.lazyZip(updateCodecs) do
             codec.writeSingle(field, ps, pos)
             pos += codec.cols.length
@@ -219,7 +219,7 @@ object PostgresDbType extends DbType:
               .patch(idIndex, Vector.empty, 1)
               .appended(entityValues(idIndex))
 
-            var pos = 0
+            var pos = 1
             for (field, codec) <- updateValues.lazyZip(updateCodecs) do
               codec.writeSingle(field, ps, pos)
               pos += codec.cols.length
