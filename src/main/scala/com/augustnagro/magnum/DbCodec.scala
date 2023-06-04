@@ -3,16 +3,10 @@ package com.augustnagro.magnum
 import java.net.URL
 import java.sql.{JDBCType, PreparedStatement, ResultSet, Types}
 import java.time.{LocalDate, LocalDateTime, LocalTime, OffsetDateTime}
+import java.util.UUID
 import scala.annotation.implicitNotFound
 import scala.deriving.Mirror
-import scala.compiletime.{
-  constValue,
-  constValueTuple,
-  erasedValue,
-  error,
-  summonFrom,
-  summonInline
-}
+import scala.compiletime.{constValue, constValueTuple, erasedValue, error, summonFrom, summonInline}
 import scala.quoted.*
 import scala.reflect.ClassTag
 
@@ -271,6 +265,14 @@ object DbCodec:
     ): Unit =
       ps.setBigDecimal(pos, bd.underlying)
     def queryRepr: String = "?"
+    
+  given UUIDCodec: DbCodec[UUID] with
+    def queryRepr: String = "?"
+    val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
+    def readSingle(rs: ResultSet, pos: Int): UUID =
+      rs.getObject(pos, classOf[UUID])
+    def writeSingle(entity: UUID, ps: PreparedStatement, pos: Int): Unit =
+      ps.setObject(pos, entity)
 
   given OptionCodec[A](using codec: DbCodec[A]): DbCodec[Option[A]] with
     def cols: IArray[Int] = codec.cols

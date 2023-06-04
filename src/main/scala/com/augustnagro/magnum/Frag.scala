@@ -15,5 +15,4 @@ case class Frag(
   def update: Update = Update(this)
 
 object Frag:
-  private val emptyWriter: FragWriter =
-    (ps: PreparedStatement, pos: Int) => 0
+  private val emptyWriter: FragWriter = (_, _) => 0

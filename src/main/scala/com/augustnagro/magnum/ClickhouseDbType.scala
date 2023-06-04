@@ -7,92 +7,77 @@ import scala.deriving.Mirror
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Using, boundary}
 
-object ClickhouseDbType /*extends DbType:
-  def buildDbSchema[EC, E, ID, RES](
+object ClickhouseDbType extends DbType:
+  def buildRepoDefaults[EC, E, ID](
       tableNameSql: String,
-      fieldNames: List[String],
-      ecFieldNames: List[String],
-      sqlNameMapper: SqlNameMapper,
+      eElemNames: Seq[String],
+      eElemNamesSql: Seq[String],
+      eElemCodecs: Seq[DbCodec[?]],
+      ecElemNames: Seq[String],
+      ecElemNamesSql: Seq[String],
       idIndex: Int
   )(using
-    dbReader: DbCodec[E],
-    ecClassTag: ClassTag[EC],
-    eClassTag: ClassTag[E],
-    idClassTag: ClassTag[ID],
-    eMirror: Mirror.ProductOf[E]
-  ): RES =
+      eCodec: DbCodec[E],
+      ecCodec: DbCodec[EC],
+      idCodec: DbCodec[ID],
+      eClassTag: ClassTag[E],
+      ecClassTag: ClassTag[EC],
+      idClassTag: ClassTag[ID]
+  ): RepoDefaults[EC, E, ID] =
     require(
       eClassTag.runtimeClass == ecClassTag.runtimeClass,
       "ClickHouse does not support generated keys, so EC must equal E"
     )
-    val schemaNames: IArray[DbSchemaName] = IArray
-      .from(fieldNames)
-      .map(fn =>
-        DbSchemaName(
-          scalaName = fn,
-          sqlName = sqlNameMapper.toColumnName(fn),
-          tableAlias = DbSchema.DefaultAlias
-        )
-      )
-    val idName = schemaNames(idIndex).sqlName
-
-    val ecInsertFields: IArray[String] =
-      IArray.from(ecFieldNames).map(sqlNameMapper.toColumnName)
-    val ecInsertKeys: String = ecInsertFields.mkString("(", ", ", ")")
-    val ecInsertQs =
-      IArray.fill(ecInsertFields.size)("?").mkString("(", ", ", ")")
+    val idName = eElemNamesSql(idIndex)
+    val selectKeys = eElemNamesSql.mkString(", ")
+    val ecInsertKeys = ecElemNamesSql.mkString("(", ", ", ")")
 
     val countSql = s"SELECT count(*) FROM $tableNameSql"
-    val existsByIdSql = s"SELECT 1 FROM $tableNameSql WHERE $idName = ?"
-    val findAllSql = s"SELECT * FROM $tableNameSql"
-    val findByIdSql = s"SELECT * FROM $tableNameSql WHERE $idName = ?"
-    val deleteByIdSql = s"DELETE FROM $tableNameSql WHERE $idName = ?"
+    val countQuery = Frag(countSql).query[Long]
+    val existsByIdSql =
+      s"SELECT 1 FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
+    val findAllSql = s"SELECT $selectKeys FROM $tableNameSql"
+    val findAllQuery = Frag(findAllSql).query[E]
+    val findByIdSql =
+      s"SELECT $selectKeys FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
+    val deleteByIdSql =
+      s"DELETE FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
     val truncateSql = s"TRUNCATE TABLE $tableNameSql"
+    val truncateUpdate = Frag(truncateSql).update
     val insertSql =
-      s"INSERT INTO $tableNameSql $ecInsertKeys VALUES $ecInsertQs"
+      s"INSERT INTO $tableNameSql $ecInsertKeys VALUES (${ecCodec.queryRepr})"
 
-    class ClickHouseSchema(
-        tableAlias: String,
-        schemaNames: IArray[DbSchemaName]
-    ) extends DbSchema[EC, E, ID]:
-      def selectDynamic(scalaName: String): DbSchemaName =
-        schemaNames.find(_.scalaName == scalaName).get
+    def idWriter(id: ID): FragWriter = (ps, pos) =>
+      idCodec.writeSingle(id, ps, pos)
+      pos + idCodec.cols.length
 
-      def all: IArray[DbSchemaName] = schemaNames
-
-      def alias: String = tableAlias
-
-      def alias(tableAlias: String): this.type =
-        val newSchemaNames =
-          schemaNames.map(sn => sn.copy(tableAlias = tableAlias))
-        new ClickHouseSchema(
-          tableAlias,
-          newSchemaNames
-        ).asInstanceOf[this.type]
-
-      def tableWithAlias: String =
-        if tableAlias.isEmpty then tableNameSql
-        else tableNameSql + " " + tableAlias
-
-      def count(using con: DbCon): Long =
-        Sql(countSql, Vector.empty).run[Long].head
+    new RepoDefaults[EC, E, ID]:
+      def count(using con: DbCon): Long = countQuery.run().head
 
       def existsById(id: ID)(using DbCon): Boolean =
-        Sql(existsByIdSql, Vector(id)).run[Int].nonEmpty
+        Frag(existsByIdSql, IArray(id), idWriter(id))
+          .query[Int]
+          .run()
+          .nonEmpty
 
-      def findAll(using DbCon): Vector[E] =
-        Sql(findAllSql, Vector.empty).run
+      def findAll(using DbCon): Vector[E] = findAllQuery.run()
 
       def findAll(spec: Spec[E])(using DbCon): Vector[E] =
-        spec.build.run
+        val f = spec.build
+        Frag(s"SELECT * FROM $tableNameSql ${f.sqlString}", f.params, f.writer)
+          .query[E]
+          .run()
 
       def findById(id: ID)(using DbCon): Option[E] =
-        Sql(findByIdSql, Vector(id)).run[E].headOption
+        Frag(findByIdSql, IArray(id), idWriter(id))
+          .query[E]
+          .run()
+          .headOption
 
       def findAllById(ids: Iterable[ID])(using DbCon): Vector[E] =
         throw UnsupportedOperationException()
 
-      def delete(entity: E)(using DbCon): Boolean =
+      def delete(entity: E)(using DbCon): Unit =
         deleteById(
           entity
             .asInstanceOf[Product]
@@ -100,11 +85,12 @@ object ClickhouseDbType /*extends DbType:
             .asInstanceOf[ID]
         )
 
-      def deleteById(id: ID)(using DbCon): Boolean =
-        Sql(deleteByIdSql, Vector(id)).runUpdate > 0
+      def deleteById(id: ID)(using DbCon): Unit =
+        Frag(deleteByIdSql, IArray(id), idWriter(id)).update
+          .run()
 
-      def truncate()(using DbCon): Int =
-        Sql(truncateSql, Vector.empty).runUpdate
+      def truncate()(using DbCon): Unit =
+        truncateUpdate.run()
 
       def deleteAll(entities: Iterable[E])(using DbCon): BatchUpdateResult =
         deleteAllById(
@@ -118,76 +104,56 @@ object ClickhouseDbType /*extends DbType:
       ): BatchUpdateResult =
         logSql(deleteByIdSql, ids)
         Using(con.connection.prepareStatement(deleteByIdSql))(ps =>
-          for id <- ids do
-            ps.setObject(1, id)
-            ps.addBatch()
+          idCodec.write(ids, ps)
           batchUpdateResult(ps.executeBatch())
         ) match
           case Success(res) => res
-          case Failure(t) =>
-            throw SqlException(deleteByIdSql, ids, t)
+          case Failure(t)   => throw SqlException(deleteByIdSql, ids, t)
 
       def insert(entityCreator: EC)(using con: DbCon): Unit =
-        val insertValues = ProductIterable(entityCreator.asInstanceOf[Product])
-        logSql(insertSql, insertValues)
+        logSql(insertSql, entityCreator)
         Using(con.connection.prepareStatement(insertSql))(ps =>
-          setValues(ps, insertValues)
+          ecCodec.writeSingle(entityCreator, ps)
           ps.executeUpdate()
         ) match
-          case Success(_) => ()
-          case Failure(ex) =>
-            throw SqlException(insertSql, insertValues, ex)
+          case Success(_)  => ()
+          case Failure(ex) => throw SqlException(insertSql, entityCreator, ex)
 
       def insertAll(entityCreators: Iterable[EC])(using con: DbCon): Unit =
-        val batchInsertValues = entityCreators
-          .map(ec => ProductIterable(ec.asInstanceOf[Product]))
-        logSql(insertSql, batchInsertValues)
+        logSql(insertSql, entityCreators)
         Using(con.connection.prepareStatement(insertSql))(ps =>
-          for insertValues <- batchInsertValues do
-            setValues(ps, insertValues)
-            ps.addBatch()
+          ecCodec.write(entityCreators, ps)
           batchUpdateResult(ps.executeBatch())
         ) match
           case Success(_) => ()
-          case Failure(ex) =>
-            throw SqlException(insertSql, batchInsertValues, ex)
+          case Failure(t) => throw SqlException(insertSql, entityCreators, t)
 
       def insertReturning(entityCreator: EC)(using con: DbCon): E =
-        val insertValues = ProductIterable(entityCreator.asInstanceOf[Product])
-        logSql(insertSql, insertValues)
+        logSql(insertSql, entityCreator)
         Using(con.connection.prepareStatement(insertSql))(ps =>
-          setValues(ps, insertValues)
+          ecCodec.writeSingle(entityCreator, ps)
           ps.executeUpdate()
           entityCreator.asInstanceOf[E]
         ) match
           case Success(res) => res
-          case Failure(ex) =>
-            throw SqlException(insertSql, insertValues, ex)
+          case Failure(t)   => throw SqlException(insertSql, entityCreator, t)
 
       def insertAllReturning(
           entityCreators: Iterable[EC]
       )(using con: DbCon): Vector[E] =
-        val batchInsertValues = entityCreators
-          .map(ec => ProductIterable(ec.asInstanceOf[Product]))
-        logSql(insertSql, batchInsertValues)
+        logSql(insertSql, entityCreators)
         Using(con.connection.prepareStatement(insertSql))(ps =>
-          for insertValues <- batchInsertValues do
-            setValues(ps, insertValues)
-            ps.addBatch()
-          ps.executeBatch()
+          ecCodec.write(entityCreators, ps)
+          batchUpdateResult(ps.executeBatch())
           entityCreators.toVector.asInstanceOf[Vector[E]]
         ) match
           case Success(res) => res
-          case Failure(ex) =>
-            throw SqlException(insertSql, batchInsertValues, ex)
+          case Failure(t)   => throw SqlException(insertSql, entityCreators, t)
 
-      def update(entity: E)(using DbCon): Boolean =
+      def update(entity: E)(using DbCon): Unit =
         throw UnsupportedOperationException()
 
-      def updateAll(entities: Iterable[E])(using con: DbCon): BatchUpdateResult =
+      def updateAll(entities: Iterable[E])(using
+          con: DbCon
+      ): BatchUpdateResult =
         throw UnsupportedOperationException()
-
-    end ClickHouseSchema
-    ClickHouseSchema(DbSchema.DefaultAlias, schemaNames).asInstanceOf[RES]
-
-*/

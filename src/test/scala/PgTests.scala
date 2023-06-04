@@ -86,7 +86,6 @@ class PgTests extends FunSuite, TestContainersFixtures:
     connect(ds()):
       val minSpeed: Int = 210
       val query = sql"select * from car where top_speed > $minSpeed".query[Car]
-
       assertNoDiff(
         query.frag.sqlString,
         "select * from car where top_speed > ?"
@@ -123,13 +122,12 @@ class PgTests extends FunSuite, TestContainersFixtures:
       created: OffsetDateTime
   ) derives DbCodec
 
-  // aliases should not affect generated queries
   val personRepo = Repo[PersonCreator, Person, Long]
 
   test("delete"):
     connect(ds()):
       val p = personRepo.findById(1L).get
-      assert(personRepo.delete(p))
+      personRepo.delete(p)
       assertEquals(personRepo.findById(1L), None)
 
   test("delete invalid"):
@@ -139,9 +137,9 @@ class PgTests extends FunSuite, TestContainersFixtures:
 
   test("deleteById"):
     connect(ds()):
-      assert(personRepo.deleteById(1L))
-      assert(personRepo.deleteById(2L))
-      assert(!personRepo.deleteById(1L))
+      personRepo.deleteById(1L)
+      personRepo.deleteById(2L)
+      personRepo.deleteById(1L)
       assertEquals(personRepo.findAll.size, 6)
 
   test("deleteAll"):
@@ -199,7 +197,7 @@ class PgTests extends FunSuite, TestContainersFixtures:
       assertEquals(person.id, 9L)
       assertEquals(person.lastName, "Smith")
 
-  test("insertReturningAll"):
+  test("insertAllReturning"):
     connect(ds()):
       val newPc = Vector(
         PersonCreator(
@@ -233,7 +231,7 @@ class PgTests extends FunSuite, TestContainersFixtures:
     connect(ds()):
       val p = personRepo.findById(1L).get
       val updated = p.copy(firstName = None)
-      assert(personRepo.update(updated))
+      personRepo.update(updated)
       assertEquals(personRepo.findById(1L).get, updated)
 
   test("update invalid"):

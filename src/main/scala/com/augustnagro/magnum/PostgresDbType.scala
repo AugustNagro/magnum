@@ -26,7 +26,6 @@ object PostgresDbType extends DbType:
       idClassTag: ClassTag[ID]
   ): RepoDefaults[EC, E, ID] =
     val idName = eElemNamesSql(idIndex)
-
     val selectKeys = eElemNamesSql.mkString(", ")
     val ecInsertKeys = ecElemNamesSql.mkString("(", ", ", ")")
 
@@ -63,7 +62,7 @@ object PostgresDbType extends DbType:
     val compositeId = idCodec.cols.distinct.size != 1
     val idFirstTypeName = JDBCType.valueOf(idCodec.cols.head).getName
 
-    def idWriter(id: ID): FragWriter = (ps: PreparedStatement, pos: Int) =>
+    def idWriter(id: ID): FragWriter = (ps, pos) =>
       idCodec.writeSingle(id, ps, pos)
       pos + idCodec.cols.length
 
@@ -106,7 +105,7 @@ object PostgresDbType extends DbType:
             pos + 1
         ).query[E].run()
 
-      def delete(entity: E)(using DbCon): Boolean =
+      def delete(entity: E)(using DbCon): Unit =
         deleteById(
           entity
             .asInstanceOf[Product]
@@ -114,9 +113,9 @@ object PostgresDbType extends DbType:
             .asInstanceOf[ID]
         )
 
-      def deleteById(id: ID)(using DbCon): Boolean =
+      def deleteById(id: ID)(using DbCon): Unit =
         Frag(deleteByIdSql, IArray(id), idWriter(id)).update
-          .run() > 0
+          .run()
 
       def truncate()(using DbCon): Unit =
         truncateUpdate.run()
@@ -190,7 +189,7 @@ object PostgresDbType extends DbType:
           case Success(res) => res
           case Failure(t)   => throw SqlException(insertSql, entityCreators, t)
 
-      def update(entity: E)(using con: DbCon): Boolean =
+      def update(entity: E)(using con: DbCon): Unit =
         logSql(updateSql, entity)
         Using(con.connection.prepareStatement(updateSql))(ps =>
           val entityValues: Vector[Any] = entity
@@ -206,9 +205,9 @@ object PostgresDbType extends DbType:
           for (field, codec) <- updateValues.lazyZip(updateCodecs) do
             codec.writeSingle(field, ps, pos)
             pos += codec.cols.length
-          ps.executeUpdate() > 0
+          ps.executeUpdate()
         ) match
-          case Success(res) => res
+          case Success(_) => ()
           case Failure(t)   => throw SqlException(updateSql, entity, t)
 
       def updateAll(entities: Iterable[E])(using

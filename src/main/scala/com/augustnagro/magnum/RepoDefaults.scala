@@ -12,8 +12,8 @@ trait RepoDefaults[EC, E, ID]:
   def findAll(spec: Spec[E])(using DbCon): Vector[E]
   def findById(id: ID)(using DbCon): Option[E]
   def findAllById(ids: Iterable[ID])(using DbCon): Vector[E]
-  def delete(entity: E)(using DbCon): Boolean
-  def deleteById(id: ID)(using DbCon): Boolean
+  def delete(entity: E)(using DbCon): Unit
+  def deleteById(id: ID)(using DbCon): Unit
   def truncate()(using DbCon): Unit
   def deleteAll(entities: Iterable[E])(using DbCon): BatchUpdateResult
   def deleteAllById(ids: Iterable[ID])(using DbCon): BatchUpdateResult
@@ -21,7 +21,7 @@ trait RepoDefaults[EC, E, ID]:
   def insertAll(entityCreators: Iterable[EC])(using DbCon): Unit
   def insertReturning(entityCreator: EC)(using DbCon): E
   def insertAllReturning(entityCreators: Iterable[EC])(using DbCon): Vector[E]
-  def update(entity: E)(using DbCon): Boolean
+  def update(entity: E)(using DbCon): Unit
   def updateAll(entities: Iterable[E])(using DbCon): BatchUpdateResult
 
 object RepoDefaults:

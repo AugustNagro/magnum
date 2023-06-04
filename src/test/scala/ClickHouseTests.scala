@@ -16,26 +16,26 @@ import java.util.{Properties, UUID}
 import javax.sql.DataSource
 import scala.util.Using
 
-class ClickHouseTests /*extends FunSuite, TestContainersFixtures:
+class ClickHouseTests extends FunSuite, TestContainersFixtures:
 
   /*
   Immutable Repo Tests
    */
 
+  enum Color derives DbCodec:
+    case Red, Green, Blue
+
+  @Table(ClickhouseDbType, SqlNameMapper.CamelToSnakeCase)
   case class Car(
       model: String,
       @Id id: UUID,
       topSpeed: Int,
       created: OffsetDateTime,
-      vin: Option[Int]
+      @SqlName("vin") vinNumber: Option[Int],
+      color: Color
   ) derives DbCodec
 
-  val carSchema = DbSchema[Car, Car, UUID](
-    ClickhouseDbType,
-    SqlNameMapper.CamelToSnakeCase
-  )
-
-  val carRepo = ImmutableRepo(carSchema)
+  val carRepo = ImmutableRepo[Car, UUID]
 
   val allCars = Vector(
     Car(
@@ -43,21 +43,24 @@ class ClickHouseTests /*extends FunSuite, TestContainersFixtures:
       UUID.fromString("a88a32f1-1e4a-41b9-9fb0-e9a8aba2428a"),
       208,
       OffsetDateTime.of(2023, 3, 5, 2, 26, 0, 0, ZoneOffset.UTC),
-      Some(123)
+      Some(123),
+      Color.Red
     ),
     Car(
       "Ferrari F8 Tributo",
       UUID.fromString("e4895170-5b54-4e3b-b857-b95d45d3550c"),
       212,
       OffsetDateTime.of(2023, 3, 5, 2, 27, 0, 0, ZoneOffset.UTC),
-      Some(124)
+      Some(124),
+      Color.Green
     ),
     Car(
       "Aston Martin Superleggera",
       UUID.fromString("460798da-917d-442f-a987-a7e6528ddf17"),
       211,
       OffsetDateTime.of(2023, 3, 5, 2, 28, 0, 0, ZoneOffset.UTC),
-      None
+      None,
+      Color.Blue
     )
   )
 
@@ -77,9 +80,10 @@ class ClickHouseTests /*extends FunSuite, TestContainersFixtures:
 
   test("findAll spec"):
     connect(ds()):
-      val spec = Spec(carSchema)
-        .where(sql"${carSchema.topSpeed} > 211")
-      assertEquals(carRepo.findAll(spec).size, 1)
+      val topSpeed = 211
+      val spec = Spec[Car]
+        .where(sql"top_speed > $topSpeed")
+      assertEquals(carRepo.findAll(spec), Vector(allCars(1)))
 
   test("findById"):
     connect(ds()):
@@ -94,59 +98,50 @@ class ClickHouseTests /*extends FunSuite, TestContainersFixtures:
           2
         )
 
+  test("repeatable read transaction"):
+    transact(ds(), withRepeatableRead):
+      assertEquals(carRepo.count, 3L)
+
+  private def withRepeatableRead(con: Connection): Unit =
+    con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
+
   test("select query"):
     connect(ds()):
-      val car = carSchema
       val minSpeed = 210
       val query =
-        sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
-
+        sql"select * from car where top_speed > $minSpeed".query[Car]
       assertNoDiff(
-        query.sqlString,
-        "select model, id, top_speed, created, vin from car where top_speed > ?"
+        query.frag.sqlString,
+        "select * from car where top_speed > ?"
       )
-      assertEquals(query.params, Vector(minSpeed))
-      assertEquals(
-        query.run[Car],
-        allCars.tail
-      )
+      assertEquals(query.frag.params, Vector(minSpeed))
+      assertEquals(query.run(), allCars.tail)
 
-  test("select query with aliasing"):
+  test("tuple select"):
     connect(ds()):
-      val car = carSchema.alias("c")
-      val minSpeed = 210
-      val query =
-        sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
-
-      assertNoDiff(
-        query.sqlString,
-        "select c.model, c.id, c.top_speed, c.created, c.vin from car c where c.top_speed > ?"
-      )
-      assertEquals(query.run[Car], allCars.tail)
+      val tuples = sql"select model, color from car where id = ${allCars(1).id}"
+        .query[(String, Color)]
+        .run()
+      assertEquals(tuples, Vector(allCars(1).model -> allCars(1).color))
 
   test("reads null int as None and not Some(0)"):
     connect(ds()):
-      assertEquals(carRepo.findAll.last.vin, None)
+      assertEquals(carRepo.findAll.last.vinNumber, None)
 
   /*
   Repo Tests
    */
 
+  @Table(ClickhouseDbType, SqlNameMapper.CamelToSnakeCase)
   case class Person(
       id: UUID,
       firstName: Option[String],
       lastName: String,
       isAdmin: Boolean,
       created: OffsetDateTime
-  )
+  ) derives DbCodec
 
-  val person = DbSchema[Person, Person, UUID](
-    ClickhouseDbType,
-    SqlNameMapper.CamelToSnakeCase
-  )
-
-  // aliases should not affect generated queries
-  val personRepo = Repo(person.alias("p"))
+  val personRepo = Repo[Person, Person, UUID]
 
   test("delete"):
     connect(ds()):
@@ -195,6 +190,65 @@ class ClickHouseTests /*extends FunSuite, TestContainersFixtures:
       assertEquals(personRepo.count, 10L)
       assert(personRepo.findAll.exists(_.lastName == "Prince"))
 
+  test("insertAll"):
+    connect(ds()):
+      personRepo.insertAll(
+        Vector(
+          Person(
+            id = UUID.randomUUID,
+            firstName = Some("John"),
+            lastName = "Smith",
+            isAdmin = false,
+            created = OffsetDateTime.now
+          ),
+          Person(
+            id = UUID.randomUUID,
+            firstName = None,
+            lastName = "Prince",
+            isAdmin = true,
+            created = OffsetDateTime.now
+          )
+        )
+      )
+      assertEquals(personRepo.count, 10L)
+
+  test("insertReturning"):
+    connect(ds()):
+      val id = UUID.randomUUID
+      val person = personRepo.insertReturning(
+        Person(
+          id = id,
+          firstName = Some("John"),
+          lastName = "Smith",
+          isAdmin = false,
+          created = OffsetDateTime.now
+        )
+      )
+      assertEquals(personRepo.count, 9L)
+      assertEquals(personRepo.findById(id).get.firstName, person.firstName)
+
+  test("insertAllReturning"):
+    connect(ds()):
+      val ps = Vector(
+        Person(
+          id = UUID.randomUUID,
+          firstName = Some("John"),
+          lastName = "Smith",
+          isAdmin = false,
+          created = OffsetDateTime.now
+        ),
+        Person(
+          id = UUID.randomUUID,
+          firstName = None,
+          lastName = "Prince",
+          isAdmin = true,
+          created = OffsetDateTime.now
+        )
+      )
+      val people = personRepo.insertAllReturning(ps)
+      assertEquals(people, ps)
+      assertEquals(personRepo.count, 10L)
+
   test("insert invalid"):
     intercept[SqlException]:
       connect(ds()):
@@ -209,11 +263,10 @@ class ClickHouseTests /*extends FunSuite, TestContainersFixtures:
 
   test("only allows EC =:= E"):
     intercept[IllegalArgumentException]:
-      case class UserCreator(name: String)
+      case class UserCreator(name: String) derives DbCodec
+      @Table(ClickhouseDbType)
       case class User(id: UUID, name: String) derives DbCodec
-      val userSchema = DbSchema[UserCreator, User, UUID](
-        ClickhouseDbType
-      )
+      val repo = Repo[UserCreator, User, UUID]
 
   test("update"):
     intercept[UnsupportedOperationException]:
@@ -290,4 +343,3 @@ class ClickHouseTests /*extends FunSuite, TestContainersFixtures:
       )
       .get
     ds
-*/
