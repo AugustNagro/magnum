@@ -1,13 +1,12 @@
 ## Magnum
 
-
 Historically, database clients on the JVM fall into three categories.
 
 * Object Oriented Repositories (Spring-Data, Hibernate)
 * Functional DSLs (JOOQ, Slick, quill, zio-sql)
 * SQL String interpolators (Anorm, doobie, plain jdbc)
 
-Magnum utilizes the full power of Scala 3 to combine aspects of all three,
+Magnum is a Scala 3 library combining aspects of all three,
 providing a typesafe and refactorable SQL interface,
 which can express all SQL expressions, on all JDBC-supported databases.
 
@@ -18,6 +17,7 @@ Like in Zoolander (the movie), Magnum represents a 'new look' for Database acces
 ```scala
 import com.augustnagro.magnum.*
 
+@Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
 case class User(
   @Id id: Long,
   firstName: Option[String],
@@ -25,7 +25,7 @@ case class User(
   created: OffsetDateTime
 ) derives DbReader
 
-// 'id' and 'created' columns are db-generated
+// assume 'id' and 'created' columns are db-generated
 case class UserCreator(
   firstName: Option[String],
   lastName: String
@@ -68,14 +68,14 @@ transact(ds):
 
 * Supports any database with a JDBC driver,
 including Postgres, MySql, Oracle, ClickHouse, H2, and Sqlite
-* Refactor-safe `sql" "` interpolator
+* Efficient `sql" "` interpolator
 * Purely-functional API
 * Common queries (like insert, update, delete) generated at compile time
-* Impossible to hit N+1 query problem
+* Difficult to hit N+1 query problem
 * Type-safe Transactions
 * Supports database-generated columns
-* Easy to use, performant, Loom-ready API (no Futures or Effect Systems)
-* Easy to define entities
+* Easy to use, Loom-ready API (no Futures or Effect Systems)
+* Easy to define entities. Easy to implement DB support & codecs for custom types.
 * Scales to complex SQL queries
 * Specifications for building dynamic queries, such as table filters with pagination
 * Supports high-performance [Seek pagination](https://blog.jooq.org/faster-sql-paging-with-jooq-using-the-seek-method/)
@@ -86,17 +86,14 @@ including Postgres, MySql, Oracle, ClickHouse, H2, and Sqlite
 ### `connect` creates a database connection.
 
 `connect` takes two parameters; the database DataSource,
-and a context function f that uses the given `DbCon` connection.
+and a context function that provides a given `DbCon` connection.
 For example:
 
 ```scala
-val ds: PGSimpleDataSource = ???
+val ds: DataSource = ???
 
-val users = connect(ds)(getUsers)
-
-def getUsers(using DbCon): Vector[User] =
-  import Schema.user
-  sql"select ${user.all} from $user".run
+val users: Vector[User] = connect(ds):
+  sql"select * from user".query[User].run()
 ```
 
 ### `transact` creates a database transaction.
@@ -105,31 +102,37 @@ Like `connect`, `transact` accepts a DataSource and context function.
 The context function provides a `DbTx` instance.
 If the function throws, the transaction will be rolled back.
 
-`DbTx` extends `DbCon`, facilitating type-safe transactions.
+```scala
+// update is rolled back
+transact(ds):
+  sql"update user set first_name = $firstName where id = $id".update.run()
+  thisMethodThrows()
+```
+
+### Type-safe Transaction & Connection Management
+
+`DbTx` extends `DbCon`, enabling type-safe transactions.
 
 ```scala
-val users = transact(ds):
-  runUpdateAndGetUsers()
-  
 def runUpdateAndGetUsers()(using DbTx): Vector[User] =
   userRepo.deleteById(1L)
   getUsers
 
 def getUsers(using DbCon): Vector[User] =
-  import Schema.user
-  sql"select ${user.all} from $user".run
+  sql"select * from user".query.run()
 ```
 
-You can also customize the transaction's JDBC Connection.
+### Customizing the transaction's JDBC Connection.
 
 ```scala
-transact(ds(), withRepeatableRead)(???)
+transact(ds(), withRepeatableRead):
+  ???
 
 def withRepeatableRead(con: Connection): Unit =
   con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
 ```
 
-### `DbReader` reads values from from JDBC ResultSets
+### `DbCodec`: Typeclass for JDBC reading & writing
 
 Methods on the sql interpolator require implicit DbReaders.
 In the below example, `.run` only compiles because the User class `derives DbReader`.
@@ -329,4 +332,5 @@ Table that compares frameworks:
 * Performant Batch queries
 
 ## Todo
-Configurable Scala -> JDBC field mapping (via static annotation)
+* Support MSSql
+* Streaming support

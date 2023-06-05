@@ -88,6 +88,14 @@ class SqliteTests extends FunSuite:
       assertEquals(query.frag.params, Vector(minSpeed))
       assertEquals(query.run(), allCars.tail)
 
+  test("select via option"):
+    connect(ds()):
+      val vin = Some(124)
+      val cars =
+        sql"select * from car where vin = $vin"
+          .query[Car].run()
+      assertEquals(cars, allCars.filter(_.vinNumber == vin))
+
   test("tuple select"):
     connect(ds()):
       val tuples = sql"select model, color from car where id = 2"

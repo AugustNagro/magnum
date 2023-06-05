@@ -105,35 +105,16 @@ private def sqlWriter(
           '{ ??? }
     case Seq() => posExpr
 
-//private def summonWriters(
-//    argsExprs: Seq[Expr[Any]],
-//    res: Vector[Expr[DbCodec[Any]]] = Vector.empty
-//)(using Quotes): Expr[Seq[DbCodec[Any]]] =
-//  import quotes.reflect.*
-//  argsExprs match
-//    case head +: tail =>
-//      head match
-//        case '{ $arg: tp } =>
-//          val writer = summonWriter[tp]
-//          summonWriters(tail, res :+ writer)
-//        case _ =>
-//          report.error("Args must be explicit", head)
-//          '{ ??? }
-//    case Seq() => Expr.ofSeq(res)
-
 private def summonWriter[T: Type](using Quotes): Expr[DbCodec[T]] =
   import quotes.reflect.*
-  TypeRepr
-    .of[T]
-    .baseClasses
-    .view
-    .init // remove the 'Any' class at the end of the list, since we want to warn if using DbCodec[Any]
-    .flatMap(symbol =>
-      symbol.typeRef.asType match
-        case '[tpe] => Expr.summon[DbCodec[tpe]]
+
+  Expr.summon[DbCodec[T]]
+    .orElse(
+      TypeRepr.of[T].widen.asType match
+        case '[tpe] => Expr.summon[DbCodec[tpe]].map(codec =>
+          '{ $codec.asInstanceOf[DbCodec[T]] }
+        )
     )
-    .map(codec => '{ $codec.asInstanceOf[DbCodec[T]] })
-    .headOption
     .getOrElse:
       report.info(
         s"Could not find given DbCodec for ${TypeRepr.of[T].show}. Using PreparedStatement::setObject instead."
