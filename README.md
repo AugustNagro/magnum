@@ -1,6 +1,6 @@
 ## Magnum
 
-Yet another database library for Scala. No-dependencies, high productivity ([feature list](#feature-list)).
+Yet another database client for Scala. No dependencies, high productivity.
 
 * [Installing](#installing)
 * [ScalaDoc](#scaladoc)
@@ -24,18 +24,20 @@ Yet another database library for Scala. No-dependencies, high productivity ([fea
 
 ## Installing
 
-
+"com.augustnagro" %% "magnum" % "1.0.0"
 
 Magnum requires Scala >= 3.3.0
 
 ## ScalaDoc
+
+https://javadoc.io/doc/com.augustnagro/magnum
 
 ## Documentation
 
 ### `connect` creates a database connection.
 
 `connect` takes two parameters; the database DataSource,
-and a context function that provides a given `DbCon` connection.
+and a context function with a given `DbCon` connection.
 For example:
 
 ```scala
@@ -137,7 +139,7 @@ transact(ds):
 
 Batch updates are supported via `batchUpdate` method in package `com.augustnagro.magnum`.
 
-```
+```scala
 connect(ds):
   val users: Iterable[User] = ???
   val updateResult: BatchUpdateResult =
@@ -178,9 +180,9 @@ transact(ds):
   val userOpt = userRepo.findById(2L)
 ```
 
-Importantly, class User is annotated with `@Table`, which defines the table's database type. The annot optionally specifies the name-mapping between the scala fields and column names. The table must also `derive DbCodec`, or otherwise provide a given DbCodec instance.
+Importantly, class User is annotated with `@Table`, which defines the table's database type. The annot optionally specifies the name-mapping between the scala fields and column names. The table must also `derive DbCodec`, or otherwise provide an implicit DbCodec instance.
 
-The optional `@Id` annotation denotes the table's primary key. Not setting `@Id` will default to using the first field. If there is no logical id, then strip the annotation and use Null in the ImmutableRepo type parameters.
+The optional `@Id` annotation denotes the table's primary key. Not setting `@Id` will default to using the first field. If there is no logical id, then strip the annotation and use Null in the ID type parameter of Repositories (see next).
 
 It is a best practice to extend ImmutableRepo to encapsulate your SQL in repositories. This way, it's easier to maintain since they're grouped together.
 
