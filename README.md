@@ -1,23 +1,32 @@
 ## Magnum
 
-Historically, database clients on the JVM fall into three categories.
-
-* Object Oriented Repositories (Spring-Data, Hibernate)
-* Functional DSLs (JOOQ, Slick, quill, zio-sql)
-* SQL String interpolators (Anorm, doobie, plain jdbc)
-
-Magnum is a Scala 3 library combining aspects of all three,
-providing a typesafe and refactorable SQL interface,
-which can express all SQL expressions, on all JDBC-supported databases.
-
-Like in Zoolander (the movie), Magnum represents a 'new look' for Database access in Scala.
+Yet another database library for Scala. No-dependencies, high productivity ([feature list](#feature-list)).
 
 * [Installing](#installing)
 * [ScalaDoc](#scaladoc)
-* [Features](#features)
+* [Documentation](#documentation)
+  * [`connect` creates a database connection](#connect-creates-a-database-connection)
+  * [`transact` creates a database transaction](#transact-creates-a-database-transaction)
+  * [Type-safe Transaction & Connection Management](#type-safe-transaction--connection-management)
+  * [Customizing the transaction's JDBC Connection](#customizing-the-transactions-jdbc-connection)
+  * [Sql Interpolator, Frag, Query, and Update](#sql-interpolator-frag-query-and-update)
+  * [Batch Updates](#batch-updates)
+  * [Immutable Repositories](#immutable-repositories)
+  * [Repositories](#repositories)
+  * [Database generated columns](#database-generated-columns)
+  * [Specifications](#specifications)
+  * [Scala 3 Enum Support](#scala-3-enum-support)
+  * [`DbCodec`: Typeclass for JDBC reading & writing](#dbcodec-typeclass-for-jdbc-reading--writing)
+  * [Logging](#logging-sql-queries)
+* [Motivation](#motivation)
+* [Feature List And Database Support](#feature-list)
 * [Documentation](#documentation)
 
 ## Installing
+
+
+
+Magnum requires Scala >= 3.3.0
 
 ## ScalaDoc
 
@@ -329,6 +338,20 @@ DbCodec[Int].writeSingle(22, ps)
 ### Defining your own DbCodecs
 
 To modify the JDBC mappings, implement a given DbCodec instance as you would for any Typeclass.
+
+## Motivation
+
+Historically, database clients on the JVM fall into three categories.
+
+* Object Oriented Repositories (Spring-Data, Hibernate)
+* Functional DSLs (JOOQ, Slick, quill, zio-sql)
+* SQL String interpolators (Anorm, doobie, plain jdbc)
+
+Magnum is a Scala 3 library combining aspects of all three,
+providing a typesafe and refactorable SQL interface,
+which can express all SQL expressions, on all JDBC-supported databases.
+
+Like in Zoolander (the movie), Magnum represents a 'new look' for Database access in Scala.
 
 ## Feature List
 

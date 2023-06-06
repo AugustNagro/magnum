@@ -1,41 +1,48 @@
-inThisBuild(
-  Seq(
-    organization := "com.augustnagro",
-    version := "0.1.0-SNAPSHOT",
-    versionScheme := Some("early-semver"),
-    scalaVersion := "3.3.0",
-    scalacOptions ++= Seq("-deprecation"),
-    homepage := Some(url("https://github.com/AugustNagro/magnum")),
-    licenses += ("Apache-2.0", url(
-      "https://opensource.org/licenses/Apache-2.0"
-    )),
-    scmInfo := Some(
-      ScmInfo(
-        url("https://github.com/AugustNagro/magnum"),
-        "scm:git:git@github.com:augustnagro/magnum.git",
-        Some("scm:git:git@github.com:augustnagro/magnum.git")
-      )
-    ),
-    developers := List(
-      Developer(
-        id = "augustnagro@gmail.com",
-        name = "August Nagro",
-        email = "augustnagro@gmail.com",
-        url = url("https://augustnagro.com")
-      )
-    )
+ThisBuild / organization := "com.augustnagro"
+ThisBuild / version := "0.1.0-SNAPSHOT"
+ThisBuild / versionScheme := Some("early-semver")
+ThisBuild / scalaVersion := "3.3.0"
+ThisBuild / scalacOptions ++= Seq("-deprecation")
+ThisBuild / homepage := Some(url("https://github.com/AugustNagro/magnum"))
+ThisBuild / licenses += ("Apache-2.0", url(
+  "https://opensource.org/licenses/Apache-2.0"
+))
+ThisBuild / scmInfo := Some(
+  ScmInfo(
+    url("https://github.com/AugustNagro/magnum"),
+    "scm:git:git@github.com:augustnagro/magnum.git",
+    Some("scm:git:git@github.com:augustnagro/magnum.git")
   )
 )
+ThisBuild / developers := List(
+  Developer(
+    id = "augustnagro@gmail.com",
+    name = "August Nagro",
+    email = "augustnagro@gmail.com",
+    url = url("https://augustnagro.com")
+  )
+)
+ThisBuild / publishMavenStyle := true
+ThisBuild / pomIncludeRepository := { _ => false }
+ThisBuild / publishTo := {
+  val nexus = "https://oss.sonatype.org/"
+  if (isSnapshot.value)
+    Some("snapshots" at nexus + "content/repositories/snapshots")
+  else
+    Some("releases" at nexus + "service/local/staging/deploy/maven2")
+}
+ThisBuild / credentials += Credentials(Path.userHome / ".sbt" / ".credentials")
+ThisBuild / publish / skip := true
 
-val mUnitVersion = "0.7.29"
 val testcontainersVersion = "0.40.12"
 
 lazy val magnum = project
   .in(file("."))
   .settings(
     Test / fork := true,
+    publish / skip := false,
     libraryDependencies ++= Seq(
-      "org.scalameta" %% "munit" % mUnitVersion % Test,
+      "org.scalameta" %% "munit" % "0.7.29" % Test,
       "com.dimafeng" %% "testcontainers-scala-munit" % testcontainersVersion % Test,
       "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion % Test,
       "org.postgresql" % "postgresql" % "42.5.4" % Test,
