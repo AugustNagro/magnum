@@ -50,9 +50,9 @@ class Spec[E] private (
     val allParams = Vector.newBuilder[Any]
 
     val validFrags = predicates.reverse.filter(_.sqlString.nonEmpty)
-    for Frag(query, params, _) <- validFrags do
-      whereClause.add("(" + query + ")")
-      allParams ++= params
+    for frag <- validFrags do
+      whereClause.add("(" + frag.sqlString + ")")
+      allParams ++= frag.params
 
     val orderByClause = StringJoiner(", ", "ORDER BY ", "").setEmptyValue("")
     for Sort(col, dir, nullOrder) <- sorts.reverse do
@@ -66,7 +66,7 @@ class Spec[E] private (
     for l <- limit do finalSj.add("LIMIT " + l)
     for o <- offset do finalSj.add("OFFSET " + o)
 
-    val fragWriter: FragWriter = (ps: PreparedStatement, startingPos: Int) =>
+    val fragWriter: FragWriter = (ps, startingPos) =>
       validFrags.foldLeft(startingPos)((pos, frag) =>
         pos + frag.writer.write(ps, pos)
       )

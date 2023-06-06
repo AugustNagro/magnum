@@ -12,49 +12,6 @@ which can express all SQL expressions, on all JDBC-supported databases.
 
 Like in Zoolander (the movie), Magnum represents a 'new look' for Database access in Scala.
 
-## Example
-
-```scala
-import com.augustnagro.magnum.*
-
-@Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
-case class User(
-  @Id id: Long,
-  firstName: Option[String],
-  lastName: String,
-  created: OffsetDateTime
-) derives DbReader
-
-// assume 'id' and 'created' columns are db-generated
-case class UserCreator(
-  firstName: Option[String],
-  lastName: String
-)
-
-object Schema:
-  val user = DbSchema[UserCreator, User, Long](
-    dbType = PostgresDbType,
-    sqlNameMapper = SqlNameMapper.CamelToSnakeCase
-  )
-  
-class UserRepo extends Repo(Schema.user):
-  def firstNamesForLast(lastName: String)(using DbCon): Vector[String] =
-    import Schema.user
-    sql"""
-      SELECT DISTINCT ${user.firstName}
-      FROM $user
-      WHERE ${user.lastName} = $lastName
-    """.run
-
-val repo = UserRepo()
-val ds: DataSource = ???
-
-transact(ds):
-  val uc = UserCreator(Some("Kip"), "Thorne")
-  val user: User = repo.insert(uc)
-  val firstNames = repo.firstNamesForLast("Thorne")
-```
-
 * [Installing](#installing)
 * [ScalaDoc](#scaladoc)
 * [Features](#features)
@@ -63,23 +20,6 @@ transact(ds):
 ## Installing
 
 ## ScalaDoc
-
-## Features
-
-* Supports any database with a JDBC driver,
-including Postgres, MySql, Oracle, ClickHouse, H2, and Sqlite
-* Efficient `sql" "` interpolator
-* Purely-functional API
-* Common queries (like insert, update, delete) generated at compile time
-* Difficult to hit N+1 query problem
-* Type-safe Transactions
-* Supports database-generated columns
-* Easy to use, Loom-ready API (no Futures or Effect Systems)
-* Easy to define entities. Easy to implement DB support & codecs for custom types.
-* Scales to complex SQL queries
-* Specifications for building dynamic queries, such as table filters with pagination
-* Supports high-performance [Seek pagination](https://blog.jooq.org/faster-sql-paging-with-jooq-using-the-seek-method/)
-* Performant batch-queries
 
 ## Documentation
 
@@ -90,10 +30,12 @@ and a context function that provides a given `DbCon` connection.
 For example:
 
 ```scala
+import com.augustnagro.magnum.*
+
 val ds: DataSource = ???
 
 val users: Vector[User] = connect(ds):
-  sql"select * from user".query[User].run()
+  sql"SELECT * FROM user".query[User].run()
 ```
 
 ### `transact` creates a database transaction.
@@ -105,13 +47,17 @@ If the function throws, the transaction will be rolled back.
 ```scala
 // update is rolled back
 transact(ds):
-  sql"update user set first_name = $firstName where id = $id".update.run()
+  sql"UPDATE user SET first_name = $firstName WHERE id = $id".update.run()
   thisMethodThrows()
 ```
 
 ### Type-safe Transaction & Connection Management
 
-`DbTx` extends `DbCon`, enabling type-safe transactions.
+Annotate transactional methods with `using DbTx`, and connections with `using DbCon`.
+
+Since `DbTx <: DbCon`, it's impossible to call a method with the wrong context.
+
+For example, this compiles:
 
 ```scala
 def runUpdateAndGetUsers()(using DbTx): Vector[User] =
@@ -119,10 +65,19 @@ def runUpdateAndGetUsers()(using DbTx): Vector[User] =
   getUsers
 
 def getUsers(using DbCon): Vector[User] =
-  sql"select * from user".query.run()
+  sql"SELECT * FROM user".query.run()
+```
+
+But not this:
+
+```scala
+def runSomeQueries(using DbCon): Vector[User] =
+  runUpdateAndGetUsers()
 ```
 
 ### Customizing the transaction's JDBC Connection.
+
+`transact` lets you customize the underlying java.sql.Connection.
 
 ```scala
 transact(ds(), withRepeatableRead):
@@ -132,67 +87,60 @@ def withRepeatableRead(con: Connection): Unit =
   con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
 ```
 
-### `DbCodec`: Typeclass for JDBC reading & writing
+### Sql Interpolator, Frag, Query, and Update
 
-Methods on the sql interpolator require implicit DbReaders.
-In the below example, `.run` only compiles because the User class `derives DbReader`.
-
-```scala
-case class User(
-  @Id id: Long,
-  firstName: Option[String],
-  lastName: String
-  created: OffsetDateTime
-) derives DbReader
-
-def getUsers(using DbCon): Vector[User] =
-  import Schema.user
-  sql"select ${user.all} from $user".run
-```
-
-There are implicit DbReaders defined for many types, such as strings, ints, etc.
+The `sql` interpolator can express any SQL expression, returning a `Frag` sql fragment. You can interpolate values without the risk of SQL-injection attacks.
 
 ```scala
-def getUserCnt(using DbCon): Long =
-  sql"select count(*) from ${Schema.user}".run[Long].head
+val firstNameOpt = Some("John")
+val twoDaysAgo = OffsetDateTime.now.minusDays(2)
+
+val frag: Frag =
+  sql"""
+    SELECT id, last_name FROM user
+    WHERE first_name = $firstNameOpt
+    AND created <= $twoDaysAgo
+    """
 ```
 
-### DbSchemas
-
-A DbSchema defines the schema mapping for a database entity.
-
-In the below example, 
+Frags can be turned into queries with the `query[T](using DbCodec[T])` method:
 
 ```scala
-object Schema:
-  val user = DbSchema[UserCreator, User, Long](
-    dbType = PostgresDbType,
-    sqlNameMapper = SqlNameMapper.CamelToSnakeCase
-  )
+val query = frag.query[(Long, String)] // Query[(Long, String)]
 ```
 
-The first type parameter defines the Entity-Creator,
-which should omit any fields that are auto-generated by the database.
-The entity-creator class must be an 'effective' subset of the entity class,
-but it does not have to subclass the entity. This is verified at compile time.
+Or updates via `update`
 
-The second type parameter is the Entity class.
-The Entity class should `derive DbReader`,
-If the Entity's ID is not the first field, annotate it with `@Id`.
-Finally, if an Entity's field is nullable, you may use the Option type.
+```scala
+val update: Update =
+  sql"UPDATE user SET first_name = 'Buddha' WHERE id = 3".update
+```
 
-The third type parameter is the ID type.
-If the Entity does not have a logical ID, use Null.
+Both are executed via `run()(using DbCon)`:
 
-Parameter dbType defines which database the schema is for,
-and sqlNameMapper defines how the table & column names are mapped.
-CamelToSnakeCase converts the CamelCase scala names to snake_case in the SQL.
+```scala
+transact(ds):
+  val tuples: Vector[(Long, String)] = query.run()
+  val updatedRows: Int = update.run()
+```
 
-Note: Do not fix the type of a DbSchema value. For example, this fails to compile:
+### Batch Updates
+
+Batch updates are supported via `batchUpdate` method in package `com.augustnagro.magnum`.
+
+```
+connect(ds):
+  val users: Iterable[User] = ???
+  val updateResult: BatchUpdateResult =
+    batchUpdate(users): user =>
+      sql"...".update
+```
+
+`batchUpdate` returns a `BatchUpdateResult` enum, which is `Success(numRowsUpdated)` or `SuccessNoInfo` otherwise.
 
 ### Immutable Repositories
 
-`ImmutableRepo` is like a Spring-Data Repository, and auto-generates the following methods at compile-time:
+The `ImmutableRepo` class auto-generates the following methods at compile-time:
 
 ```scala
   def count(using DbCon): Long
@@ -203,12 +151,45 @@ Note: Do not fix the type of a DbSchema value. For example, this fails to compil
   def findAllById(ids: Iterable[ID])(using DbCon): Vector[E]
 ```
 
-It is a best practice to encapsulate your SQL in repositories.
-Some databases cannot support every method, and will throw UnsupportedOperationException.
+Here's an example:
+
+```scala
+@Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
+case class User(
+  @Id id: Long,
+  firstName: Option[String],
+  lastName: String,
+  created: OffsetDateTime
+) derives DbCodec
+
+val userRepo = ImmutableRepo[User, Long]
+
+transact(ds):
+  val cnt = userRepo.count
+  val userOpt = userRepo.findById(2L)
+```
+
+Importantly, class User is annotated with `@Table`, which defines the table's database type. The annot optionally specifies the name-mapping between the scala fields and column names. The table must also `derive DbCodec`, or otherwise provide a given DbCodec instance.
+
+The optional `@Id` annotation denotes the table's primary key. Not setting `@Id` will default to using the first field. If there is no logical id, then strip the annotation and use Null in the ImmutableRepo type parameters.
+
+It is a best practice to extend ImmutableRepo to encapsulate your SQL in repositories. This way, it's easier to maintain since they're grouped together.
+
+```scala
+class UserRepo extends ImmutableRepo[User, Long]:
+  def firstNamesForLast(lastName: String)(using DbCon): Vector[String] =
+    sql"""
+      SELECT DISTINCT first_name
+      FROM user
+      WHERE last_name = $lastName
+      """.query[String].run()
+        
+  // other User-related queries here
+```
 
 ### Repositories
 
-`Repo` is like a Spring-Data Repository, and auto-generates the following methods at compile-time:
+The `Repo` class auto-generates the following methods at compile-time:
 
 ```scala
   def count(using DbCon): Long
@@ -225,49 +206,65 @@ Some databases cannot support every method, and will throw UnsupportedOperationE
   def deleteAllById(ids: Iterable[ID])(using DbCon): Unit
   def insert(entityCreator: EC)(using DbCon): E
   def insertAll(entityCreators: Iterable[EC])(using DbCon): Vector[E]
+  def insertReturning(entityCreator: EC)(using DbCon): E
+  def insertAllReturning(entityCreators: Iterable[EC])(using DbCon): Vector[E]
   def update(entity: E)(using DbCon): Unit
   def updateAll(entities: Iterable[E])(using DbCon): Unit
 ```
 
+Here's an example:
+
+```scala
+@Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
+case class User(
+  @Id id: Long,
+  firstName: Option[String],
+  lastName: String,
+  created: OffsetDateTime
+) derives DbCodec
+
+val userRepo = Repo[User, User, Long]
+
+val countAfterUpdate = transact(ds):
+  userRepo.deleteById(2L)
+  userRepo.count
+```
+
 It is a best practice to encapsulate your SQL in repositories.
-Some databases cannot support every method, and will throw UnsupportedOperationException.
-Also note that Repo extends ImmutableRepo.
 
-### Sql Interpolator
-
-The `sql` interpolator can express any sql expression.
-You can interpolate values without the risk of SQL-injection attacks.
-
-```
-connect(ds()):
-  val car = carSchema.alias("c")
-  val minSpeed = 210
-  val query: Sql =
-    sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
-
-  assertNoDiff(
-    query.query,
-    "select c.model, c.id, c.top_speed from car c where c.top_speed > ?"
-  )
-  val allCars = query.run[Car]
+```scala
+class UserRepo extends Repo[User, User, Long]
 ```
 
-Combined with DbSchema, you can build queries that are easy to refactor,
-and fail to compile when an Entity field is changed or removed.
+Also note that Repo extends ImmutableRepo. Some databases cannot support every method, and will throw UnsupportedOperationException.
 
-Sql has methods
+### Database generated columns
 
-`def run[E](using con: DbCon, dbReader: DbReader[E]): Vector[E]` and
+It is often the case that database columns are auto-generated, for example, primary key IDs. This is why the Repo class has 3 type parameters. 
 
-`def runUpdate(using con: DbCon): Int`,
+The first defines the Entity-Creator, which should omit any fields that are auto-generated. The entity-creator class must be an 'effective' subclass of the entity class, but it does not have to subclass the entity. This is verified at compile time.
 
-You can also use the runBatch method in package `com.augustnagro.magnum`.
+The second type parameter is the Entity class, and the final is for the ID. If the Entity does not have a logical ID, use Null.
 
-```
-connect(ds):
-  val users: Vector[User] = ???
-  runBatch(users)(user =>
-    sql"..." 
+```scala
+class UserCreator(
+  firstName: Option[String],
+  lastName: String,
+) derives DbCodec
+
+@Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
+case class User(
+  @Id id: Long,
+  firstName: Option[String],
+  lastName: String,
+  created: OffsetDateTime
+) derives DbCodec
+
+val userRepo = Repo[User, User, Long]
+
+val newUser: User = transact(ds):
+  userRepo.insertReturning(
+    UserCreator(Some("Adam"), "Smith")
   )
 ```
 
@@ -276,33 +273,79 @@ connect(ds):
 Specifications help you write safe, dynamic queries.
 An example use-case would be a search results page that allows users to sort and filter the paginated data.
 
-If you need to perform joins to get the data needed, first create a database view.
-
-Next, create an entity class that derives DbReader.
-
-Finally, use the Spec class to create a specification.
+1. If you need to perform joins to get the data needed, first create a database view.
+2. Next, create an entity class that derives DbReader.
+3. Finally, use the Spec class to create a specification.
 
 Here's an example:
 
 ```scala
-import Schema.user
-val age = 3
-val name = "John"
-val sql: Sql = Spec(user)
-  .where(sql"${user.age} > $age")
-  .orderBy(user.age)
-  .limit(10)
-  .seek(user.name, SeekDir.Lt, name, SortOrder.Desc)
-  .build
+val partialName = "Ja"
+val idPosition = 42L
 
-assertEquals(
-  spec.query,
-  "SELECT * FROM user WHERE (age > ?) AND (name < ?) ORDER BY age ASC NULLS LAST, name DESC NULLS LAST LIMIT 10"
-)
+val spec = Spec[User]
+  .where(sql"first_name ILIKE '$partialName%'")
+  .seek("id", SeekDir.Gt, idPosition, SortOrder.Asc)
+  .limit(10)
+
+val users: Vector[User] = userRepo.findAll(spec)
 ```
 
 Note that [seek pagination](https://blog.jooq.org/faster-sql-paging-with-jooq-using-the-seek-method/) is supported.
 
+### Scala 3 Enum Support
+
+Magnum supports Scala 3 enums (non-adt) fully, by default writing & reading them as Strings. For example,
+
+```scala
+@Table(PostgresDbType, SqlNameMapper.CamelToUpperSnakeCase)
+enum Color derives DbCodec:
+  case Red, Green, Blue
+
+@Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
+case class User(
+  @Id id: Long,
+  firstName: Option[String],
+  lastName: String,
+  created: OffsetDateTime,
+  favoriteColor: Color
+) derives DbCodec
+```
+
+### `DbCodec`: Typeclass for JDBC reading & writing
+
+DbCodec is a Typeclass for JDBC reading & writing.
+
+Built-in DbCodecs are provided for many types, including primitives, dates, Options, and Tuples. You can derive DbCodecs by adding `derives DbCodec` to your case class or enum.
+
+```scala
+val rs: ResultSet = ???
+val ints: Vector[Int] = DbCodec[Int].read(rs)
+
+val ps: PreparedStatement = ???
+DbCodec[Int].writeSingle(22, ps)
+```
+
+### Defining your own DbCodecs
+
+To modify the JDBC mappings, implement a given DbCodec instance as you would for any Typeclass.
+
+## Feature List
+
+* Supports any database with a JDBC driver,
+  including Postgres, MySql, Oracle, ClickHouse, H2, and Sqlite
+* Efficient `sql" "` interpolator
+* Purely-functional API
+* Common queries (like insert, update, delete) generated at compile time
+* Difficult to hit N+1 query problem
+* Type-safe Transactions
+* Supports database-generated columns
+* Easy to use, Loom-ready API (no Futures or Effect Systems)
+* Easy to define entities. Easy to implement DB support & codecs for custom types.
+* Scales to complex SQL queries
+* Specifications for building dynamic queries, such as table filters with pagination
+* Supports high-performance [Seek pagination](https://blog.jooq.org/faster-sql-paging-with-jooq-using-the-seek-method/)
+* Performant batch-queries
 
 ### Logging SQL queries
 
@@ -311,11 +354,6 @@ Setting to TRACE will log SQL queries and their parameters.
 
 ## Developing
 The tests are written using TestContainers, which requires Docker be installed.
-
-Todo: Scala 3 Enum support
-Todo: Vector, List, etc mapping to Sql array
-Todo: optimize mysql (and other) inserts
-Todo: Comparison with existing frameworks:
 
 Table that compares frameworks:
 * Refactoring-safe sql?

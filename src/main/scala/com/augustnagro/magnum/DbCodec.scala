@@ -23,9 +23,12 @@ trait DbCodec[E]:
 
   /** Syntax used when querying the db. For example,
     *
-    * DbSchema[Int].queryRepr == "?"
+    * DbCodec[Int].queryRepr == "?"
     *
-    * DbSchema[(String, Boolean)].queryRepr = "(?, ?)"
+    * DbCodec[(String, Boolean)].queryRepr = "(?, ?)"
+    *
+    * case class User(id: Long, name: String) derives DbCodec
+    * DbCodec[User].queryRepr = "? ?"
     */
   def queryRepr: String
 
