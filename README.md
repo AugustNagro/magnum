@@ -294,17 +294,19 @@ Here's an example:
 
 ```scala
 val partialName = "Ja"
+val searchDate = OffsetDateTime.now.minusDays(2)
 val idPosition = 42L
 
 val spec = Spec[User]
   .where(sql"first_name ILIKE '$partialName%'")
+  .where(sql"created >= $searchDate")
   .seek("id", SeekDir.Gt, idPosition, SortOrder.Asc)
   .limit(10)
 
 val users: Vector[User] = userRepo.findAll(spec)
 ```
 
-Note that [seek pagination](https://blog.jooq.org/faster-sql-paging-with-jooq-using-the-seek-method/) is supported.
+Note that both [seek pagination](https://blog.jooq.org/faster-sql-paging-with-jooq-using-the-seek-method/) and offset pagination is supported.
 
 ### Scala 3 Enum Support
 
