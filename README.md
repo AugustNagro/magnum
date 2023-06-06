@@ -273,7 +273,7 @@ case class User(
   created: OffsetDateTime
 ) derives DbCodec
 
-val userRepo = Repo[User, User, Long]
+val userRepo = Repo[UserCreator, User, Long]
 
 val newUser: User = transact(ds):
   userRepo.insertReturning(
