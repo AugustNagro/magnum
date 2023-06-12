@@ -260,7 +260,7 @@ The first defines the Entity-Creator, which should omit any fields that are auto
 The second type parameter is the Entity class, and the final is for the ID. If the Entity does not have a logical ID, use Null.
 
 ```scala
-class UserCreator(
+case class UserCreator(
   firstName: Option[String],
   lastName: String,
 ) derives DbCodec
