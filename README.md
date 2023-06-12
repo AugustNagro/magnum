@@ -21,6 +21,7 @@ Yet another database client for Scala. No dependencies, high productivity.
 * [Motivation](#motivation)
 * [Feature List And Database Support](#feature-list)
 * [Documentation](#documentation)
+* [Talks and Presentations](#talks-and-presentations)
 
 ## Installing
 
@@ -401,3 +402,7 @@ Table that compares frameworks:
 ## Todo
 * Support MSSql
 * Streaming support
+
+## Talks and Presentations
+
+* Scala Days 2023: [slides](/Magnum-Slides-to-Share.pdf)
