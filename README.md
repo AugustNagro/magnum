@@ -31,9 +31,17 @@ Yet another database client for Scala. No dependencies, high productivity.
 
 Magnum requires Scala >= 3.3.0
 
+You must also install the JDBC driver for your database, for example:
+
+```
+"org.postgresql" % "postgresql" % "<version>"
+```
+
+And for performance, a JDBC connection pool like [HikariCP](https://github.com/brettwooldridge/HikariCP)
+
 ## ScalaDoc
 
-https://javadoc.io/doc/com.augustnagro/magnum
+https://javadoc.io/doc/com.augustnagro/magnum_3
 
 ## Documentation
 
@@ -46,7 +54,7 @@ For example:
 ```scala
 import com.augustnagro.magnum.*
 
-val ds: DataSource = ???
+val ds: java.sql.DataSource = ???
 
 val users: Vector[User] = connect(ds):
   sql"SELECT * FROM user".query[User].run()
@@ -384,20 +392,6 @@ Setting to TRACE will log SQL queries and their parameters.
 
 ## Developing
 The tests are written using TestContainers, which requires Docker be installed.
-
-Table that compares frameworks:
-* Refactoring-safe sql?
-* Purely functional API?
-* Supports nearly all databases?
-* Common queries (like insert, update, delete) generated at compile time?
-* Impossible to hit N+1 query problem?
-* Type-safe transaction propagation?
-* Supports generated columns?
-* Loom-ready interface?
-* Easy to define entities?
-* Scales to complex SQL queries?
-* Specifications for building dynamic queries?
-* Performant Batch queries
 
 ## Todo
 * Support MSSql
