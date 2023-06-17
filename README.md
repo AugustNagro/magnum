@@ -20,7 +20,6 @@ Yet another database client for Scala. No dependencies, high productivity.
   * [Logging](#logging-sql-queries)
 * [Motivation](#motivation)
 * [Feature List And Database Support](#feature-list)
-* [Documentation](#documentation)
 * [Talks and Presentations](#talks-and-presentations)
 
 ## Installing
@@ -191,9 +190,9 @@ transact(ds):
   val userOpt = userRepo.findById(2L)
 ```
 
-Importantly, class User is annotated with `@Table`, which defines the table's database type. The annot optionally specifies the name-mapping between the scala fields and column names. The table must also `derive DbCodec`, or otherwise provide an implicit DbCodec instance.
+Importantly, class User is annotated with `@Table`, which defines the table's database type. The annotation optionally specifies the name-mapping between scala fields and column names. You can also use the `@SqlName` annotation on individual fields. Finally, The table must `derive DbCodec`, or otherwise provide an implicit DbCodec instance.
 
-The optional `@Id` annotation denotes the table's primary key. Not setting `@Id` will default to using the first field. If there is no logical id, then strip the annotation and use Null in the ID type parameter of Repositories (see next).
+The optional `@Id` annotation denotes the table's primary key. Not setting `@Id` will default to using the first field. If there is no logical id, then remove the annotation and use Null in the ID type parameter of Repositories (see next).
 
 It is a best practice to extend ImmutableRepo to encapsulate your SQL in repositories. This way, it's easier to maintain since they're grouped together.
 
@@ -396,6 +395,7 @@ The tests are written using TestContainers, which requires Docker be installed.
 ## Todo
 * Support MSSql
 * Streaming support
+* Cats Effect & ZIO modules
 
 ## Talks and Presentations
 
