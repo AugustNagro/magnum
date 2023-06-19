@@ -396,6 +396,7 @@ The tests are written using TestContainers, which requires Docker be installed.
 * Support MSSql
 * Streaming support
 * Cats Effect & ZIO modules
+* Explicit Nulls support
 
 ## Talks and Presentations
 
