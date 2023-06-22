@@ -75,8 +75,13 @@ object RepoDefaults:
                   type MirroredElemLabels = ecMels
                 }
               }) =>
-            val tableName = Expr(Type.valueOfConstant[eLabel].get.toString)
-            val tableNameSql = '{ $nameMapper.toTableName($tableName) }
+            val tableNameSql = sqlTableNameAnnot[E] match {
+              case Some(sqlName) => 
+                '{ $sqlName.name }
+              case None =>
+                val tableName = Expr(Type.valueOfConstant[eLabel].get.toString)
+                '{ $nameMapper.toTableName($tableName) }
+            }
             val eElemNames = elemNames[eMels]()
             val eElemNamesSql = Expr.ofSeq(
               eElemNames.map(elemName =>
@@ -178,6 +183,16 @@ object RepoDefaults:
         elemNames[melTail](melString :: res)
       case '[EmptyTuple] =>
         res.reverse
+
+  private def sqlTableNameAnnot[T: Type](using Quotes): Option[Expr[SqlName]] =
+    import quotes.reflect._
+    val annot = TypeRepr.of[SqlName]
+    TypeRepr
+      .of[T]
+      .typeSymbol
+      .annotations
+      .find(_.tpe =:= annot)
+      .map(term => term.asExprOf[SqlName])
 
   private def sqlNameAnnot[T: Type](elemName: String)(using
       Quotes

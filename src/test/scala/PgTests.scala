@@ -316,6 +316,25 @@ class PgTests extends FunSuite, TestContainersFixtures:
         transact(dataSource):
           assertEquals(personRepo.count, 8L)
 
+ 
+  @SqlName("person")
+  @Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
+  case class CustomPerson(
+      id: Long,
+      firstName: Option[String],
+      lastName: String,
+      isAdmin: Boolean,
+      created: OffsetDateTime
+  ) derives DbCodec
+
+
+  val customPersonRepo = Repo[PersonCreator, CustomPerson, Long]
+
+  test("count with manual table name"):
+    val count = connect(ds()):
+      customPersonRepo.count
+    assertEquals(count, 8L)
+
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
       .Def(dockerImageName = DockerImageName.parse("postgres:15.2"))
