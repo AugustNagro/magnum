@@ -1,5 +1,5 @@
 ThisBuild / organization := "com.augustnagro"
-ThisBuild / version := "1.0.1"
+ThisBuild / version := "1.0.2-SNAPSHOT"
 ThisBuild / versionScheme := Some("early-semver")
 ThisBuild / scalaVersion := "3.3.0"
 ThisBuild / scalacOptions ++= Seq("-deprecation")
