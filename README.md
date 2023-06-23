@@ -397,6 +397,7 @@ The tests are written using TestContainers, which requires Docker be installed.
 * Streaming support
 * Cats Effect & ZIO modules
 * Explicit Nulls support
+* Postgres Types module
 
 ## Talks and Presentations
 
