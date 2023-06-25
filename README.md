@@ -223,14 +223,14 @@ The `Repo` class auto-generates the following methods at compile-time:
   def delete(entity: E)(using DbCon): Unit
   def deleteById(id: ID)(using DbCon): Unit
   def truncate()(using DbCon): Unit
-  def deleteAll(entities: Iterable[E])(using DbCon): Unit
-  def deleteAllById(ids: Iterable[ID])(using DbCon): Unit
-  def insert(entityCreator: EC)(using DbCon): E
-  def insertAll(entityCreators: Iterable[EC])(using DbCon): Vector[E]
+  def deleteAll(entities: Iterable[E])(using DbCon): BatchUpdateResult
+  def deleteAllById(ids: Iterable[ID])(using DbCon): BatchUpdateResult
+  def insert(entityCreator: EC)(using DbCon): Unit
+  def insertAll(entityCreators: Iterable[EC])(using DbCon): Unit
   def insertReturning(entityCreator: EC)(using DbCon): E
   def insertAllReturning(entityCreators: Iterable[EC])(using DbCon): Vector[E]
   def update(entity: E)(using DbCon): Unit
-  def updateAll(entities: Iterable[E])(using DbCon): Unit
+  def updateAll(entities: Iterable[E])(using DbCon): BatchUpdateResult
 ```
 
 Here's an example:
