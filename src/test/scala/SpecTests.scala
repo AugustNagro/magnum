@@ -3,7 +3,7 @@ import munit.FunSuite
 
 class SpecTests extends FunSuite:
 
-  case class User(id: Long, name: String, age: Int) derives DbCodec
+  case class User(id: Long, name: String, age: opaques.Age) derives DbCodec
 
   test("select all"):
     assertEquals(Spec[User].build.sqlString, "")
