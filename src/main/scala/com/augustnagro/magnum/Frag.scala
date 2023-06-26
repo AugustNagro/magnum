@@ -13,6 +13,7 @@ case class Frag(
 ):
   def query[E](using reader: DbCodec[E]): Query[E] = Query(this, reader)
   def update: Update = Update(this)
+  def returning[E](using reader: DbCodec[E]): Returning[E] = Returning(this)
 
 object Frag:
   private val emptyWriter: FragWriter = (_, _) => 0
