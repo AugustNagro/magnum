@@ -30,7 +30,10 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
       color: Color
   ) derives DbCodec
 
-  val carRepo = ImmutableRepo[Car, Long]
+  object carRepo extends ImmutableRepo[Car, Long]:
+    def customSelect(using DbCon): Car =
+      val sql = sql"select ${*} from $table where $id = 1"
+      sql.query[Car].run().head
 
   val allCars = Vector(
     Car("McLaren Senna", 1L, 208, Some(123), Color.Red),
@@ -94,7 +97,8 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
       val vin = Some(124)
       val cars =
         sql"select * from car where vin = $vin"
-          .query[Car].run()
+          .query[Car]
+          .run()
       assertEquals(cars, allCars.filter(_.vinNumber == vin))
 
   test("tuple select"):
@@ -107,6 +111,10 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
   test("reads null int as None and not Some(0)"):
     connect(ds()):
       assertEquals(carRepo.findById(3L).get.vinNumber, None)
+
+  test("custom select"):
+    connect(ds()):
+      assertEquals(carRepo.customSelect, allCars.head)
 
   /*
    Repo Tests
@@ -126,7 +134,14 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
       created: OffsetDateTime
   ) derives DbCodec
 
-  val personRepo = Repo[PersonCreator, Person, Long]
+  object personRepo extends Repo[PersonCreator, Person, Long]:
+    def customInsert(p: PersonCreator)(using DbCon): Unit =
+      val sql = sql"insert into $table $insertColumns values ($p)"
+      sql.update.run()
+
+    def customUpdate(personId: Long, isAdmin: Boolean)(using DbCon): Unit =
+      val sql = sql"update $table set is_admin = $isAdmin where $id = $personId"
+      sql.update.run()
 
   test("delete"):
     connect(ds()):
@@ -313,6 +328,32 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
       case _: Exception =>
         transact(dataSource):
           assertEquals(personRepo.count, 8L)
+
+  test("custom insert"):
+    connect(ds()):
+      val p = PersonCreator(
+        firstName = Some("Chandler"),
+        lastName = "Brown",
+        isAdmin = false
+      )
+      personRepo.customInsert(p)
+      assertEquals(personRepo.count, 9L)
+      val fetched = personRepo.findAll.last
+      assertEquals(fetched.firstName, p.firstName)
+      assertEquals(fetched.lastName, p.lastName)
+      assertEquals(fetched.isAdmin, p.isAdmin)
+
+  test("custom update"):
+    connect(ds()):
+      val p = personRepo.insertReturning(
+        PersonCreator(
+          firstName = Some("Chandler"),
+          lastName = "Brown",
+          isAdmin = false
+        )
+      )
+      personRepo.customUpdate(p.id, isAdmin = true)
+      assertEquals(personRepo.findById(p.id).get.isAdmin, true)
 
   val mySqlContainer = ForAllContainerFixture(
     MySQLContainer

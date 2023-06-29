@@ -208,7 +208,7 @@ object PostgresDbType extends DbType:
           ps.executeUpdate()
         ) match
           case Success(_) => ()
-          case Failure(t)   => throw SqlException(updateSql, entity, t)
+          case Failure(t) => throw SqlException(updateSql, entity, t)
 
       def updateAll(entities: Iterable[E])(using
           con: DbCon
@@ -235,3 +235,11 @@ object PostgresDbType extends DbType:
         ) match
           case Success(res) => res
           case Failure(t)   => throw SqlException(updateSql, entities, t)
+
+      def columns: AllColumns = AllColumns.fromSeq(eElemNamesSql)
+
+      def insertColumns: InsertColumns = InsertColumns.fromSeq(ecElemNamesSql)
+
+      def tableName: Repo.TableName = Repo.TableName(tableNameSql)
+
+      def idColumn: Repo.IdColumn = Repo.IdColumn(idName)

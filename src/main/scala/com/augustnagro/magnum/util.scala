@@ -65,14 +65,27 @@ private def sqlImpl(sc: Expr[StringContext], args: Expr[Seq[Any]])(using
 //  val stringExprs: Seq[Expr[String]] = sc match
 //    case '{ StringContext(${ Varargs(strings) }: _*) } => strings
 
-  val paramsExpr = Expr.ofSeq(argsExprs)
-  val questionVarargs = Varargs(Vector.fill(argsExprs.size)(Expr("?")))
-  val queryExpr = '{ $sc.s($questionVarargs: _*) }
+  val interpolatedVarargs = Varargs(argsExprs.map {
+    case '{ $arg: Renderables[_] }  => '{ $arg.toString() }
+    case '{ $arg: Repo.Identifier } => '{ $arg.toString() }
+    case '{ $arg: tp } =>
+      val codecExpr = summonWriter[tp]
+      '{ $codecExpr.queryRepr }
+  })
+
+  val paramExprs = argsExprs.filter {
+    case '{ $arg: Renderables[_] }  => false
+    case '{ $arg: Repo.Identifier } => false
+    case _                          => true
+  }
+
+  val queryExpr = '{ $sc.s($interpolatedVarargs: _*) }
+  val exprParams = Expr.ofSeq(paramExprs)
 
   '{
-    val argValues = $args
+    val argValues = $exprParams
     val writer: FragWriter = (ps: PreparedStatement, pos: Int) => {
-      ${ sqlWriter('{ ps }, '{ pos }, '{ argValues }, argsExprs, '{ 0 }) }
+      ${ sqlWriter('{ ps }, '{ pos }, '{ argValues }, paramExprs, '{ 0 }) }
     }
     Frag($queryExpr, argValues, writer)
   }
@@ -108,12 +121,14 @@ private def sqlWriter(
 private def summonWriter[T: Type](using Quotes): Expr[DbCodec[T]] =
   import quotes.reflect.*
 
-  Expr.summon[DbCodec[T]]
+  Expr
+    .summon[DbCodec[T]]
     .orElse(
       TypeRepr.of[T].widen.asType match
-        case '[tpe] => Expr.summon[DbCodec[tpe]].map(codec =>
-          '{ $codec.asInstanceOf[DbCodec[T]] }
-        )
+        case '[tpe] =>
+          Expr
+            .summon[DbCodec[tpe]]
+            .map(codec => '{ $codec.asInstanceOf[DbCodec[T]] })
     )
     .getOrElse:
       report.info(
