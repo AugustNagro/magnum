@@ -16,6 +16,8 @@ import scala.compiletime.{
 }
 import scala.quoted.*
 import scala.reflect.ClassTag
+import java.util.Calendar
+import java.util.TimeZone
 
 /** Typeclass for JDBC reading & writing.
   */
@@ -181,14 +183,17 @@ object DbCodec:
     def queryRepr: String = "?"
 
   given SqlTimestampCodec: DbCodec[java.sql.Timestamp] with
+    private val tzUTC = Calendar.getInstance(
+      TimeZone.getTimeZone("UTC")
+    )
     val cols: IArray[Int] = IArray(Types.TIMESTAMP)
     def readSingle(rs: ResultSet, pos: Int): java.sql.Timestamp =
-      rs.getTimestamp(pos)
+      rs.getTimestamp(pos, tzUTC)
     def writeSingle(
         t: java.sql.Timestamp,
         ps: PreparedStatement,
         pos: Int
-    ): Unit = ps.setTimestamp(pos, t)
+    ): Unit = ps.setTimestamp(pos, t, tzUTC)
     def queryRepr: String = "?"
 
   given OffsetDateTimeCodec: DbCodec[OffsetDateTime] with
