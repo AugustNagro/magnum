@@ -372,7 +372,12 @@ object DbCodec:
 
   private def dbCodecImpl[E: Type](using Quotes): Expr[DbCodec[E]] =
     import quotes.reflect.*
-    Expr.summon[Mirror.Of[E]].get match
+    val mirror = Expr.summon[Mirror.Of[E]].getOrElse {
+      report.errorAndAbort(
+        "Can only derive DbCodec for case classes, sealed traits or enums (products and sums)."
+      )
+    }
+    mirror match
       case '{
             $mp: Mirror.ProductOf[E] {
               type MirroredElemTypes = mets
@@ -529,7 +534,12 @@ object DbCodec:
     import quotes.reflect.*
     Type.of[Mets] match
       case '[met *: metTail] =>
-        val metCodec = Expr.summon[DbCodec[met]].get
+        val metCodec = Expr.summon[DbCodec[met]].getOrElse {
+          val metType = TypeRepr.of[met].show
+          report.errorAndAbort(
+            s"Cannot find a DbCodec instance for $metType! Provide one or derive it."
+          )
+        }
         val newCols = '{ $metCodec.cols }
         buildColsExpr[metTail](res :+ newCols)
       case '[EmptyTuple] =>
