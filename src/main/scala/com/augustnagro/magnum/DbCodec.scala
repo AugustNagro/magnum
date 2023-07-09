@@ -20,6 +20,7 @@ import scala.reflect.ClassTag
 /** Typeclass for JDBC reading & writing.
   */
 trait DbCodec[E]:
+  self =>
 
   /** Syntax used when querying the db. For example,
     *
@@ -72,6 +73,15 @@ trait DbCodec[E]:
     for e <- entities do
       writeSingle(e, ps)
       ps.addBatch()
+
+  def biMap[E2](to: E => E2, from: E2 => E): DbCodec[E2] =
+    new DbCodec[E2]:
+      val cols: IArray[Int] = self.cols
+      def readSingle(rs: ResultSet, pos: Int): E2 =
+        to(self.readSingle(rs, pos))
+      def writeSingle(e: E2, ps: PreparedStatement, pos: Int): Unit =
+        self.writeSingle(from(e), ps, pos)
+      def queryRepr: String = self.queryRepr
 
 object DbCodec:
 
