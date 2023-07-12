@@ -23,6 +23,11 @@ trait RepoDefaults[EC, E, ID]:
   def insertAllReturning(entityCreators: Iterable[EC])(using DbCon): Vector[E]
   def update(entity: E)(using DbCon): Unit
   def updateAll(entities: Iterable[E])(using DbCon): BatchUpdateResult
+  // metadata to help with query building
+  def columns: AllColumns
+  def insertColumns: InsertColumns
+  def tableName: Repo.TableName
+  def idColumn: Repo.IdColumn
 
 object RepoDefaults:
 
@@ -76,7 +81,7 @@ object RepoDefaults:
                 }
               }) =>
             val tableNameSql = sqlTableNameAnnot[E] match {
-              case Some(sqlName) => 
+              case Some(sqlName) =>
                 '{ $sqlName.name }
               case None =>
                 val tableName = Expr(Type.valueOfConstant[eLabel].get.toString)

@@ -35,7 +35,11 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
       color: Color
   ) derives DbCodec
 
-  val carRepo = ImmutableRepo[Car, UUID]
+  object carRepo extends ImmutableRepo[Car, UUID]:
+    def customSelect(speed: Int): Vector[Car] =
+      val sql = sql"SELECT ${*} FROM $table WHERE top_speed > $speed"
+      connect(ds()):
+        sql.query[Car].run()
 
   val allCars = Vector(
     Car(
@@ -122,7 +126,8 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
       val vin = Some(124)
       val cars =
         sql"select * from car where vin = $vin"
-          .query[Car].run()
+          .query[Car]
+          .run()
       assertEquals(cars, allCars.filter(_.vinNumber == vin))
 
   test("tuple select"):
@@ -135,6 +140,10 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
   test("reads null int as None and not Some(0)"):
     connect(ds()):
       assertEquals(carRepo.findAll.last.vinNumber, None)
+
+  test("custom select using identifiers"):
+    connect(ds()):
+      assertEquals(carRepo.customSelect(211), Vector(allCars(1)))
 
   /*
   Repo Tests
@@ -149,7 +158,12 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
       created: OffsetDateTime
   ) derives DbCodec
 
-  val personRepo = Repo[Person, Person, UUID]
+  object personRepo extends Repo[Person, Person, UUID]:
+    def customInsert(p: Person): Unit =
+      val sql =
+        sql"INSERT INTO $table $insertColumns VALUES ($p)"
+      connect(ds()):
+        sql.update.run()
 
   test("delete"):
     connect(ds()):
@@ -321,6 +335,21 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
   test("transact"):
     val count = transact(ds())(personRepo.count)
     assertEquals(count, 8L)
+
+  test("custom insert"):
+    val person = Person(
+      id = UUID.randomUUID,
+      firstName = Some("John"),
+      lastName = "Smith",
+      isAdmin = false,
+      created = OffsetDateTime.of(2020, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC)
+    )
+
+    connect(ds()):
+      personRepo.customInsert(person)
+
+      assertEquals(personRepo.count, 9L)
+      assertEquals(personRepo.findById(person.id).get, person)
 
   val clickHouseContainer = ForAllContainerFixture(
     ClickHouseContainer

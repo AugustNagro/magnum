@@ -237,3 +237,11 @@ object H2DbType extends DbType:
         ) match
           case Success(res) => res
           case Failure(t)   => throw SqlException(updateSql, entities, t)
+
+      def columns: AllColumns = AllColumns.fromSeq(eElemNamesSql)
+
+      def insertColumns: InsertColumns = InsertColumns.fromSeq(ecElemNamesSql)
+
+      def tableName: Repo.TableName = Repo.TableName(tableNameSql)
+
+      def idColumn: Repo.IdColumn = Repo.IdColumn(idName)
