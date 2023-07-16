@@ -53,17 +53,4 @@ open class Repo[EC, E, ID](using defaults: RepoDefaults[EC, E, ID])
   def updateAll(entities: Iterable[E])(using DbCon): BatchUpdateResult =
     defaults.updateAll(entities)
 
-  def insertColumns: InsertColumns = defaults.insertColumns
-
-object Repo:
-
-  trait Identifier
-
-  opaque type TableName <: Identifier = String & Identifier
-  opaque type IdColumn <: Identifier = String & Identifier
-
-  object TableName:
-    private[magnum] def apply(s: String): TableName = s.asInstanceOf[TableName]
-
-  object IdColumn:
-    private[magnum] def apply(s: String): IdColumn = s.asInstanceOf[IdColumn]
+end Repo

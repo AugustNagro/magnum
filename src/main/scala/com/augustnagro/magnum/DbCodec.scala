@@ -82,6 +82,7 @@ trait DbCodec[E]:
       def writeSingle(e: E2, ps: PreparedStatement, pos: Int): Unit =
         self.writeSingle(from(e), ps, pos)
       def queryRepr: String = self.queryRepr
+end DbCodec
 
 object DbCodec:
 
@@ -346,6 +347,7 @@ object DbCodec:
       cCodec.writeSingle(tup._3, ps, i)
     val queryRepr: String =
       s"(${aCodec.queryRepr}, ${bCodec.queryRepr}, ${cCodec.queryRepr})"
+  end Tuple3Codec
 
   given Tuple4Codec[A, B, C, D](using
       aCodec: DbCodec[A],
@@ -376,6 +378,7 @@ object DbCodec:
       dCodec.writeSingle(tup._4, ps, i)
     val queryRepr: String =
       s"(${aCodec.queryRepr}, ${bCodec.queryRepr}, ${cCodec.queryRepr}, ${dCodec.queryRepr})"
+  end Tuple4Codec
 
   inline given derived[E: Mirror.Of]: DbCodec[E] =
     ${ dbCodecImpl[E] }
@@ -439,6 +442,8 @@ object DbCodec:
             def queryRepr: String = "?"
           }
         }
+    end match
+  end dbCodecImpl
 
   private def productQueryRepr[Mets: Type](
       elemReprs: Vector[Expr[String]] = Vector.empty
@@ -495,6 +500,7 @@ object DbCodec:
             '{ ($defaultNameMapper.toColumnName($scalaNameExpr), $sumExpr) }
       )
     Expr.ofSeq(sqlNameExprs)
+  end buildSqlNameMap
 
   private def getScalaNames[Mels: Type](res: Vector[String] = Vector.empty)(
       using Quotes
@@ -516,8 +522,7 @@ object DbCodec:
           case Some(m) if isSingleton[met] =>
             '{ $m.fromProduct(EmptyTuple).asInstanceOf[E] }
           case _ =>
-            report.error("Can only derive simple (non-adt) enums")
-            '{ ??? }
+            report.errorAndAbort("Can only derive simple (non-adt) enums")
         sumValues[E, metTail](res :+ expr)
       case '[EmptyTuple] => res
 
@@ -557,6 +562,7 @@ object DbCodec:
           val iArrays: Seq[IArray[Int]] = ${ Expr.ofSeq(res) }
           IArray.concat(iArrays*)
         }
+  end buildColsExpr
 
   private def productReadSingle[E: Type, Mets: Type](
       rs: Expr[ResultSet],
@@ -606,15 +612,16 @@ object DbCodec:
                   }
                 }
               case None =>
-                report.error(
+                report.errorAndAbort(
                   "Could not find DbCodec or ClassTag for ${TypeRepr.of[met].show}"
                 )
-                '{ ??? }
       case '[EmptyTuple] =>
         '{
           val product = ${ Expr.ofTupleFromSeq(res) }
           $m.fromProduct(product)
         }
+    end match
+  end productReadSingle
 
   private def productWriteSingle[E: Type, Mets: Type](
       e: Expr[E],
@@ -653,3 +660,6 @@ object DbCodec:
               ${ productWriteSingle[E, metTail](e, ps, '{ newPos }, '{ newI }) }
             }
       case '[EmptyTuple] => '{}
+    end match
+  end productWriteSingle
+end DbCodec

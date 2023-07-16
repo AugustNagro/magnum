@@ -19,3 +19,4 @@ class SqlException(query: String, params: Any, t: Throwable = null)
     ):
 
   def this(frag: Frag, t: Throwable) = this(frag.sqlString, frag.params, t)
+end SqlException

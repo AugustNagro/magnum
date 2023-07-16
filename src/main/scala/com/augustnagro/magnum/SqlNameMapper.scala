@@ -21,7 +21,6 @@ object SqlNameMapper:
         if c.isUpper then res.append('_').append(c.toLower)
         else res.append(c)
       res.result()
-  end CamelToSnakeCase
 
   object CamelToUpperSnakeCase extends SqlNameMapper:
     def toColumnName(scalaName: String): String = toCase(scalaName)
@@ -35,8 +34,10 @@ object SqlNameMapper:
         if c.isUpper then res.append('_').append(c)
         else res.append(c.toUpper)
       res.result()
+  end CamelToUpperSnakeCase
 
   /** SqlNameMapper that keeps the same case as the provided scala names */
   object SameCase extends SqlNameMapper:
     def toColumnName(scalaName: String): String = scalaName
     def toTableName(scalaName: String): String = scalaName
+end SqlNameMapper

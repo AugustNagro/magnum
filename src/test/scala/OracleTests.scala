@@ -29,10 +29,8 @@ class OracleTests extends FunSuite, TestContainersFixtures:
       color: Color
   ) derives DbCodec
 
-  object carRepo extends ImmutableRepo[Car, Long]:
-    def customSelect(using DbCon): Car =
-      val sql = sql"select ${*} from $table where $id = 1"
-      sql.query[Car].run().head
+  val carRepo = ImmutableRepo[Car, Long]
+  val car = DbSchema[Car, Car, Long]
 
   val allCars = Vector(
     Car("McLaren Senna", 1L, 208, Some(123), Color.Red),
@@ -58,7 +56,7 @@ class OracleTests extends FunSuite, TestContainersFixtures:
     connect(ds()):
       val topSpeed = 211
       val spec = Spec[Car]
-        .where(sql"top_speed > $topSpeed")
+        .where(sql"${car.topSpeed} > $topSpeed")
       assertEquals(carRepo.findAll(spec), Vector(allCars(1)))
 
   test("findById"):
@@ -84,10 +82,26 @@ class OracleTests extends FunSuite, TestContainersFixtures:
   test("select query"):
     connect(ds()):
       val minSpeed: Int = 210
-      val query = sql"select * from car where top_speed > $minSpeed".query[Car]
+      val query =
+        sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
+          .query[Car]
       assertNoDiff(
         query.frag.sqlString,
-        "select * from car where top_speed > ?"
+        "select model, id, top_speed, vin, color from car where top_speed > ?"
+      )
+      assertEquals(query.frag.params, Vector(minSpeed))
+      assertEquals(query.run(), allCars.tail)
+
+  test("select query with aliasing"):
+    connect(ds()):
+      val minSpeed = 210
+      val cAlias = car.alias("c")
+      val query =
+        sql"select ${cAlias.all} from $cAlias where ${cAlias.topSpeed} > $minSpeed"
+          .query[Car]
+      assertNoDiff(
+        query.frag.sqlString,
+        "select c.model, c.id, c.top_speed, c.vin, c.color from car c where c.top_speed > ?"
       )
       assertEquals(query.frag.params, Vector(minSpeed))
       assertEquals(query.run(), allCars.tail)
@@ -112,10 +126,6 @@ class OracleTests extends FunSuite, TestContainersFixtures:
     connect(ds()):
       assertEquals(carRepo.findById(3L).get.vinNumber, None)
 
-  test("custom select"):
-    connect(ds()):
-      assertEquals(carRepo.customSelect, allCars.head)
-
   /*
   Repo Tests
    */
@@ -134,15 +144,8 @@ class OracleTests extends FunSuite, TestContainersFixtures:
       created: OffsetDateTime
   ) derives DbCodec
 
-  object personRepo extends Repo[PersonCreator, Person, Long]:
-    def customInsert(p: PersonCreator)(using DbCon): Unit =
-      val sql = sql"insert into $table $insertColumns values ($p)"
-      sql.update.run()
-
-    def customUpdate(personId: Long, isAdmin: "Y" | "N")(using DbCon): Unit =
-      val sql =
-        sql"update $table set is_admin = ${isAdmin: String} where $id = $personId"
-      sql.update.run()
+  val personRepo = Repo[PersonCreator, Person, Long]
+  val person = DbSchema[PersonCreator, Person, Long]
 
   test("delete"):
     connect(ds()):
@@ -335,7 +338,14 @@ class OracleTests extends FunSuite, TestContainersFixtures:
         lastName = "Brown",
         isAdmin = "N"
       )
-      personRepo.customInsert(p)
+      val update =
+        sql"insert into $person ${person.insertColumns} values ($p)".update
+      assertNoDiff(
+        update.frag.sqlString,
+        "insert into person (first_name, last_name, is_admin) values (?, ?, ?)"
+      )
+      val rowsInserted = update.run()
+      assertEquals(rowsInserted, 1)
       assertEquals(personRepo.count, 9L)
       val fetched = personRepo.findAll.last
       assertEquals(fetched.firstName, p.firstName)
@@ -351,8 +361,16 @@ class OracleTests extends FunSuite, TestContainersFixtures:
           isAdmin = "N"
         )
       )
-      personRepo.customUpdate(p.id, isAdmin = "Y")
-      assertEquals(personRepo.findById(1L).get.isAdmin, "Y")
+      val newIsAdmin = "Y"
+      val update =
+        sql"update $person set ${person.isAdmin} = $newIsAdmin where ${person.id} = ${p.id}".update
+      assertNoDiff(
+        update.frag.sqlString,
+        "update person set is_admin = ? where id = ?"
+      )
+      val rowsUpdated = update.run()
+      assertEquals(rowsUpdated, 1)
+      assertEquals(personRepo.findById(p.id).get.isAdmin, "Y")
 
   val oracleContainer = ForAllContainerFixture(
     OracleContainer
@@ -448,3 +466,5 @@ class OracleTests extends FunSuite, TestContainersFixtures:
       )
       .get
     ds
+  end ds
+end OracleTests
