@@ -357,6 +357,22 @@ class PgTests extends FunSuite, TestContainersFixtures:
       personRepo.customUpdate(p.id, isAdmin = true)
       assertEquals(personRepo.findById(p.id).get.isAdmin, true)
 
+  test("custom returning a single column"):
+    connect(ds()):
+      val returningQuery =
+        sql"insert into person (first_name, last_name, is_admin) values ('Arton', 'Senna', true) RETURNING id"
+          .returning[Long]
+      val personId = returningQuery.run()
+      assertEquals(personId, 9L)
+
+  test("custom returning multiple columns"):
+    connect(ds()):
+      val returningQuery =
+        sql"insert into person (first_name, last_name, is_admin) values ('Arton', 'Senna', true) RETURNING id, created"
+          .returning[(Long, OffsetDateTime)]
+      val (personId, created) = returningQuery.run()
+      assertEquals(personId, 9L)
+
   @SqlName("person")
   @Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
   case class CustomPerson(

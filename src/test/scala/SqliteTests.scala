@@ -237,6 +237,14 @@ class SqliteTests extends FunSuite:
         assertEquals(people.size, 3)
         assertEquals(people.last.lastName, newPc.last.lastName)
 
+  test("custom returning"):
+    connect(ds()):
+      val returningQuery =
+        sql"insert into person (first_name, last_name, is_admin) values ('Arton', 'Senna', true) RETURNING id"
+          .returning[Long]
+      val personId = returningQuery.run()
+      assertEquals(personId, 9L)
+
   test("insert invalid"):
     intercept[SqlException]:
       connect(ds()):
