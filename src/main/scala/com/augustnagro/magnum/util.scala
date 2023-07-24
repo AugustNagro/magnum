@@ -66,19 +66,15 @@ private def sqlImpl(sc: Expr[StringContext], args: Expr[Seq[Any]])(using
 //    case '{ StringContext(${ Varargs(strings) }: _*) } => strings
 
   val interpolatedVarargs = Varargs(argsExprs.map {
-    case '{ $arg: DbSchema[?, ?, ?] } => '{ $arg.tableWithAlias }
-    case '{ $arg: SchemaName }        => '{ $arg.sqlNameAliased }
-    case '{ $arg: SchemaNames }       => '{ $arg.queryRepr }
+    case '{ $arg: SqlLiteral } => '{ $arg.queryRepr }
     case '{ $arg: tp } =>
       val codecExpr = summonWriter[tp]
       '{ $codecExpr.queryRepr }
   })
 
   val paramExprs = argsExprs.filter {
-    case '{ $arg: DbSchema[?, ?, ?] } => false
-    case '{ $arg: SchemaName }        => false
-    case '{ $arg: SchemaNames }       => false
-    case _                            => true
+    case '{ $arg: SqlLiteral } => false
+    case _                     => true
   }
 
   val queryExpr = '{ $sc.s($interpolatedVarargs: _*) }

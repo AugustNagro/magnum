@@ -5,35 +5,42 @@ import scala.compiletime.*
 import scala.quoted.*
 
 class DbSchema[EC, E, ID](
-    val all: SchemaNames,
-    val insertColumns: SchemaNames,
+    val all: ColumnNames,
+    val insertColumns: ColumnNames,
     val alias: String,
+    val queryRepr: String,
     private[magnum] val table: String,
-    private[magnum] val tableWithAlias: String,
     private[magnum] val eClassName: String
-) extends Selectable:
+) extends Selectable,
+      SqlLiteral:
 
-  def selectDynamic(scalaName: String): SchemaName =
-    all.schemaNames.find(_.scalaName == scalaName).get
+  def selectDynamic(scalaName: String): ColumnName =
+    all.columnNames.find(_.scalaName == scalaName).get
 
   def alias(tableAlias: String): this.type =
     require(tableAlias.nonEmpty, "custom tableAlias cannot be empty")
-    val tableWithAlias = table + " " + tableAlias
+    val queryRepr = table + " " + tableAlias
 
-    val allSchemaNames = all.schemaNames.map(sn =>
-      sn.copy(sqlNameAliased = tableAlias + "." + sn.sqlName)
+    val allSchemaNames = all.columnNames.map(cn =>
+      val sqlName = cn.sqlName
+      ColumnName(
+        scalaName = cn.scalaName,
+        sqlName = sqlName,
+        queryRepr = tableAlias + "." + sqlName
+      )
     )
-    val allQueryRepr = allSchemaNames.map(_.sqlNameAliased).mkString(", ")
-    val allCols = SchemaNames(allQueryRepr, allSchemaNames)
+    val allQueryRepr = allSchemaNames.map(_.queryRepr).mkString(", ")
+    val allCols = ColumnNames(allQueryRepr, allSchemaNames)
 
     new DbSchema[EC, E, ID](
-      allCols,
-      insertColumns,
-      tableAlias,
-      table,
-      tableWithAlias,
-      eClassName
+      all = allCols,
+      insertColumns = insertColumns,
+      alias = tableAlias,
+      queryRepr = queryRepr,
+      table = table,
+      eClassName = eClassName
     ).asInstanceOf[this.type]
+  end alias
 end DbSchema
 
 object DbSchema:
@@ -49,16 +56,16 @@ object DbSchema:
     val exprs = tableExprs[EC, E, ID]
     val refinement = exprs.eElemNames
       .foldLeft(TypeRepr.of[DbSchema[EC, E, ID]])((typeRepr, elemName) =>
-        Refinement(typeRepr, elemName, TypeRepr.of[SchemaName])
+        Refinement(typeRepr, elemName, TypeRepr.of[ColumnName])
       )
 
-    val allSchemaNamesExpr = Expr.ofSeq(
+    val allColumnsExpr = Expr.ofSeq(
       exprs.eElemNames
         .lazyZip(exprs.eElemNamesSql)
         .map((elemName, elemNameSqlExpr) =>
           '{
             val elemNameSql = $elemNameSqlExpr
-            SchemaName(${ Expr(elemName) }, elemNameSql, elemNameSql)
+            ColumnName(${ Expr(elemName) }, elemNameSql, elemNameSql)
           }
         )
     )
@@ -69,7 +76,7 @@ object DbSchema:
         .map((elemName, elemNameSqlExpr) =>
           '{
             val elemNameSql = $elemNameSqlExpr
-            SchemaName(${ Expr(elemName) }, elemNameSql, elemNameSql)
+            ColumnName(${ Expr(elemName) }, elemNameSql, elemNameSql)
           }
         )
     )
@@ -77,14 +84,14 @@ object DbSchema:
     refinement.asType match
       case '[tpe] =>
         '{
-          val allSchemaNames = IArray.from($allSchemaNamesExpr)
-          val allQueryRepr = allSchemaNames.map(_.sqlNameAliased).mkString(", ")
-          val allCols = SchemaNames(allQueryRepr, allSchemaNames)
+          val allColumns = IArray.from($allColumnsExpr)
+          val allQueryRepr = allColumns.map(_.queryRepr).mkString(", ")
+          val allCols = ColumnNames(allQueryRepr, allColumns)
 
-          val insertSchemaNames = IArray.from($insertColumnsExpr)
+          val insertColumns = IArray.from($insertColumnsExpr)
           val insertQueryRepr =
-            insertSchemaNames.map(_.sqlNameAliased).mkString("(", ", ", ")")
-          val insertCols = SchemaNames(insertQueryRepr, insertSchemaNames)
+            insertColumns.map(_.queryRepr).mkString("(", ", ", ")")
+          val insertCols = ColumnNames(insertQueryRepr, insertColumns)
 
           val tableName = ${ exprs.tableNameSql }
           new DbSchema[EC, E, ID](
@@ -92,7 +99,7 @@ object DbSchema:
             insertColumns = insertCols,
             alias = defaultAlias,
             table = tableName,
-            tableWithAlias = tableName,
+            queryRepr = tableName,
             eClassName = ${ exprs.tableNameScala }
           ).asInstanceOf[tpe]
         }
