@@ -241,6 +241,33 @@ class SqliteTests extends FunSuite:
         assertEquals(people.size, 3)
         assertEquals(people.last.lastName, newPc.last.lastName)
 
+  test("custom returning"):
+    connect(ds()):
+      val returningQuery =
+        sql"insert into person (first_name, last_name, is_admin) values ('Arton', 'Senna', true) RETURNING id"
+          .returning[Long]
+      val personId = returningQuery.run().head
+      assertEquals(personId, 9L)
+
+  test("custom returning multiple columns"):
+    connect(ds()):
+      val returningQuery =
+        sql"""insert into person (first_name, last_name, is_admin) values
+             ('Arton', 'Senna', true),
+             ('Demo', 'User', false)
+             RETURNING id"""
+          .returning[Long]
+      val cols = returningQuery.run()
+      assertEquals(cols, Vector(9L, 10L))
+
+  test("custom returning with no rows updated"):
+    connect(ds()):
+      val statement =
+        sql"update person set first_name = 'xxx' where id = 12345 returning id"
+          .returning[Long]
+      val personIds = statement.run()
+      assert(personIds.isEmpty)
+
   test("insert invalid"):
     intercept[SqlException]:
       connect(ds()):
