@@ -11,10 +11,10 @@ class SqlException(query: String, params: Any, t: Throwable = null)
            |${logSqlParams(params)}
            |""".stripMargin
       else s"""Error executing query:
-           |$query
-           |With message:
-           |${t.getMessage}
-           |""".stripMargin,
+              |$query
+              |With message:
+              |${t.getMessage}
+              |""".stripMargin,
       t
     ):
 
