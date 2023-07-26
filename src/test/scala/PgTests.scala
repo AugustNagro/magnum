@@ -35,7 +35,7 @@ class PgTests extends FunSuite, TestContainersFixtures:
   ) derives DbCodec
 
   val carRepo = ImmutableRepo[Car, Long]
-  val car = DbSchema[Car, Car, Long]
+  val car = TableInfo[Car, Car, Long]
 
   val allCars = Vector(
     Car("McLaren Senna", 1L, 208, Some(123), Color.Red),
@@ -130,6 +130,13 @@ class PgTests extends FunSuite, TestContainersFixtures:
     connect(ds()):
       assertEquals(carRepo.findById(3L).get.vinNumber, None)
 
+  test("TableInfo query with alias and schema"):
+    val c = car.alias("c").schema("qa_schema")
+    assertEquals(
+      sql"SELECT ${c.topSpeed} FROM $c".sqlString,
+      "SELECT c.top_speed FROM qa_schema.car c"
+    )
+
   /*
   Repo Tests
    */
@@ -149,7 +156,7 @@ class PgTests extends FunSuite, TestContainersFixtures:
   ) derives DbCodec
 
   val personRepo = Repo[PersonCreator, Person, Long]
-  val person = DbSchema[PersonCreator, Person, Long]
+  val person = TableInfo[PersonCreator, Person, Long]
 
   test("delete"):
     connect(ds()):

@@ -36,7 +36,7 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
   ) derives DbCodec
 
   val carRepo = ImmutableRepo[Car, UUID]
-  val car = DbSchema[Car, Car, UUID]
+  val car = TableInfo[Car, Car, UUID]
 
   val allCars = Vector(
     Car(
@@ -167,7 +167,7 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
   ) derives DbCodec
 
   val personRepo = Repo[Person, Person, UUID]
-  val person = DbSchema[Person, Person, UUID]
+  val person = TableInfo[Person, Person, UUID]
 
   test("delete"):
     connect(ds()):

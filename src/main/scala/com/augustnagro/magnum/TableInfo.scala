@@ -4,10 +4,28 @@ import scala.deriving.*
 import scala.compiletime.*
 import scala.quoted.*
 
-class DbSchema[EC, E, ID](
+/** Metadata about a Table, which can be interpolated in sql"" expressions
+  *
+  * For example,
+  *
+  * {{{
+  *   @Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
+  *   case class User(@Id id: Long, firstName: String)
+  *     derives DbCodec
+  *
+  *   val u = TableInfo[User, User, Long]
+  *     .schema("qa_schema")
+  *     .alias("u")
+  *
+  *   sql"SELECT ${u.firstName} FROM $u".sqlString ==
+  *     "SELECT u.first_name FROM qa_schema.user u"
+  * }}}
+  */
+class TableInfo[EC, E, ID](
     val all: ColumnNames,
     val insertColumns: ColumnNames,
-    val alias: String,
+    val alias: Option[String],
+    val schema: Option[String],
     val queryRepr: String,
     private[magnum] val table: String,
     private[magnum] val eClassName: String
@@ -19,7 +37,8 @@ class DbSchema[EC, E, ID](
 
   def alias(tableAlias: String): this.type =
     require(tableAlias.nonEmpty, "custom tableAlias cannot be empty")
-    val queryRepr = table + " " + tableAlias
+    val schemaRepr = schema.map(_ + ".").getOrElse("")
+    val queryRepr = schemaRepr + table + " " + tableAlias
 
     val allSchemaNames = all.columnNames.map(cn =>
       val sqlName = cn.sqlName
@@ -32,20 +51,34 @@ class DbSchema[EC, E, ID](
     val allQueryRepr = allSchemaNames.map(_.queryRepr).mkString(", ")
     val allCols = ColumnNames(allQueryRepr, allSchemaNames)
 
-    new DbSchema[EC, E, ID](
+    new TableInfo[EC, E, ID](
       all = allCols,
       insertColumns = insertColumns,
-      alias = tableAlias,
+      alias = Some(tableAlias),
+      schema = schema,
       queryRepr = queryRepr,
       table = table,
       eClassName = eClassName
     ).asInstanceOf[this.type]
   end alias
-end DbSchema
 
-object DbSchema:
-  val defaultAlias = ""
+  def schema(s: String): this.type =
+    require(s.nonEmpty, "custom schema cannot be empty")
+    val aliasRepr = alias.map(" " + _).getOrElse("")
+    val queryRepr = s + "." + table + aliasRepr
+    new TableInfo[EC, E, ID](
+      all = all,
+      insertColumns = insertColumns,
+      alias = alias,
+      schema = Some(s),
+      queryRepr = queryRepr,
+      table = table,
+      eClassName = eClassName
+    ).asInstanceOf[this.type]
 
+end TableInfo
+
+object TableInfo:
   transparent inline def apply[EC: Mirror.Of, E: Mirror.Of, ID] =
     ${ dbSchemaImpl[EC, E, ID] }
 
@@ -55,7 +88,7 @@ object DbSchema:
     import quotes.reflect.*
     val exprs = tableExprs[EC, E, ID]
     val refinement = exprs.eElemNames
-      .foldLeft(TypeRepr.of[DbSchema[EC, E, ID]])((typeRepr, elemName) =>
+      .foldLeft(TypeRepr.of[TableInfo[EC, E, ID]])((typeRepr, elemName) =>
         Refinement(typeRepr, elemName, TypeRepr.of[ColumnName])
       )
 
@@ -94,10 +127,11 @@ object DbSchema:
           val insertCols = ColumnNames(insertQueryRepr, insertColumns)
 
           val tableName = ${ exprs.tableNameSql }
-          new DbSchema[EC, E, ID](
+          new TableInfo[EC, E, ID](
             all = allCols,
             insertColumns = insertCols,
-            alias = defaultAlias,
+            alias = None,
+            schema = None,
             table = tableName,
             queryRepr = tableName,
             eClassName = ${ exprs.tableNameScala }
@@ -105,4 +139,4 @@ object DbSchema:
         }
     end match
   end dbSchemaImpl
-end DbSchema
+end TableInfo
