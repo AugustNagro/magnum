@@ -45,7 +45,7 @@ lazy val magnum = project
       "org.scalameta" %% "munit" % "0.7.29" % Test,
       "com.dimafeng" %% "testcontainers-scala-munit" % testcontainersVersion % Test,
       "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion % Test,
-      "org.postgresql" % "postgresql" % "42.5.4" % Test,
+      "org.postgresql" % "postgresql" % "42.6.0" % Test,
       "com.dimafeng" %% "testcontainers-scala-mysql" % testcontainersVersion % Test,
       "mysql" % "mysql-connector-java" % "8.0.32" % Test,
       "com.h2database" % "h2" % "2.1.214" % Test,
@@ -54,5 +54,19 @@ lazy val magnum = project
       "com.dimafeng" %% "testcontainers-scala-clickhouse" % testcontainersVersion % Test,
       "com.clickhouse" % "clickhouse-jdbc" % "0.4.1" % Test classifier "http",
       "org.xerial" % "sqlite-jdbc" % "3.41.0.0" % Test
+    )
+  )
+
+lazy val magnumPg = project
+  .in(file("pg"))
+  .dependsOn(magnum)
+  .settings(
+    Test / fork := true,
+    publish / skip := false,
+    libraryDependencies ++= Seq(
+      "org.postgresql" % "postgresql" % "42.6.0" % "provided",
+      "org.scalameta" %% "munit" % "0.7.29" % Test,
+      "com.dimafeng" %% "testcontainers-scala-munit" % testcontainersVersion % Test,
+      "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion % Test
     )
   )
