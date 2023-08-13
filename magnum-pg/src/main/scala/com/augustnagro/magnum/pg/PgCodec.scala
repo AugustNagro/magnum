@@ -1,7 +1,15 @@
 package com.augustnagro.magnum.pg
 
 import com.augustnagro.magnum.DbCodec
-import org.postgresql.geometric.{PGbox, PGcircle}
+import org.postgresql.geometric.{
+  PGbox,
+  PGcircle,
+  PGline,
+  PGlseg,
+  PGpath,
+  PGpoint,
+  PGpolygon
+}
 import org.postgresql.util.PGInterval
 
 import java.sql
@@ -118,16 +126,13 @@ object PgCodec:
   ): DbCodec[Seq[A]] = new DbCodec[Seq[A]]:
     require(aCodec.cols.length == 1)
     def queryRepr: String = "?"
-
     val cols: IArray[Int] = aCodec.cols
-
     def readSingle(resultSet: ResultSet, pos: Int): Seq[A] =
       val jdbcArray = resultSet.getArray(pos)
       try
         val arr = aArrayCodec.readArray(jdbcArray.getArray)
         List.from(arr)
       finally jdbcArray.free()
-
     def writeSingle(entity: Seq[A], ps: PreparedStatement, pos: Int): Unit =
       val arr = entity.iterator.map(aArrayCodec.toArrayObj).toArray
       val jdbcArr =
@@ -140,16 +145,13 @@ object PgCodec:
   ): DbCodec[List[A]] = new DbCodec[List[A]]:
     require(aCodec.cols.length == 1)
     def queryRepr: String = "?"
-
     val cols: IArray[Int] = aCodec.cols
-
     def readSingle(resultSet: ResultSet, pos: Int): List[A] =
       val jdbcArray = resultSet.getArray(pos)
       try
         val arr = aArrayCodec.readArray(jdbcArray.getArray)
         List.from(arr)
       finally jdbcArray.free()
-
     def writeSingle(entity: List[A], ps: PreparedStatement, pos: Int): Unit =
       val arr = entity.iterator.map(aArrayCodec.toArrayObj).toArray
       val jdbcArr =
@@ -162,16 +164,13 @@ object PgCodec:
   ): DbCodec[Vector[A]] = new DbCodec[Vector[A]]:
     require(aCodec.cols.length == 1)
     def queryRepr: String = "?"
-
     val cols: IArray[Int] = aCodec.cols
-
     def readSingle(resultSet: ResultSet, pos: Int): Vector[A] =
       val jdbcArray = resultSet.getArray(pos)
       try
         val arr = aArrayCodec.readArray(jdbcArray.getArray)
         Vector.from(arr)
       finally jdbcArray.free()
-
     def writeSingle(entity: Vector[A], ps: PreparedStatement, pos: Int): Unit =
       val arr = entity.iterator.map(aArrayCodec.toArrayObj).toArray
       val jdbcArr =
@@ -184,18 +183,14 @@ object PgCodec:
   ): DbCodec[m.Buffer[A]] = new DbCodec[m.Buffer[A]]:
     require(aCodec.cols.length == 1)
     private val jdbcTypeName = JDBCType.valueOf(aCodec.cols.head).getName
-
     def queryRepr: String = "?"
-
     val cols: IArray[Int] = aCodec.cols
-
     def readSingle(resultSet: ResultSet, pos: Int): m.Buffer[A] =
       val jdbcArray = resultSet.getArray(pos)
       try
         val arr = aArrayCodec.readArray(jdbcArray.getArray)
         m.Buffer.from(arr)
       finally jdbcArray.free()
-
     def writeSingle(
         entity: m.Buffer[A],
         ps: PreparedStatement,
@@ -227,4 +222,44 @@ object PgCodec:
     def readSingle(resultSet: ResultSet, pos: Int): PGInterval =
       resultSet.getObject(pos, classOf[PGInterval])
     def writeSingle(entity: PGInterval, ps: PreparedStatement, pos: Int): Unit =
+      ps.setObject(pos, entity)
+
+  given PgLineCodec: DbCodec[PGline] with
+    def queryRepr: String = "?"
+    val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
+    def readSingle(resultSet: ResultSet, pos: Int): PGline =
+      resultSet.getObject(pos, classOf[PGline])
+    def writeSingle(entity: PGline, ps: PreparedStatement, pos: Int): Unit =
+      ps.setObject(pos, entity)
+
+  given PgLSegCodec: DbCodec[PGlseg] with
+    def queryRepr: String = "?"
+    val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
+    def readSingle(resultSet: ResultSet, pos: Int): PGlseg =
+      resultSet.getObject(pos, classOf[PGlseg])
+    def writeSingle(entity: PGlseg, ps: PreparedStatement, pos: Int): Unit =
+      ps.setObject(pos, entity)
+
+  given PgPathCodec: DbCodec[PGpath] with
+    def queryRepr: String = "?"
+    val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
+    def readSingle(resultSet: ResultSet, pos: Int): PGpath =
+      resultSet.getObject(pos, classOf[PGpath])
+    def writeSingle(entity: PGpath, ps: PreparedStatement, pos: Int): Unit =
+      ps.setObject(pos, entity)
+
+  given PgPointCodec: DbCodec[PGpoint] with
+    def queryRepr: String = "?"
+    val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
+    def readSingle(resultSet: ResultSet, pos: Int): PGpoint =
+      resultSet.getObject(pos, classOf[PGpoint])
+    def writeSingle(entity: PGpoint, ps: PreparedStatement, pos: Int): Unit =
+      ps.setObject(pos, entity)
+
+  given PgPolygonCodec: DbCodec[PGpolygon] with
+    def queryRepr: String = "?"
+    val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
+    def readSingle(resultSet: ResultSet, pos: Int): PGpolygon =
+      resultSet.getObject(pos, classOf[PGpolygon])
+    def writeSingle(entity: PGpolygon, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)

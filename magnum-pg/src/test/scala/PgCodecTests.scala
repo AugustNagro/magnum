@@ -28,7 +28,12 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       dates: IArray[OffsetDateTime],
       bx: PGbox,
       c: PGcircle,
-      iv: PGInterval
+      iv: PGInterval,
+      l: PGline,
+      lSeg: PGlseg,
+      p: PGpath,
+      pnt: PGpoint,
+      poly: PGpolygon
   ) derives DbCodec:
     override def equals(obj: Any): Boolean =
       obj match
@@ -37,7 +42,8 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
           Objects.deepEquals(matrix, u.matrix) &&
           Objects.deepEquals(test, u.test) &&
           Objects.deepEquals(dates, u.dates) &&
-          bx == u.bx && c == u.c && iv == u.iv
+          bx == u.bx && c == u.c && iv == u.iv && l == u.l && lSeg == u.lSeg
+          && p == u.p && pnt == u.pnt && poly == u.poly
         case _ => false
 
   val userRepo = Repo[MagUser, MagUser, Long]
@@ -55,7 +61,12 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       ),
       bx = PGbox(1, 2, 3, 4),
       c = PGcircle(1, 2, 3),
-      iv = PGInterval("1 hour")
+      iv = PGInterval("1 hour"),
+      l = PGline(1, 1, 1),
+      lSeg = PGlseg(1, 1, 2, 2),
+      p = PGpath(Array(PGpoint(1, 1), PGpoint(2, 2)), true),
+      pnt = PGpoint(1, 1),
+      poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, 1), PGpoint(1, 1)))
     ),
     MagUser(
       id = 2L,
@@ -66,7 +77,12 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       dates = IArray.empty,
       bx = PGbox(5, 6, 7, 8),
       c = PGcircle(4, 5, 6),
-      iv = PGInterval("2 days")
+      iv = PGInterval("2 days"),
+      l = PGline(2, 2, 2),
+      lSeg = PGlseg(2, 2, 3, 3),
+      p = PGpath(Array(PGpoint(2, 2), PGpoint(3, 3)), true),
+      pnt = PGpoint(2, 2),
+      poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, -1), PGpoint(1, -1)))
     )
   )
 
@@ -85,7 +101,12 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
         dates = IArray(OffsetDateTime.parse("2023-07-30T13:57:29.059335Z")),
         bx = PGbox(1, 2, 3, 4),
         c = PGcircle(1, 1, 1),
-        iv = PGInterval("1 minute")
+        iv = PGInterval("1 minute"),
+        l = PGline(3, 4, 5),
+        lSeg = PGlseg(0, 0, -1, -1),
+        p = PGpath(Array(PGpoint(3, 3), PGpoint(4, 4)), true),
+        pnt = PGpoint(3, 4),
+        poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, 1), PGpoint(1, 1)))
       )
       userRepo.insert(u)
       val dbU = userRepo.findById(3L).get

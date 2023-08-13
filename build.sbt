@@ -37,7 +37,7 @@ ThisBuild / publish / skip := true
 val testcontainersVersion = "0.40.12"
 
 lazy val magnum = project
-  .in(file("."))
+  .in(file("magnum"))
   .settings(
     Test / fork := true,
     publish / skip := false,
@@ -58,7 +58,7 @@ lazy val magnum = project
   )
 
 lazy val magnumPg = project
-  .in(file("pg"))
+  .in(file("magnum-pg"))
   .dependsOn(magnum)
   .settings(
     Test / fork := true,
