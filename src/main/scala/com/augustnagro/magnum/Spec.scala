@@ -72,6 +72,8 @@ class Spec[E] private (
       )
 
     Frag(finalSj.toString, allParams.result(), fragWriter)
+  end build
+end Spec
 
 object Spec:
   def apply[E]: Spec[E] =

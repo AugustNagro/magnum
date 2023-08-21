@@ -158,10 +158,6 @@ object ClickhouseDbType extends DbType:
       ): BatchUpdateResult =
         throw UnsupportedOperationException()
 
-      def columns: AllColumns = AllColumns.fromSeq(eElemNamesSql)
-
-      def insertColumns: InsertColumns = InsertColumns.fromSeq(ecElemNamesSql)
-
-      def tableName: Repo.TableName = Repo.TableName(tableNameSql)
-
-      def idColumn: Repo.IdColumn = Repo.IdColumn(idName)
+    end new
+  end buildRepoDefaults
+end ClickhouseDbType

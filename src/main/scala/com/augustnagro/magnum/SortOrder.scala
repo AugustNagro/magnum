@@ -6,6 +6,6 @@ trait SortOrder:
 object SortOrder:
   object Asc extends SortOrder:
     def sql: String = "ASC"
-    
+
   object Desc extends SortOrder:
     def sql: String = "DESC"

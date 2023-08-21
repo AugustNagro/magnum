@@ -59,24 +59,22 @@ extension (inline sc: StringContext)
 private def sqlImpl(sc: Expr[StringContext], args: Expr[Seq[Any]])(using
     Quotes
 ): Expr[Frag] =
-  import quotes.reflect.report
+  import quotes.reflect.*
   val argsExprs: Seq[Expr[Any]] = args match
     case Varargs(ae) => ae
 //  val stringExprs: Seq[Expr[String]] = sc match
 //    case '{ StringContext(${ Varargs(strings) }: _*) } => strings
 
   val interpolatedVarargs = Varargs(argsExprs.map {
-    case '{ $arg: Renderables[_] }  => '{ $arg.toString() }
-    case '{ $arg: Repo.Identifier } => '{ $arg.toString() }
+    case '{ $arg: SqlLiteral } => '{ $arg.queryRepr }
     case '{ $arg: tp } =>
       val codecExpr = summonWriter[tp]
       '{ $codecExpr.queryRepr }
   })
 
   val paramExprs = argsExprs.filter {
-    case '{ $arg: Renderables[_] }  => false
-    case '{ $arg: Repo.Identifier } => false
-    case _                          => true
+    case '{ $arg: SqlLiteral } => false
+    case _                     => true
   }
 
   val queryExpr = '{ $sc.s($interpolatedVarargs: _*) }
@@ -89,6 +87,7 @@ private def sqlImpl(sc: Expr[StringContext], args: Expr[Seq[Any]])(using
     }
     Frag($queryExpr, argValues, writer)
   }
+end sqlImpl
 
 private def sqlWriter(
     psExpr: Expr[PreparedStatement],
@@ -114,9 +113,9 @@ private def sqlWriter(
             ${ sqlWriter(psExpr, '{ newPos }, args, tail, '{ newI }) }
           }
         case _ =>
-          report.error("Args must be explicit", head)
-          '{ ??? }
+          report.errorAndAbort("Args must be explicit", head)
     case Seq() => posExpr
+end sqlWriter
 
 private def summonWriter[T: Type](using Quotes): Expr[DbCodec[T]] =
   import quotes.reflect.*
@@ -161,6 +160,7 @@ def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
   ) match
     case Success(res) => res
     case Failure(ex)  => throw SqlException(firstFrag, ex)
+end batchUpdate
 
 private def logSql(sql: Frag): Unit = logSql(sql.sqlString, sql.params)
 
@@ -208,3 +208,148 @@ private def batchUpdateResult(updateCounts: Array[Int]): BatchUpdateResult =
           throw RuntimeException(s"Received JDBC error code $errorCode")
     )
     BatchUpdateResult.Success(updatedRows)
+
+private def assertECIsSubsetOfE[EC: Type, E: Type](using Quotes): Unit =
+  import quotes.reflect.*
+  val eRepr = TypeRepr.of[E]
+  val ecRepr = TypeRepr.of[EC]
+  val eFields = eRepr.typeSymbol.caseFields
+  val ecFields = ecRepr.typeSymbol.caseFields
+
+  for ecField <- ecFields do
+    if !eFields.exists(f =>
+        f.name == ecField.name &&
+          f.signature.resultSig == ecField.signature.resultSig
+      )
+    then
+      report.error(
+        s"""${ecRepr.show} must be an effective subset of ${eRepr.show}.
+           |Are there any fields on ${ecRepr.show} you forgot to update on ${eRepr.show}?
+           |""".stripMargin
+      )
+
+private def tableExprs[EC: Type, E: Type, ID: Type](using
+    Quotes
+): TableExprs =
+  import quotes.reflect.*
+  assertECIsSubsetOfE[EC, E]
+
+  val idIndex = idAnnotIndex[E]
+  val tableAnnot = TypeRepr.of[Table]
+  val table: Expr[Table] =
+    TypeRepr
+      .of[E]
+      .typeSymbol
+      .annotations
+      .collectFirst {
+        case term if term.tpe =:= tableAnnot => term.asExprOf[Table]
+      } match
+      case Some(table) => table
+      case None =>
+        report.errorAndAbort(
+          s"${TypeRepr.of[E].show} must have @Table annotation"
+        )
+  val nameMapper: Expr[SqlNameMapper] = '{ $table.nameMapper }
+
+  Expr.summon[Mirror.Of[E]] match
+    case Some('{
+          $eMirror: Mirror.Of[E] {
+            type MirroredLabel = eLabel
+            type MirroredElemLabels = eMels
+          }
+        }) =>
+      Expr.summon[Mirror.Of[EC]] match
+        case Some('{
+              $ecMirror: Mirror.Of[EC] {
+                type MirroredElemLabels = ecMels
+              }
+            }) =>
+          val tableNameScala = Type.valueOfConstant[eLabel].get.toString
+          val tableNameScalaExpr = Expr(tableNameScala)
+          val tableNameSql = sqlTableNameAnnot[E] match
+            case Some(sqlName) => '{ $sqlName.name }
+            case None => '{ $nameMapper.toTableName($tableNameScalaExpr) }
+          val eElemNames = elemNames[eMels]()
+          val eElemNamesSql = eElemNames.map(elemName =>
+            sqlNameAnnot[E](elemName) match
+              case Some(sqlName) => '{ $sqlName.name }
+              case None =>
+                '{ $nameMapper.toColumnName(${ Expr(elemName) }) }
+          )
+          val ecElemNames = elemNames[ecMels]()
+          val ecElemNamesSql = ecElemNames.map(elemName =>
+            sqlNameAnnot[E](elemName) match
+              case Some(sqlName) => '{ $sqlName.name }
+              case None =>
+                '{ $nameMapper.toColumnName(${ Expr(elemName) }) }
+          )
+          TableExprs(
+            table,
+            tableNameScalaExpr,
+            tableNameSql,
+            eElemNames,
+            eElemNamesSql,
+            ecElemNames,
+            ecElemNamesSql,
+            idIndex
+          )
+        case _ =>
+          report.errorAndAbort(
+            s"A Mirror is required to derive RepoDefaults for ${TypeRepr.of[EC].show}"
+          )
+    case _ =>
+      report.errorAndAbort(
+        s"A Mirror is required to derive RepoDefaults for ${TypeRepr.of[E].show}"
+      )
+  end match
+end tableExprs
+
+private def idAnnotIndex[E: Type](using q: Quotes): Expr[Int] =
+  import q.reflect.*
+  val idAnnot = TypeRepr.of[Id].typeSymbol
+  val index = TypeRepr
+    .of[E]
+    .typeSymbol
+    .primaryConstructor
+    .paramSymss
+    .head
+    .indexWhere(sym => sym.hasAnnotation(idAnnot)) match
+    case -1 => 0
+    case x  => x
+  Expr(index)
+
+private def sqlTableNameAnnot[T: Type](using Quotes): Option[Expr[SqlName]] =
+  import quotes.reflect._
+  val annot = TypeRepr.of[SqlName]
+  TypeRepr
+    .of[T]
+    .typeSymbol
+    .annotations
+    .find(_.tpe =:= annot)
+    .map(term => term.asExprOf[SqlName])
+
+private def elemNames[Mels: Type](res: List[String] = Nil)(using
+    Quotes
+): List[String] =
+  import quotes.reflect.*
+  Type.of[Mels] match
+    case '[mel *: melTail] =>
+      val melString = Type.valueOfConstant[mel].get.toString
+      elemNames[melTail](melString :: res)
+    case '[EmptyTuple] =>
+      res.reverse
+
+private def sqlNameAnnot[T: Type](elemName: String)(using
+    Quotes
+): Option[Expr[SqlName]] =
+  import quotes.reflect.*
+  val annot = TypeRepr.of[SqlName].typeSymbol
+  TypeRepr
+    .of[T]
+    .typeSymbol
+    .primaryConstructor
+    .paramSymss
+    .head
+    .find(sym => sym.name == elemName && sym.hasAnnotation(annot))
+    .flatMap(sym => sym.getAnnotation(annot))
+    .map(term => term.asExprOf[SqlName])

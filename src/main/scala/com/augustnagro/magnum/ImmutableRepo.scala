@@ -36,8 +36,4 @@ open class ImmutableRepo[E, ID](using defaults: RepoDefaults[?, E, ID]):
   def findAllById(ids: Iterable[ID])(using DbCon): Vector[E] =
     defaults.findAllById(ids)
 
-  def * : AllColumns = defaults.columns
-
-  def id: Repo.IdColumn = defaults.idColumn
-
-  def table: Repo.TableName = defaults.tableName
+end ImmutableRepo

@@ -121,8 +121,7 @@ object H2DbType extends DbType:
         )
 
       def deleteById(id: ID)(using DbCon): Unit =
-        Frag(deleteByIdSql, IArray(id), idWriter(id)).update
-          .run()
+        Frag(deleteByIdSql, IArray(id), idWriter(id)).update.run()
 
       def truncate()(using DbCon): Unit = truncateUpdate.run()
 
@@ -211,6 +210,7 @@ object H2DbType extends DbType:
         ) match
           case Success(_) => ()
           case Failure(t) => throw SqlException(updateSql, entity, t)
+      end update
 
       def updateAll(entities: Iterable[E])(using
           con: DbCon
@@ -237,11 +237,9 @@ object H2DbType extends DbType:
         ) match
           case Success(res) => res
           case Failure(t)   => throw SqlException(updateSql, entities, t)
+        end match
+      end updateAll
 
-      def columns: AllColumns = AllColumns.fromSeq(eElemNamesSql)
-
-      def insertColumns: InsertColumns = InsertColumns.fromSeq(ecElemNamesSql)
-
-      def tableName: Repo.TableName = Repo.TableName(tableNameSql)
-
-      def idColumn: Repo.IdColumn = Repo.IdColumn(idName)
+    end new
+  end buildRepoDefaults
+end H2DbType

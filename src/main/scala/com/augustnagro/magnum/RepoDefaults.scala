@@ -23,11 +23,6 @@ trait RepoDefaults[EC, E, ID]:
   def insertAllReturning(entityCreators: Iterable[EC])(using DbCon): Vector[E]
   def update(entity: E)(using DbCon): Unit
   def updateAll(entities: Iterable[E])(using DbCon): BatchUpdateResult
-  // metadata to help with query building
-  def columns: AllColumns
-  def insertColumns: InsertColumns
-  def tableName: Repo.TableName
-  def idColumn: Repo.IdColumn
 
 object RepoDefaults:
 
@@ -45,101 +40,33 @@ object RepoDefaults:
       Quotes
   ): Expr[RepoDefaults[EC, E, ID]] =
     import quotes.reflect.*
-    assertECIsSubsetOfE[EC, E]
-
-    val idIndex = idAnnotIndex[E]
-    val tableAnnot = TypeRepr.of[Table]
-    val table: Expr[Table] =
-      TypeRepr
-        .of[E]
-        .typeSymbol
-        .annotations
-        .collectFirst {
-          case term if term.tpe =:= tableAnnot => term.asExprOf[Table]
-        } match
-        case Some(table) => table
-        case None =>
-          report.error(
-            s"${TypeRepr.of[E].show} must have @Table annotation to derive Repo methods"
-          )
-          '{ ??? }
-
-    val nameMapper: Expr[SqlNameMapper] = '{ $table.nameMapper }
-
-    // todo handle None
-    Expr.summon[Mirror.Of[E]] match
-      case Some('{
-            $eMirror: Mirror.Of[E] {
-              type MirroredLabel = eLabel
-              type MirroredElemLabels = eMels
-            }
-          }) =>
-        Expr.summon[Mirror.Of[EC]] match
-          case Some('{
-                $ecMirror: Mirror.Of[EC] {
-                  type MirroredElemLabels = ecMels
-                }
-              }) =>
-            val tableNameSql = sqlTableNameAnnot[E] match {
-              case Some(sqlName) =>
-                '{ $sqlName.name }
-              case None =>
-                val tableName = Expr(Type.valueOfConstant[eLabel].get.toString)
-                '{ $nameMapper.toTableName($tableName) }
-            }
-            val eElemNames = elemNames[eMels]()
-            val eElemNamesSql = Expr.ofSeq(
-              eElemNames.map(elemName =>
-                sqlNameAnnot[E](elemName) match
-                  case Some(sqlName) => '{ $sqlName.name }
-                  case None =>
-                    '{ $nameMapper.toColumnName(${ Expr(elemName) }) }
-              )
-            )
-            val eElemCodecs = getEElemCodecs[E]
-            val ecElemNames = elemNames[ecMels]()
-            val ecElemNamesSql = Expr.ofSeq(
-              ecElemNames.map(elemName =>
-                sqlNameAnnot[E](elemName) match
-                  case Some(sqlName) => '{ $sqlName.name }
-                  case None =>
-                    '{ $nameMapper.toColumnName(${ Expr(elemName) }) }
-              )
-            )
-            val eCodec = Expr.summon[DbCodec[E]].get
-            val ecCodec = Expr.summon[DbCodec[EC]].get
-            val idCodec = Expr.summon[DbCodec[ID]].get
-            val eClassTag = Expr.summon[ClassTag[E]].get
-            val ecClassTag = Expr.summon[ClassTag[EC]].get
-            val idClassTag = Expr.summon[ClassTag[ID]].get
-            '{
-              $table.dbType.buildRepoDefaults[EC, E, ID](
-                $tableNameSql,
-                ${ Expr(eElemNames) },
-                $eElemNamesSql,
-                $eElemCodecs,
-                ${ Expr(ecElemNames) },
-                $ecElemNamesSql,
-                $idIndex
-              )(using
-                $eCodec,
-                $ecCodec,
-                $idCodec,
-                $eClassTag,
-                $ecClassTag,
-                $idClassTag
-              )
-            }
-          case _ =>
-            report.error(
-              s"A Mirror is required to derive RepoDefaults for ${TypeRepr.of[EC].show}"
-            )
-            '{ ??? }
-      case _ =>
-        report.error(
-          s"A Mirror is required to derive RepoDefaults for ${TypeRepr.of[E].show}"
-        )
-        '{ ??? }
+    val exprs = tableExprs[EC, E, ID]
+    val eElemCodecs = getEElemCodecs[E]
+    val eCodec = Expr.summon[DbCodec[E]].get
+    val ecCodec = Expr.summon[DbCodec[EC]].get
+    val idCodec = Expr.summon[DbCodec[ID]].get
+    val eClassTag = Expr.summon[ClassTag[E]].get
+    val ecClassTag = Expr.summon[ClassTag[EC]].get
+    val idClassTag = Expr.summon[ClassTag[ID]].get
+    '{
+      ${ exprs.tableAnnot }.dbType.buildRepoDefaults[EC, E, ID](
+        ${ exprs.tableNameSql },
+        ${ Expr(exprs.eElemNames) },
+        ${ Expr.ofSeq(exprs.eElemNamesSql) },
+        $eElemCodecs,
+        ${ Expr(exprs.ecElemNames) },
+        ${ Expr.ofSeq(exprs.ecElemNamesSql) },
+        ${ exprs.idIndex }
+      )(using
+        $eCodec,
+        $ecCodec,
+        $idCodec,
+        $eClassTag,
+        $ecClassTag,
+        $idClassTag
+      )
+    }
+  end genImpl
 
   private def getEElemCodecs[E: Type](using Quotes): Expr[Seq[DbCodec[?]]] =
     import quotes.reflect.*
@@ -163,72 +90,5 @@ object RepoDefaults:
           case Some(codec) => getProductCodecs[metTail](res :+ codec)
           case None => getProductCodecs[metTail](res :+ '{ DbCodec.AnyCodec })
       case '[EmptyTuple] => Expr.ofSeq(res)
-
-  private def idAnnotIndex[E: Type](using q: Quotes): Expr[Int] =
-    import q.reflect.*
-    val idAnnot = TypeRepr.of[Id].typeSymbol
-    val index = TypeRepr
-      .of[E]
-      .typeSymbol
-      .primaryConstructor
-      .paramSymss
-      .head
-      .indexWhere(sym => sym.hasAnnotation(idAnnot)) match
-      case -1 => 0
-      case x  => x
-    Expr(index)
-
-  private def elemNames[Mels: Type](res: List[String] = Nil)(using
-      Quotes
-  ): List[String] =
-    import quotes.reflect.*
-    Type.of[Mels] match
-      case '[mel *: melTail] =>
-        val melString = Type.valueOfConstant[mel].get.toString
-        elemNames[melTail](melString :: res)
-      case '[EmptyTuple] =>
-        res.reverse
-
-  private def sqlTableNameAnnot[T: Type](using Quotes): Option[Expr[SqlName]] =
-    import quotes.reflect._
-    val annot = TypeRepr.of[SqlName]
-    TypeRepr
-      .of[T]
-      .typeSymbol
-      .annotations
-      .find(_.tpe =:= annot)
-      .map(term => term.asExprOf[SqlName])
-
-  private def sqlNameAnnot[T: Type](elemName: String)(using
-      Quotes
-  ): Option[Expr[SqlName]] =
-    import quotes.reflect.*
-    val annot = TypeRepr.of[SqlName].typeSymbol
-    TypeRepr
-      .of[T]
-      .typeSymbol
-      .primaryConstructor
-      .paramSymss
-      .head
-      .find(sym => sym.name == elemName && sym.hasAnnotation(annot))
-      .flatMap(sym => sym.getAnnotation(annot))
-      .map(term => term.asExprOf[SqlName])
-
-  private def assertECIsSubsetOfE[EC: Type, E: Type](using Quotes): Unit =
-    import quotes.reflect.*
-    val eRepr = TypeRepr.of[E]
-    val ecRepr = TypeRepr.of[EC]
-    val eFields = eRepr.typeSymbol.caseFields
-    val ecFields = ecRepr.typeSymbol.caseFields
-
-    for ecField <- ecFields do
-      if !eFields.exists(f =>
-          f.name == ecField.name &&
-            f.signature.resultSig == ecField.signature.resultSig
-        )
-      then
-        report.error(
-          s"""${ecRepr.show} must be an effective subset of ${eRepr.show}.
-             |Are there any fields on ${ecRepr.show} you forgot to update on ${eRepr.show}?
-             |""".stripMargin
-        )
+      
+end RepoDefaults
