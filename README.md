@@ -9,15 +9,18 @@ Yet another database client for Scala. No dependencies, high productivity.
   * [`transact` creates a database transaction](#transact-creates-a-database-transaction)
   * [Type-safe Transaction & Connection Management](#type-safe-transaction--connection-management)
   * [Customizing the transaction's JDBC Connection](#customizing-the-transactions-jdbc-connection)
-  * [Sql Interpolator, Frag, Query, and Update](#sql-interpolator-frag-query-and-update)
+  * [Sql Interpolator, Frag, Query, Update, Returning](#sql-interpolator-frag-query-and-update)
   * [Batch Updates](#batch-updates)
   * [Immutable Repositories](#immutable-repositories)
   * [Repositories](#repositories)
   * [Database generated columns](#database-generated-columns)
   * [Specifications](#specifications)
-  * [Scala 3 Enum Support](#scala-3-enum-support)
+  * [Scala 3 Enum & NewType Support](#scala-3-enum--newtype-support)
   * [`DbCodec`: Typeclass for JDBC reading & writing](#dbcodec-typeclass-for-jdbc-reading--writing)
   * [Logging](#logging-sql-queries)
+  * [Future-Proof Queries](#future-proof-queries)
+  * [Splicing Literal Values into Frags](#splicing-literal-values-into-frags)
+  * [Postgres Module](#postgres-module)
 * [Motivation](#motivation)
 * [Feature List And Database Support](#feature-list)
 * [Talks and Presentations](#talks-and-presentations)
@@ -137,12 +140,24 @@ val update: Update =
   sql"UPDATE user SET first_name = 'Buddha' WHERE id = 3".update
 ```
 
-Both are executed via `run()(using DbCon)`:
+Or an update with a `RETURNING` clause via `returning`:
+
+```
+val updateReturning: Returning =
+  sql"""
+     UPDATE user SET first_name = 'Buddha'
+     WHERE last_name = 'Harper'
+     RETURNING id
+     """.returning[Long]
+```
+
+All are executed via `run()(using DbCon)`:
 
 ```scala
 transact(ds):
   val tuples: Vector[(Long, String)] = query.run()
   val updatedRows: Int = update.run()
+  val updatedIds: Vector[Long] = updateReturning.run()
 ```
 
 ### Batch Updates
@@ -316,7 +331,7 @@ val users: Vector[User] = userRepo.findAll(spec)
 
 Note that both [seek pagination](https://blog.jooq.org/faster-sql-paging-with-jooq-using-the-seek-method/) and offset pagination is supported.
 
-### Scala 3 Enum Support
+### Scala 3 Enum & NewType Support
 
 Magnum supports Scala 3 enums (non-adt) fully, by default writing & reading them as Strings. For example,
 
@@ -333,6 +348,28 @@ case class User(
   created: OffsetDateTime,
   favoriteColor: Color
 ) derives DbCodec
+```
+
+NewTypes and Opaque Type Alias can cause issues with derivation since given DbCodecs are not available. A simple way to provide them is using DbCodec.bimap:
+
+```scala
+opaque type MyId = Long
+
+object MyId:
+  def apply(id: Long): MyId =
+    require(id >= 0)
+    id
+
+  extension (myId: MyId)
+    def underlying: Long = myId
+
+  given DbCodec[MyId] =
+    DbCodec[Long].biMap(MyId.apply, _.underlying)
+end MyId
+
+transact(ds):
+  val id = MyId(123L)
+  sql"UPDATE my_table SET x = true WHERE id = $id".update.run()
 ```
 
 ### `DbCodec`: Typeclass for JDBC reading & writing
@@ -388,6 +425,113 @@ Like in Zoolander (the movie), Magnum represents a 'new look' for Database acces
 
 If you set the java.util Logging level to DEBUG, all SQL queries will be logged.
 Setting to TRACE will log SQL queries and their parameters.
+
+### Future-Proof Queries
+
+A common problem when writing SQL queries is that they're difficult to refactor. When a column or table name changes you have to do a global find & replace. And if you miss a query, it's discovered at runtime.
+
+There's also lots of repetition when writing SQL. Magnum's repositories help scrap the boilerplate, but writing `SELECT a, b, c, d, ...` for a large table quickly gets tiring.
+
+To help with this, Magnum offers a `TableInfo` class to enable 'future-proof' queries. An important caveat is that these queries are harder to copy/paste into SQL editors like PgAdmin or DbBeaver.
+
+Here's some examples:
+
+```scala
+import com.augustnagro.magnum.*
+
+case class UserCreator(firstName: String, age: Int) derives DbCodec
+
+@Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
+case class User(id: Long, firstName: String, age: Int) derives DbCodec
+
+object User:
+  val Table = TableInfo[UserCreator, User, Long]
+
+def allUsers(using DbCon): Vector[User] =
+  val u = User.Table
+  // equiv to 
+  // SELECT id, first_name, age FROM user
+  sql"SELECT ${u.all} FROM $u".query.run()
+
+def firstNamesForLast(lastName: String)(using DbCon): Vector[String] =
+  val u = User.Table
+  // equiv to
+  // SELECT DISTINCT first_name FROM user WHERE last_name = ?
+  sql"""
+    SELECT DISTINCT ${u.firstName} FROM $u
+    WHERE ${u.lastName} = $lastName
+  """.query.run()
+
+def insertOrIgnore(creator: UserCreator)(using DbCon): Unit =
+  val u = User.Table
+  // equiv to
+  // INSERT OR IGNORE INTO user (first_name, age) VALUES (?, ?)
+  sql"INSERT OR IGNORE INTO $u ${u.insertCols} VALUES ($creator)".update.run()
+```
+
+It's important that `val Table = TableInfo[X, Y, Z]` is not explicitly typed, otherwise its structural typing will be destroyed.
+
+In the case of multiple joins, you can use `TableInfo.alias(String)` to prevent name conflicts:
+
+```scala
+val c = TableInfo[Car].alias("c")
+val p = TableInfo[Person].alias("p")
+
+sql"""
+   SELECT ${c.all}, ${p.firstName}
+   FROM $c
+   JOIN $p ON ${p.id} = ${c.personId}
+   """.query.run()
+```
+
+### Splicing Literal Values into Frags
+
+To splice Strings directly into `sql` statements, you can interpolate `SqlLiteral` values. For example,
+
+```scala
+val table = SqlLiteral("beans")
+  
+sql"select * from $table"
+```
+
+This feature should be used sparingly and never with untrusted input. 
+
+### Postgres Module
+
+The Postgres Module adds support for [Geometric Types](https://www.postgresql.org/docs/current/datatype-geometric.html) and [Arrays](https://www.postgresql.org/docs/current/arrays.html). Postgres Arrays can be decoded into Scala List/Vector/IArray, etc; multi-dimensionality is also supported.
+
+```
+"com.augustnagro" %% "magnum-pg" % "<version>"
+```
+
+Example: Insert into a table with a `point[]` type column.
+
+With table:
+
+```sql
+create table my_geo (
+  id bigint primary key,
+  pnts point[] not null
+);
+```
+
+```scala
+import org.postgresql.geometric.*
+import com.augustnagro.magnum.*
+import com.augustnagro.magnum.pg.PgCodec.given
+
+@Table(PostgresDbType)
+case class MyGeo(@Id id: Long, pnts: IArray[PGpoint]) derives DbCodec
+
+val ds: javax.sql.DataSource = ???
+
+val myGeoRepo = Repo[MyGeo, MyGeo, Long]
+
+transact(ds):
+  myGeoRepo.insert(MyGeo(1L, IArray(PGpoint(1, 1), PGPoint(2, 2))))
+```
+
+The import of `PgCodec.given` is required to bring Geo/Array DbCodecs into scope.
 
 ## Developing
 The tests are written using TestContainers, which requires Docker be installed.
