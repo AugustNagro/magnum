@@ -36,6 +36,10 @@ ThisBuild / publish / skip := true
 
 val testcontainersVersion = "0.40.12"
 
+lazy val root = project
+  .in(file("."))
+  .aggregate(magnum, magnumPg)
+
 lazy val magnum = project
   .in(file("magnum"))
   .settings(

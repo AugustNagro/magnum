@@ -17,13 +17,13 @@ Yet another database client for Scala. No dependencies, high productivity.
   * [Specifications](#specifications)
   * [Scala 3 Enum & NewType Support](#scala-3-enum--newtype-support)
   * [`DbCodec`: Typeclass for JDBC reading & writing](#dbcodec-typeclass-for-jdbc-reading--writing)
-  * [Logging](#logging-sql-queries)
   * [Future-Proof Queries](#future-proof-queries)
   * [Splicing Literal Values into Frags](#splicing-literal-values-into-frags)
   * [Postgres Module](#postgres-module)
+  * [Logging](#logging-sql-queries)
 * [Motivation](#motivation)
 * [Feature List And Database Support](#feature-list)
-* [Talks and Presentations](#talks-and-presentations)
+* [Talks and Blogs](#talks-and-blogs)
 
 ## Installing
 
@@ -390,42 +390,6 @@ DbCodec[Int].writeSingle(22, ps)
 
 To modify the JDBC mappings, implement a given DbCodec instance as you would for any Typeclass.
 
-## Motivation
-
-Historically, database clients on the JVM fall into three categories.
-
-* Object Oriented Repositories (Spring-Data, Hibernate)
-* Functional DSLs (JOOQ, Slick, quill, zio-sql)
-* SQL String interpolators (Anorm, doobie, plain jdbc)
-
-Magnum is a Scala 3 library combining aspects of all three,
-providing a typesafe and refactorable SQL interface,
-which can express all SQL expressions, on all JDBC-supported databases.
-
-Like in Zoolander (the movie), Magnum represents a 'new look' for Database access in Scala.
-
-## Feature List
-
-* Supports any database with a JDBC driver,
-  including Postgres, MySql, Oracle, ClickHouse, H2, and Sqlite
-* Efficient `sql" "` interpolator
-* Purely-functional API
-* Common queries (like insert, update, delete) generated at compile time
-* Difficult to hit N+1 query problem
-* Type-safe Transactions
-* Supports database-generated columns
-* Easy to use, Loom-ready API (no Futures or Effect Systems)
-* Easy to define entities. Easy to implement DB support & codecs for custom types.
-* Scales to complex SQL queries
-* Specifications for building dynamic queries, such as table filters with pagination
-* Supports high-performance [Seek pagination](https://blog.jooq.org/faster-sql-paging-with-jooq-using-the-seek-method/)
-* Performant batch-queries
-
-### Logging SQL queries
-
-If you set the java.util Logging level to DEBUG, all SQL queries will be logged.
-Setting to TRACE will log SQL queries and their parameters.
-
 ### Future-Proof Queries
 
 A common problem when writing SQL queries is that they're difficult to refactor. When a column or table name changes you have to do a global find & replace. And if you miss a query, it's discovered at runtime.
@@ -533,16 +497,52 @@ transact(ds):
 
 The import of `PgCodec.given` is required to bring Geo/Array DbCodecs into scope.
 
+### Logging SQL queries
+
+If you set the java.util Logging level to DEBUG, all SQL queries will be logged.
+Setting to TRACE will log SQL queries and their parameters.
+
+## Motivation
+
+Historically, database clients on the JVM fall into three categories.
+
+* Object Oriented Repositories (Spring-Data, Hibernate)
+* Functional DSLs (JOOQ, Slick, quill, zio-sql)
+* SQL String interpolators (Anorm, doobie, plain jdbc)
+
+Magnum is a Scala 3 library combining aspects of all three,
+providing a typesafe and refactorable SQL interface,
+which can express all SQL expressions, on all JDBC-supported databases.
+
+Like in Zoolander (the movie), Magnum represents a 'new look' for Database access in Scala.
+
+## Feature List
+
+* Supports any database with a JDBC driver,
+  including Postgres, MySql, Oracle, ClickHouse, H2, and Sqlite
+* Efficient `sql" "` interpolator
+* Purely-functional API
+* Common queries (like insert, update, delete) generated at compile time
+* Difficult to hit [N+1 query problem](https://stackoverflow.com/questions/97197/what-is-the-n1-selects-problem-in-orm-object-relational-mapping)
+* Type-safe Transactions
+* Supports database-generated columns
+* Easy to use, Loom-ready API (no Futures or Effect Systems)
+* Easy to define entities. Easy to implement DB support & codecs for custom types.
+* Scales to complex SQL queries
+* Specifications for building dynamic queries, such as table filters with pagination
+* Supports high-performance [Seek pagination](https://blog.jooq.org/faster-sql-paging-with-jooq-using-the-seek-method/)
+* Performant batch-queries
+
 ## Developing
 The tests are written using TestContainers, which requires Docker be installed.
+
+## Talks and Blogs
+
+* Scala Days 2023: [slides](/Magnum-Slides-to-Share.pdf), [talk](https://www.youtube.com/watch?v=iKNRS5b1zAY)
 
 ## Todo
 * Support MSSql
 * Streaming support
 * Cats Effect & ZIO modules
 * Explicit Nulls support
-* Postgres Types module
 
-## Talks and Presentations
-
-* Scala Days 2023: [slides](/Magnum-Slides-to-Share.pdf)
