@@ -465,7 +465,7 @@ This feature should be used sparingly and never with untrusted input.
 The Postgres Module adds support for [Geometric Types](https://www.postgresql.org/docs/current/datatype-geometric.html) and [Arrays](https://www.postgresql.org/docs/current/arrays.html). Postgres Arrays can be decoded into Scala List/Vector/IArray, etc; multi-dimensionality is also supported.
 
 ```
-"com.augustnagro" %% "magnum-pg" % "<version>"
+"com.augustnagro" %% "magnumpg" % "<version>"
 ```
 
 Example: Insert into a table with a `point[]` type column.
