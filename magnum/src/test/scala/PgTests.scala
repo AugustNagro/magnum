@@ -420,6 +420,18 @@ class PgTests extends FunSuite, TestContainersFixtures:
       customPersonRepo.count
     assertEquals(count, 8L)
 
+  @Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
+  case class BigDec(id: Int, myBigDec: Option[BigDecimal]) derives DbCodec
+
+  val bigDecRepo = Repo[BigDec, BigDec, Int]
+
+  test("option of bigdecimal"):
+    connect(ds()):
+      val bigDec1 = bigDecRepo.findById(1).get
+      assertEquals(bigDec1.myBigDec, Some(BigDecimal(123)))
+      val bigDec2 = bigDecRepo.findById(2).get
+      assertEquals(bigDec2.myBigDec, None)
+
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
       .Def(dockerImageName = DockerImageName.parse("postgres:15.2"))
@@ -439,12 +451,16 @@ class PgTests extends FunSuite, TestContainersFixtures:
       Files.readString(Path.of(getClass.getResource("/pg-car.sql").toURI))
     val personSql =
       Files.readString(Path.of(getClass.getResource("/pg-person.sql").toURI))
+    val bigDecSql =
+      Files.readString(Path.of(getClass.getResource("/pg-bigdec.sql").toURI))
 
     Manager(use =>
       val con = use(ds.getConnection)
       val stmt = use(con.createStatement)
       stmt.execute(carSql)
       stmt.execute(personSql)
+      stmt.execute(bigDecSql)
     ).get
     ds
+  end ds
 end PgTests

@@ -278,7 +278,9 @@ object DbCodec:
   given ScalaBigDecimalCodec: DbCodec[scala.math.BigDecimal] with
     val cols: IArray[Int] = IArray(Types.NUMERIC)
     def readSingle(rs: ResultSet, pos: Int): scala.math.BigDecimal =
-      scala.math.BigDecimal(rs.getBigDecimal(pos))
+      rs.getBigDecimal(pos) match
+        case null => null
+        case x    => scala.math.BigDecimal(x)
     def writeSingle(
         bd: scala.math.BigDecimal,
         ps: PreparedStatement,
