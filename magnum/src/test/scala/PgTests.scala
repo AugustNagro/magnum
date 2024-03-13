@@ -420,6 +420,22 @@ class PgTests extends FunSuite, TestContainersFixtures:
       customPersonRepo.count
     assertEquals(count, 8L)
 
+  test(".query iterator"):
+    connect(ds()):
+      Using.Manager(implicit use =>
+        val it = sql"SELECT * FROM person".query[Person].iterator()
+        assertEquals(it.map(_.id).size, 8)
+      )
+
+  test(".returning iterator"):
+    connect(ds()):
+      Using.Manager(implicit use =>
+        val it = sql"UPDATE person set is_admin = false RETURNING first_name"
+          .returning[String]
+          .iterator()
+        assertEquals(it.size, 8)
+      )
+
   @Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
   case class BigDec(id: Int, myBigDec: Option[BigDecimal]) derives DbCodec
 
