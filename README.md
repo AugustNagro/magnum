@@ -24,7 +24,7 @@ Yet another database client for Scala. No dependencies, high productivity.
 * [Motivation](#motivation)
 * [Feature List And Database Support](#feature-list)
 * [Talks and Blogs](#talks-and-blogs)
-* [Frequently Asked Questions](#fr)
+* [Frequently Asked Questions](#frequently-asked-questions)
 
 ## Installing
 
