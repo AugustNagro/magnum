@@ -454,6 +454,21 @@ class PgTests extends FunSuite, TestContainersFixtures:
       .createContainer()
   )
 
+  @Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
+  case class NoId(
+      createdAt: OffsetDateTime,
+      userName: String,
+      userAction: String
+  ) derives DbCodec
+
+  val noIdRepo = Repo[NoId, NoId, Null]()
+
+  test("insert NoId entities"):
+    connect(ds()):
+      val entity = NoId(OffsetDateTime.now, "Dan", "Fishing")
+      noIdRepo.insert(entity)
+      assert(noIdRepo.findAll.exists(_.userName == "Dan"))
+
   override def munitFixtures: Seq[Fixture[_]] =
     super.munitFixtures :+ pgContainer
 
@@ -469,6 +484,8 @@ class PgTests extends FunSuite, TestContainersFixtures:
       Files.readString(Path.of(getClass.getResource("/pg-person.sql").toURI))
     val bigDecSql =
       Files.readString(Path.of(getClass.getResource("/pg-bigdec.sql").toURI))
+    val noIdSql =
+      Files.readString(Path.of(getClass.getResource("/pg-no-id.sql").toURI))
 
     Manager(use =>
       val con = use(ds.getConnection)
@@ -476,6 +493,7 @@ class PgTests extends FunSuite, TestContainersFixtures:
       stmt.execute(carSql)
       stmt.execute(personSql)
       stmt.execute(bigDecSql)
+      stmt.execute(noIdSql)
     ).get
     ds
   end ds

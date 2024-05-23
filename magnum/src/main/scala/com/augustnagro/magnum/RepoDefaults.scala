@@ -26,14 +26,14 @@ trait RepoDefaults[EC, E, ID]:
 
 object RepoDefaults:
 
-  inline given genImmutableRepo[E: DbCodec: Mirror.Of, ID: ClassTag]
+  inline given genImmutableRepo[E: DbCodec: Mirror.Of, ID]
       : RepoDefaults[E, E, ID] =
     genRepo[E, E, ID]
 
   inline given genRepo[
       EC: DbCodec: Mirror.Of,
       E: DbCodec: Mirror.Of,
-      ID: ClassTag
+      ID
   ]: RepoDefaults[EC, E, ID] = ${ genImpl[EC, E, ID] }
 
   private def genImpl[EC: Type, E: Type, ID: Type](using
@@ -44,10 +44,16 @@ object RepoDefaults:
     val eElemCodecs = getEElemCodecs[E]
     val eCodec = Expr.summon[DbCodec[E]].get
     val ecCodec = Expr.summon[DbCodec[EC]].get
-    val idCodec = Expr.summon[DbCodec[ID]].get
+    val idCodec =
+      if TypeRepr.of[ID] =:= TypeRepr.of[Null] then
+        '{ DbCodec.AnyCodec.asInstanceOf[DbCodec[ID]] }
+      else Expr.summon[DbCodec[ID]].get
     val eClassTag = Expr.summon[ClassTag[E]].get
     val ecClassTag = Expr.summon[ClassTag[EC]].get
-    val idClassTag = Expr.summon[ClassTag[ID]].get
+    val idClassTag =
+      if TypeRepr.of[ID] =:= TypeRepr.of[Null] then
+        '{ ClassTag.Any.asInstanceOf[ClassTag[ID]] }
+      else Expr.summon[ClassTag[ID]].get
     '{
       ${ exprs.tableAnnot }.dbType.buildRepoDefaults[EC, E, ID](
         ${ exprs.tableNameSql },
@@ -90,5 +96,5 @@ object RepoDefaults:
           case Some(codec) => getProductCodecs[metTail](res :+ codec)
           case None => getProductCodecs[metTail](res :+ '{ DbCodec.AnyCodec })
       case '[EmptyTuple] => Expr.ofSeq(res)
-      
+
 end RepoDefaults
