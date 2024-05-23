@@ -24,6 +24,7 @@ Yet another database client for Scala. No dependencies, high productivity.
 * [Motivation](#motivation)
 * [Feature List And Database Support](#feature-list)
 * [Talks and Blogs](#talks-and-blogs)
+* [Frequently Asked Questions](#frequently-asked-questions)
 
 ## Installing
 
@@ -540,9 +541,54 @@ The tests are written using TestContainers, which requires Docker be installed.
 
 * Scala Days 2023: [slides](/Magnum-Slides-to-Share.pdf), [talk](https://www.youtube.com/watch?v=iKNRS5b1zAY)
 
+## Frequently Asked Questions
+
+#### Does Magnum support nested entities like:
+
+```scala
+@Table(H2DbType, SqlNameMapper.CamelToSnakeCase)
+case class Company(
+  name: String,
+  address: Address,
+  ) derives DbCodec
+
+case class Address(
+  street: String,
+  city: String,
+  zipCode: String,
+  country: String
+) derives DbCodec
+```
+
+NO; Magnum only supports flat entity structures. This keeps things simple and makes it obvious how the Scala entity class maps to the SQL table. Additionally, SQL databases do not support such embeddings. The above example would be better expressed using a foreign key to an Address table, like so:
+
+```scala
+@Table(H2DbType, SqlNameMapper.CamelToSnakeCase)
+case class Company(
+  name: String,
+  addressId: AddressId,
+) derives DbCodec
+
+opaque type AddressId = Long
+object AddressId:
+  def apply(id: Long): AddressId = id
+  extension (id: AddressId)
+    def underlying: Long = id
+  given DbCodec[AddressId] =
+    DbCodec[Long].biMap(AddressId.apply, _.underlying)
+
+@Table(H2DbType, SqlNameMapper.CamelToSnakeCase)
+case class Address(
+  @Id id: AddressId,
+  street: String,
+  city: String,
+  zipCode: String,
+  country: String
+) derives DbCodec
+```
+
 ## Todo
 * Support MSSql
 * Streaming support
 * Cats Effect & ZIO modules
 * Explicit Nulls support
-
