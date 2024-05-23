@@ -311,7 +311,7 @@ Specifications help you write safe, dynamic queries.
 An example use-case would be a search results page that allows users to sort and filter the paginated data.
 
 1. If you need to perform joins to get the data needed, first create a database view.
-2. Next, create an entity class that derives DbReader.
+2. Next, create an entity class that derives DbCodec.
 3. Finally, use the Spec class to create a specification.
 
 Here's an example:
@@ -366,7 +366,6 @@ object MyId:
 
   given DbCodec[MyId] =
     DbCodec[Long].biMap(MyId.apply, _.underlying)
-end MyId
 
 transact(ds):
   val id = MyId(123L)
@@ -560,7 +559,11 @@ case class Address(
 ) derives DbCodec
 ```
 
-NO; Magnum only supports flat entity structures. This keeps things simple and makes it obvious how the Scala entity class maps to the SQL table. Additionally, SQL databases do not support such embeddings. The above example would be better expressed using a foreign key to an Address table, like so:
+NO; Magnum only supports deriving flat entity class structures. This keeps things simple and makes it obvious how the Scala entity class maps to the SQL table.
+
+We may add support for SQL UDTs (user defined types) in the future; however at the time of writing, UDTs are not well-supported by JDBC drivers.
+
+You could also express the above example using a foreign key to an Address table, like so:
 
 ```scala
 @Table(H2DbType, SqlNameMapper.CamelToSnakeCase)
@@ -588,7 +591,7 @@ case class Address(
 ```
 
 ## Todo
+* JSON / XML support
 * Support MSSql
-* Streaming support
 * Cats Effect & ZIO modules
 * Explicit Nulls support
