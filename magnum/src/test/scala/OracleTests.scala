@@ -347,8 +347,7 @@ class OracleTests extends FunSuite, TestContainersFixtures:
       val rowsInserted = update.run()
       assertEquals(rowsInserted, 1)
       assertEquals(personRepo.count, 9L)
-      val fetched = personRepo.findAll.last
-      assertEquals(fetched.firstName, p.firstName)
+      val fetched = personRepo.findAll.find(_.firstName == p.firstName).get
       assertEquals(fetched.lastName, p.lastName)
       assertEquals(fetched.isAdmin, p.isAdmin)
 
