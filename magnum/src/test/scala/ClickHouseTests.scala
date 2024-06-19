@@ -163,7 +163,8 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
       firstName: Option[String],
       lastName: String,
       isAdmin: Boolean,
-      created: OffsetDateTime
+      created: OffsetDateTime,
+      socialId: Option[UUID]
   ) derives DbCodec
 
   val personRepo = Repo[Person, Person, UUID]
@@ -201,7 +202,8 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
           firstName = Some("John"),
           lastName = "Smith",
           isAdmin = false,
-          created = OffsetDateTime.now
+          created = OffsetDateTime.now,
+          socialId = Some(UUID.randomUUID())
         )
       )
       personRepo.insert(
@@ -210,7 +212,8 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
           firstName = None,
           lastName = "Prince",
           isAdmin = true,
-          created = OffsetDateTime.now
+          created = OffsetDateTime.now,
+          socialId = None
         )
       )
       assertEquals(personRepo.count, 10L)
@@ -225,14 +228,16 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
             firstName = Some("John"),
             lastName = "Smith",
             isAdmin = false,
-            created = OffsetDateTime.now
+            created = OffsetDateTime.now,
+            socialId = Some(UUID.randomUUID())
           ),
           Person(
             id = UUID.randomUUID,
             firstName = None,
             lastName = "Prince",
             isAdmin = true,
-            created = OffsetDateTime.now
+            created = OffsetDateTime.now,
+            socialId = None
           )
         )
       )
@@ -247,7 +252,8 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
           firstName = Some("John"),
           lastName = "Smith",
           isAdmin = false,
-          created = OffsetDateTime.now
+          created = OffsetDateTime.now,
+          socialId = Some(UUID.randomUUID())
         )
       )
       assertEquals(personRepo.count, 9L)
@@ -261,14 +267,16 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
           firstName = Some("John"),
           lastName = "Smith",
           isAdmin = false,
-          created = OffsetDateTime.now
+          created = OffsetDateTime.now,
+          socialId = Some(UUID.randomUUID())
         ),
         Person(
           id = UUID.randomUUID,
           firstName = None,
           lastName = "Prince",
           isAdmin = true,
-          created = OffsetDateTime.now
+          created = OffsetDateTime.now,
+          socialId = None
         )
       )
       val people = personRepo.insertAllReturning(ps)
@@ -283,7 +291,8 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
           firstName = None,
           lastName = null,
           isAdmin = false,
-          created = OffsetDateTime.now
+          created = OffsetDateTime.now,
+          socialId = None
         )
         personRepo.insert(invalidP)
 
@@ -310,14 +319,16 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
           firstName = Some("John"),
           lastName = "Smith",
           isAdmin = false,
-          created = OffsetDateTime.now
+          created = OffsetDateTime.now,
+          socialId = Some(UUID.randomUUID())
         ),
         Person(
           id = UUID.randomUUID,
           firstName = None,
           lastName = "Prince",
           isAdmin = true,
-          created = OffsetDateTime.now
+          created = OffsetDateTime.now,
+          socialId = None
         )
       )
       personRepo.insertAll(newPeople)
@@ -347,13 +358,14 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
         firstName = Some("John"),
         lastName = "Smith",
         isAdmin = false,
-        created = OffsetDateTime.now
+        created = OffsetDateTime.now,
+        socialId = Some(UUID.randomUUID())
       )
       val update =
         sql"insert into $person ${person.insertColumns} values ($p)".update
       assertNoDiff(
         update.frag.sqlString,
-        "insert into person (id, first_name, last_name, is_admin, created) values (?, ?, ?, ?, ?)"
+        "insert into person (id, first_name, last_name, is_admin, created, social_id) values (?, ?, ?, ?, ?, ?)"
       )
       val rowsInserted = update.run()
       assertEquals(rowsInserted, 1)

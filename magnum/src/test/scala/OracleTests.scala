@@ -1,4 +1,5 @@
 import com.augustnagro.magnum.*
+import com.augustnagro.magnum.UUIDCodec.VarCharUUIDCodec
 import com.dimafeng.testcontainers.OracleContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import munit.FunSuite
@@ -8,6 +9,7 @@ import oracle.jdbc.datasource.impl.OracleDataSource
 import java.nio.file.{Files, Path}
 import java.sql.Connection
 import java.time.OffsetDateTime
+import java.util.UUID
 import javax.sql.DataSource
 import scala.util.Using
 
@@ -132,7 +134,8 @@ class OracleTests extends FunSuite, TestContainersFixtures:
   case class PersonCreator(
       firstName: Option[String],
       lastName: String,
-      isAdmin: String
+      isAdmin: String,
+      socialId: Option[UUID]
   ) derives DbCodec
 
   @Table(OracleDbType, SqlNameMapper.CamelToSnakeCase)
@@ -141,7 +144,8 @@ class OracleTests extends FunSuite, TestContainersFixtures:
       firstName: Option[String],
       lastName: String,
       isAdmin: String,
-      created: OffsetDateTime
+      created: OffsetDateTime,
+      socialId: Option[UUID]
   ) derives DbCodec
 
   val personRepo = Repo[PersonCreator, Person, Long]
@@ -155,7 +159,7 @@ class OracleTests extends FunSuite, TestContainersFixtures:
 
   test("delete invalid"):
     connect(ds()):
-      personRepo.delete(Person(23L, None, "", "N", OffsetDateTime.now))
+      personRepo.delete(Person(23L, None, "", "N", OffsetDateTime.now, None))
       assertEquals(8L, personRepo.count)
 
   test("deleteById"):
@@ -195,14 +199,16 @@ class OracleTests extends FunSuite, TestContainersFixtures:
         PersonCreator(
           firstName = Some("John"),
           lastName = "Smith",
-          isAdmin = "N"
+          isAdmin = "N",
+          socialId = Some(UUID.randomUUID())
         )
       )
       personRepo.insert(
         PersonCreator(
           firstName = None,
           lastName = "Prince",
-          isAdmin = "Y"
+          isAdmin = "Y",
+          socialId = None
         )
       )
       assertEquals(personRepo.count, 10L)
@@ -214,7 +220,8 @@ class OracleTests extends FunSuite, TestContainersFixtures:
         PersonCreator(
           firstName = Some("John"),
           lastName = "Smith",
-          isAdmin = "N"
+          isAdmin = "N",
+          socialId = Some(UUID.randomUUID())
         )
       )
       assertEquals(person.id, 9L)
@@ -226,17 +233,20 @@ class OracleTests extends FunSuite, TestContainersFixtures:
         PersonCreator(
           firstName = Some("Chandler"),
           lastName = "Johnsored",
-          isAdmin = "Y"
+          isAdmin = "Y",
+          socialId = Some(UUID.randomUUID())
         ),
         PersonCreator(
           firstName = None,
           lastName = "Odysseus",
-          isAdmin = "N"
+          isAdmin = "N",
+          socialId = None
         ),
         PersonCreator(
           firstName = Some("Jorge"),
           lastName = "Masvidal",
-          isAdmin = "Y"
+          isAdmin = "Y",
+          socialId = None
         )
       )
       val people = personRepo.insertAllReturning(newPc)
@@ -247,7 +257,7 @@ class OracleTests extends FunSuite, TestContainersFixtures:
   test("insert invalid"):
     intercept[SqlException]:
       connect(ds()):
-        val invalidP = PersonCreator(None, null, "N")
+        val invalidP = PersonCreator(None, null, "N", None)
         personRepo.insert(invalidP)
 
   test("update"):
@@ -270,17 +280,20 @@ class OracleTests extends FunSuite, TestContainersFixtures:
         PersonCreator(
           firstName = Some("Chandler"),
           lastName = "Johnsored",
-          isAdmin = "Y"
+          isAdmin = "Y",
+          socialId = Some(UUID.randomUUID())
         ),
         PersonCreator(
           firstName = None,
           lastName = "Odysseus",
-          isAdmin = "N"
+          isAdmin = "N",
+          socialId = None
         ),
         PersonCreator(
           firstName = Some("Jorge"),
           lastName = "Masvidal",
-          isAdmin = "Y"
+          isAdmin = "Y",
+          socialId = None
         )
       )
       personRepo.insertAll(newPeople)
@@ -308,7 +321,8 @@ class OracleTests extends FunSuite, TestContainersFixtures:
       val p = PersonCreator(
         firstName = Some("Chandler"),
         lastName = "Brown",
-        isAdmin = "N"
+        isAdmin = "N",
+        socialId = Some(UUID.randomUUID())
       )
       personRepo.insert(p)
       personRepo.count
@@ -319,7 +333,8 @@ class OracleTests extends FunSuite, TestContainersFixtures:
     val p = PersonCreator(
       firstName = Some("Chandler"),
       lastName = "Brown",
-      isAdmin = "N"
+      isAdmin = "N",
+      socialId = Some(UUID.randomUUID())
     )
     try
       transact(dataSource):
@@ -336,13 +351,14 @@ class OracleTests extends FunSuite, TestContainersFixtures:
       val p = PersonCreator(
         firstName = Some("Chandler"),
         lastName = "Brown",
-        isAdmin = "N"
+        isAdmin = "N",
+        socialId = Some(UUID.randomUUID())
       )
       val update =
         sql"insert into $person ${person.insertColumns} values ($p)".update
       assertNoDiff(
         update.frag.sqlString,
-        "insert into person (first_name, last_name, is_admin) values (?, ?, ?)"
+        "insert into person (first_name, last_name, is_admin, social_id) values (?, ?, ?, ?)"
       )
       val rowsInserted = update.run()
       assertEquals(rowsInserted, 1)
@@ -357,7 +373,8 @@ class OracleTests extends FunSuite, TestContainersFixtures:
         PersonCreator(
           firstName = Some("Chandler"),
           lastName = "Brown",
-          isAdmin = "N"
+          isAdmin = "N",
+          socialId = Some(UUID.randomUUID())
         )
       )
       val newIsAdmin = "Y"
@@ -427,40 +444,41 @@ class OracleTests extends FunSuite, TestContainersFixtures:
           |    first_name varchar2(50),
           |    last_name varchar2(50) not null,
           |    is_admin varchar2(1) not null,
-          |    created timestamp default current_timestamp
+          |    created timestamp default current_timestamp,
+          |    social_id varchar2(36)
           |)""".stripMargin
         )
         stmt.execute(
-          """insert into person (first_name, last_name, is_admin, created) values
-          |('George', 'Washington', 'Y', current_timestamp)""".stripMargin
+          """insert into person (first_name, last_name, is_admin, created, social_id) values
+          |('George', 'Washington', 'Y', current_timestamp, 'd06443a6-3efb-46c4-a66a-a80a8a9a5388')""".stripMargin
         )
         stmt.execute(
-          """insert into person (first_name, last_name, is_admin, created) values
-          |('Alexander', 'Hamilton', 'Y', current_timestamp)""".stripMargin
+          """insert into person (first_name, last_name, is_admin, created, social_id) values
+          |('Alexander', 'Hamilton', 'Y', current_timestamp, '529b6c6d-7228-4da5-81d7-13b706f78ddb')""".stripMargin
         )
         stmt.execute(
-          """insert into person (first_name, last_name, is_admin, created) values
-          |('John', 'Adams', 'Y', current_timestamp)""".stripMargin
+          """insert into person (first_name, last_name, is_admin, created, social_id) values
+          |('John', 'Adams', 'Y', current_timestamp, null)""".stripMargin
         )
         stmt.execute(
-          """insert into person (first_name, last_name, is_admin, created) values
-          |('Benjamin', 'Franklin', 'Y', current_timestamp)""".stripMargin
+          """insert into person (first_name, last_name, is_admin, created, social_id) values
+          |('Benjamin', 'Franklin', 'Y', current_timestamp, null)""".stripMargin
         )
         stmt.execute(
-          """insert into person (first_name, last_name, is_admin, created) values
-          |('John', 'Jay', 'Y', current_timestamp)""".stripMargin
+          """insert into person (first_name, last_name, is_admin, created, social_id) values
+          |('John', 'Jay', 'Y', current_timestamp, null)""".stripMargin
         )
         stmt.execute(
-          """insert into person (first_name, last_name, is_admin, created) values
-          |('Thomas', 'Jefferson', 'Y', current_timestamp)""".stripMargin
+          """insert into person (first_name, last_name, is_admin, created, social_id) values
+          |('Thomas', 'Jefferson', 'Y', current_timestamp, null)""".stripMargin
         )
         stmt.execute(
-          """insert into person (first_name, last_name, is_admin, created) values
-          |('James', 'Madison', 'Y', current_timestamp)""".stripMargin
+          """insert into person (first_name, last_name, is_admin, created, social_id) values
+          |('James', 'Madison', 'Y', current_timestamp, null)""".stripMargin
         )
         stmt.execute(
-          """insert into person (first_name, last_name, is_admin, created) values
-          |(null, 'Nagro', 'N', current_timestamp)""".stripMargin
+          """insert into person (first_name, last_name, is_admin, created, social_id) values
+          |(null, 'Nagro', 'N', current_timestamp, null)""".stripMargin
         )
       )
       .get

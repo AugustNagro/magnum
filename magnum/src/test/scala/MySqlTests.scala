@@ -12,9 +12,11 @@ import org.testcontainers.utility.DockerImageName
 import java.nio.file.{Files, Path}
 import java.sql.Connection
 import java.time.OffsetDateTime
+import java.util.UUID
 import javax.sql.DataSource
 import scala.util.Using
 import scala.util.Using.Manager
+import com.augustnagro.magnum.UUIDCodec.VarCharUUIDCodec
 
 class MySqlTests extends FunSuite, TestContainersFixtures:
 
@@ -132,7 +134,8 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
   case class PersonCreator(
       firstName: Option[String],
       lastName: String,
-      isAdmin: Boolean
+      isAdmin: Boolean,
+      socialId: Option[UUID]
   ) derives DbCodec
 
   @Table(MySqlDbType, SqlNameMapper.CamelToSnakeCase)
@@ -141,7 +144,8 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
       firstName: Option[String],
       lastName: String,
       isAdmin: Boolean,
-      created: OffsetDateTime
+      created: OffsetDateTime,
+      socialId: Option[UUID]
   ) derives DbCodec
 
   val personRepo = Repo[PersonCreator, Person, Long]
@@ -155,7 +159,7 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
 
   test("delete invalid"):
     connect(ds()):
-      personRepo.delete(Person(23L, None, "", false, OffsetDateTime.now))
+      personRepo.delete(Person(23L, None, "", false, OffsetDateTime.now, None))
       assertEquals(8L, personRepo.count)
 
   test("deleteById"):
@@ -195,14 +199,16 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
         PersonCreator(
           firstName = Some("John"),
           lastName = "Smith",
-          isAdmin = false
+          isAdmin = false,
+          socialId = Some(UUID.randomUUID())
         )
       )
       personRepo.insert(
         PersonCreator(
           firstName = None,
           lastName = "Prince",
-          isAdmin = true
+          isAdmin = true,
+          socialId = None
         )
       )
 
@@ -215,7 +221,8 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
         PersonCreator(
           firstName = Some("John"),
           lastName = "Smith",
-          isAdmin = false
+          isAdmin = false,
+          socialId = Some(UUID.randomUUID())
         )
       )
       assertEquals(person.id, 9L)
@@ -227,17 +234,20 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
         PersonCreator(
           firstName = Some("Chandler"),
           lastName = "Johnsored",
-          isAdmin = true
+          isAdmin = true,
+          socialId = Some(UUID.randomUUID())
         ),
         PersonCreator(
           firstName = None,
           lastName = "Odysseus",
-          isAdmin = false
+          isAdmin = false,
+          socialId = None
         ),
         PersonCreator(
           firstName = Some("Jorge"),
           lastName = "Masvidal",
-          isAdmin = true
+          isAdmin = true,
+          socialId = None
         )
       )
       val people = personRepo.insertAllReturning(newPc)
@@ -248,7 +258,7 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
   test("insert invalid"):
     intercept[SqlException]:
       connect(ds()):
-        val invalidP = PersonCreator(None, null, false)
+        val invalidP = PersonCreator(None, null, false, None)
         personRepo.insert(invalidP)
 
   test("update"):
@@ -271,17 +281,20 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
         PersonCreator(
           firstName = Some("Chandler"),
           lastName = "Johnsored",
-          isAdmin = true
+          isAdmin = true,
+          socialId = Some(UUID.randomUUID())
         ),
         PersonCreator(
           firstName = None,
           lastName = "Odysseus",
-          isAdmin = false
+          isAdmin = false,
+          socialId = None
         ),
         PersonCreator(
           firstName = Some("Jorge"),
           lastName = "Masvidal",
-          isAdmin = true
+          isAdmin = true,
+          socialId = None
         )
       )
 
@@ -310,7 +323,8 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
       val p = PersonCreator(
         firstName = Some("Chandler"),
         lastName = "Brown",
-        isAdmin = false
+        isAdmin = false,
+        socialId = Some(UUID.randomUUID())
       )
       personRepo.insert(p)
       personRepo.count
@@ -321,7 +335,8 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
     val p = PersonCreator(
       firstName = Some("Chandler"),
       lastName = "Brown",
-      isAdmin = false
+      isAdmin = false,
+      socialId = Some(UUID.randomUUID())
     )
     try
       transact(dataSource):
@@ -338,13 +353,14 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
       val p = PersonCreator(
         firstName = Some("Chandler"),
         lastName = "Brown",
-        isAdmin = false
+        isAdmin = false,
+        socialId = Some(UUID.randomUUID())
       )
       val update =
         sql"insert into $person ${person.insertColumns} values ($p)".update
       assertNoDiff(
         update.frag.sqlString,
-        "insert into person (first_name, last_name, is_admin) values (?, ?, ?)"
+        "insert into person (first_name, last_name, is_admin, social_id) values (?, ?, ?, ?)"
       )
       val rowsInserted = update.run()
       assertEquals(rowsInserted, 1)
@@ -360,7 +376,8 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
         PersonCreator(
           firstName = Some("Chandler"),
           lastName = "Brown",
-          isAdmin = false
+          isAdmin = false,
+          socialId = Some(UUID.randomUUID())
         )
       )
       val newIsAdmin = true

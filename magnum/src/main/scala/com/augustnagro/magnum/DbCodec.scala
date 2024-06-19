@@ -291,7 +291,7 @@ object DbCodec:
 
   given UUIDCodec: DbCodec[UUID] with
     def queryRepr: String = "?"
-    val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
+    val cols: IArray[Int] = IArray(Types.OTHER)
     def readSingle(rs: ResultSet, pos: Int): UUID =
       rs.getObject(pos, classOf[UUID])
     def writeSingle(entity: UUID, ps: PreparedStatement, pos: Int): Unit =
