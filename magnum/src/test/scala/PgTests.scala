@@ -12,6 +12,7 @@ import org.testcontainers.utility.DockerImageName
 import java.nio.file.{Files, Path}
 import java.sql.Connection
 import java.time.OffsetDateTime
+import java.util.UUID
 import javax.sql.DataSource
 import scala.util.Using
 import scala.util.Using.Manager
@@ -136,7 +137,8 @@ class PgTests extends FunSuite, TestContainersFixtures:
   case class PersonCreator(
       firstName: Option[String],
       lastName: String,
-      isAdmin: Boolean
+      isAdmin: Boolean,
+      socialId: Option[UUID]
   ) derives DbCodec
 
   @Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
@@ -145,7 +147,8 @@ class PgTests extends FunSuite, TestContainersFixtures:
       firstName: Option[String],
       lastName: String,
       isAdmin: Boolean,
-      created: OffsetDateTime
+      created: OffsetDateTime,
+      socialId: Option[UUID]
   ) derives DbCodec
 
   val personRepo = Repo[PersonCreator, Person, Long]
@@ -159,7 +162,7 @@ class PgTests extends FunSuite, TestContainersFixtures:
 
   test("delete invalid"):
     connect(ds()):
-      personRepo.delete(Person(23L, None, "", false, OffsetDateTime.now))
+      personRepo.delete(Person(23L, None, "", false, OffsetDateTime.now, None))
       assertEquals(8L, personRepo.count)
 
   test("deleteById"):
@@ -199,14 +202,16 @@ class PgTests extends FunSuite, TestContainersFixtures:
         PersonCreator(
           firstName = Some("John"),
           lastName = "Smith",
-          isAdmin = false
+          isAdmin = false,
+          socialId = Some(UUID.randomUUID())
         )
       )
       personRepo.insert(
         PersonCreator(
           firstName = None,
           lastName = "Prince",
-          isAdmin = true
+          isAdmin = true,
+          socialId = None
         )
       )
       assertEquals(personRepo.count, 10L)
@@ -218,7 +223,8 @@ class PgTests extends FunSuite, TestContainersFixtures:
         PersonCreator(
           firstName = Some("John"),
           lastName = "Smith",
-          isAdmin = false
+          isAdmin = false,
+          socialId = None
         )
       )
       assertEquals(person.id, 9L)
@@ -230,17 +236,20 @@ class PgTests extends FunSuite, TestContainersFixtures:
         PersonCreator(
           firstName = Some("Chandler"),
           lastName = "Johnsored",
-          isAdmin = true
+          isAdmin = true,
+          socialId = Some(UUID.randomUUID())
         ),
         PersonCreator(
           firstName = None,
           lastName = "Odysseus",
-          isAdmin = false
+          isAdmin = false,
+          socialId = None
         ),
         PersonCreator(
           firstName = Some("Jorge"),
           lastName = "Masvidal",
-          isAdmin = true
+          isAdmin = true,
+          socialId = None
         )
       )
       val people = personRepo.insertAllReturning(newPc)
@@ -251,7 +260,7 @@ class PgTests extends FunSuite, TestContainersFixtures:
   test("insert invalid"):
     intercept[SqlException]:
       connect(ds()):
-        val invalidP = PersonCreator(None, null, false)
+        val invalidP = PersonCreator(None, null, false, None)
         personRepo.insert(invalidP)
 
   test("update"):
@@ -274,17 +283,20 @@ class PgTests extends FunSuite, TestContainersFixtures:
         PersonCreator(
           firstName = Some("Chandler"),
           lastName = "Johnsored",
-          isAdmin = true
+          isAdmin = true,
+          socialId = Some(UUID.randomUUID())
         ),
         PersonCreator(
           firstName = None,
           lastName = "Odysseus",
-          isAdmin = false
+          isAdmin = false,
+          socialId = None
         ),
         PersonCreator(
           firstName = Some("Jorge"),
           lastName = "Masvidal",
-          isAdmin = true
+          isAdmin = true,
+          socialId = None
         )
       )
       personRepo.insertAll(newPeople)
@@ -312,7 +324,8 @@ class PgTests extends FunSuite, TestContainersFixtures:
       val p = PersonCreator(
         firstName = Some("Chandler"),
         lastName = "Brown",
-        isAdmin = false
+        isAdmin = false,
+        socialId = None
       )
       personRepo.insert(p)
       personRepo.count
@@ -323,7 +336,8 @@ class PgTests extends FunSuite, TestContainersFixtures:
     val p = PersonCreator(
       firstName = Some("Chandler"),
       lastName = "Brown",
-      isAdmin = false
+      isAdmin = false,
+      socialId = None
     )
     try
       transact(dataSource):
@@ -340,13 +354,14 @@ class PgTests extends FunSuite, TestContainersFixtures:
       val p = PersonCreator(
         firstName = Some("Chandler"),
         lastName = "Brown",
-        isAdmin = false
+        isAdmin = false,
+        socialId = None
       )
       val update =
         sql"insert into $person ${person.insertColumns} values ($p)".update
       assertNoDiff(
         update.frag.sqlString,
-        "insert into person (first_name, last_name, is_admin) values (?, ?, ?)"
+        "insert into person (first_name, last_name, is_admin, social_id) values (?, ?, ?, ?)"
       )
       val rowsInserted = update.run()
       assertEquals(rowsInserted, 1)
@@ -362,7 +377,8 @@ class PgTests extends FunSuite, TestContainersFixtures:
         PersonCreator(
           firstName = Some("Chandler"),
           lastName = "Brown",
-          isAdmin = false
+          isAdmin = false,
+          socialId = Some(UUID.randomUUID())
         )
       )
       val newIsAdmin = true
@@ -410,7 +426,8 @@ class PgTests extends FunSuite, TestContainersFixtures:
       firstName: Option[String],
       lastName: String,
       isAdmin: Boolean,
-      created: OffsetDateTime
+      created: OffsetDateTime,
+      socialId: Option[UUID]
   ) derives DbCodec
 
   val customPersonRepo = Repo[PersonCreator, CustomPerson, Long]

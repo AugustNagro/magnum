@@ -5,6 +5,7 @@ import org.h2.jdbcx.JdbcDataSource
 import java.nio.file.{Files, Path}
 import java.sql.{Connection, DriverManager}
 import java.time.OffsetDateTime
+import java.util.UUID
 import javax.sql.DataSource
 import scala.util.Properties.propOrNone
 import scala.util.Using
@@ -123,7 +124,8 @@ class H2Tests extends FunSuite:
   case class PersonCreator(
       firstName: Option[String],
       lastName: String,
-      isAdmin: Boolean
+      isAdmin: Boolean,
+      socialId: Option[UUID]
   ) derives DbCodec
 
   @Table(H2DbType, SqlNameMapper.CamelToSnakeCase)
@@ -132,7 +134,8 @@ class H2Tests extends FunSuite:
       firstName: Option[String],
       lastName: String,
       isAdmin: Boolean,
-      created: OffsetDateTime
+      created: OffsetDateTime,
+      socialId: Option[UUID]
   ) derives DbCodec
 
   val personRepo = Repo[PersonCreator, Person, Long]
@@ -146,7 +149,7 @@ class H2Tests extends FunSuite:
 
   test("delete invalid"):
     connect(ds()):
-      personRepo.delete(Person(23L, None, "", false, OffsetDateTime.now))
+      personRepo.delete(Person(23L, None, "", false, OffsetDateTime.now, None))
       assertEquals(8L, personRepo.count)
 
   test("deleteById"):
@@ -186,14 +189,16 @@ class H2Tests extends FunSuite:
         PersonCreator(
           firstName = Some("John"),
           lastName = "Smith",
-          isAdmin = false
+          isAdmin = false,
+          socialId = Some(UUID.randomUUID())
         )
       )
       personRepo.insert(
         PersonCreator(
           firstName = None,
           lastName = "Prince",
-          isAdmin = true
+          isAdmin = true,
+          socialId = None
         )
       )
       assertEquals(personRepo.count, 10L)
@@ -205,7 +210,8 @@ class H2Tests extends FunSuite:
         PersonCreator(
           firstName = Some("John"),
           lastName = "Smith",
-          isAdmin = false
+          isAdmin = false,
+          socialId = Some(UUID.randomUUID())
         )
       )
       assertEquals(person.id, 9L)
@@ -217,17 +223,20 @@ class H2Tests extends FunSuite:
         PersonCreator(
           firstName = Some("Chandler"),
           lastName = "Johnsored",
-          isAdmin = true
+          isAdmin = true,
+          socialId = Some(UUID.randomUUID())
         ),
         PersonCreator(
           firstName = None,
           lastName = "Odysseus",
-          isAdmin = false
+          isAdmin = false,
+          socialId = None
         ),
         PersonCreator(
           firstName = Some("Jorge"),
           lastName = "Masvidal",
-          isAdmin = true
+          isAdmin = true,
+          socialId = None
         )
       )
       val people = personRepo.insertAllReturning(newPc)
@@ -238,7 +247,7 @@ class H2Tests extends FunSuite:
   test("insert invalid"):
     intercept[SqlException]:
       connect(ds()):
-        val invalidP = PersonCreator(None, null, false)
+        val invalidP = PersonCreator(None, null, false, None)
         personRepo.insert(invalidP)
 
   test("update"):
@@ -261,17 +270,20 @@ class H2Tests extends FunSuite:
         PersonCreator(
           firstName = Some("Chandler"),
           lastName = "Johnsored",
-          isAdmin = true
+          isAdmin = true,
+          socialId = Some(UUID.randomUUID())
         ),
         PersonCreator(
           firstName = None,
           lastName = "Odysseus",
-          isAdmin = false
+          isAdmin = false,
+          socialId = None
         ),
         PersonCreator(
           firstName = Some("Jorge"),
           lastName = "Masvidal",
-          isAdmin = true
+          isAdmin = true,
+          socialId = None
         )
       )
       personRepo.insertAll(newPeople)
@@ -299,7 +311,8 @@ class H2Tests extends FunSuite:
       val p = PersonCreator(
         firstName = Some("Chandler"),
         lastName = "Brown",
-        isAdmin = false
+        isAdmin = false,
+        socialId = Some(UUID.randomUUID())
       )
       personRepo.insert(p)
       personRepo.count
@@ -310,7 +323,8 @@ class H2Tests extends FunSuite:
     val p = PersonCreator(
       firstName = Some("Chandler"),
       lastName = "Brown",
-      isAdmin = false
+      isAdmin = false,
+      socialId = None
     )
     try
       transact(dataSource):
@@ -327,13 +341,14 @@ class H2Tests extends FunSuite:
       val p = PersonCreator(
         firstName = Some("Chandler"),
         lastName = "Brown",
-        isAdmin = false
+        isAdmin = false,
+        socialId = None
       )
       val update =
         sql"insert into $person ${person.insertColumns} values ($p)".update
       assertNoDiff(
         update.frag.sqlString,
-        "insert into person (first_name, last_name, is_admin) values (?, ?, ?)"
+        "insert into person (first_name, last_name, is_admin, social_id) values (?, ?, ?, ?)"
       )
       val rowsInserted = update.run()
       assertEquals(rowsInserted, 1)
@@ -349,7 +364,8 @@ class H2Tests extends FunSuite:
         PersonCreator(
           firstName = Some("Chandler"),
           lastName = "Brown",
-          isAdmin = false
+          isAdmin = false,
+          socialId = Some(UUID.randomUUID())
         )
       )
       val newIsAdmin = true

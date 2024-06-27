@@ -1,10 +1,12 @@
 import com.augustnagro.magnum.*
+import com.augustnagro.magnum.UUIDCodec.VarCharUUIDCodec
 import munit.FunSuite
 import org.sqlite.SQLiteDataSource
 
 import java.nio.file.{Files, Path}
 import java.sql.Connection
 import java.time.{LocalDateTime, OffsetDateTime}
+import java.util.UUID
 import javax.sql.DataSource
 import scala.util.Using
 import scala.util.Using.Manager
@@ -131,7 +133,8 @@ class SqliteTests extends FunSuite:
   case class PersonCreator(
       firstName: Option[String],
       lastName: String,
-      isAdmin: Boolean
+      isAdmin: Boolean,
+      socialId: Option[UUID]
   ) derives DbCodec
 
   @Table(SqliteDbType, SqlNameMapper.CamelToSnakeCase)
@@ -140,7 +143,8 @@ class SqliteTests extends FunSuite:
       firstName: Option[String],
       lastName: String,
       isAdmin: Boolean,
-      created: String
+      created: String,
+      socialId: Option[UUID]
   ) derives DbCodec
 
   val personRepo = Repo[PersonCreator, Person, Long]
@@ -155,7 +159,7 @@ class SqliteTests extends FunSuite:
   test("delete invalid"):
     connect(ds()):
       personRepo.delete(
-        Person(23L, None, "", false, LocalDateTime.now.toString)
+        Person(23L, None, "", false, LocalDateTime.now.toString, None)
       )
       assertEquals(8L, personRepo.count)
 
@@ -190,14 +194,16 @@ class SqliteTests extends FunSuite:
         PersonCreator(
           firstName = Some("John"),
           lastName = "Smith",
-          isAdmin = false
+          isAdmin = false,
+          socialId = Some(UUID.randomUUID())
         )
       )
       personRepo.insert(
         PersonCreator(
           firstName = None,
           lastName = "Prince",
-          isAdmin = true
+          isAdmin = true,
+          socialId = None
         )
       )
       assertEquals(personRepo.count, 10L)
@@ -209,7 +215,8 @@ class SqliteTests extends FunSuite:
         PersonCreator(
           firstName = Some("John"),
           lastName = "Smith",
-          isAdmin = false
+          isAdmin = false,
+          socialId = Some(UUID.randomUUID())
         )
       )
       assertEquals(person.id, 9L)
@@ -222,17 +229,20 @@ class SqliteTests extends FunSuite:
           PersonCreator(
             firstName = Some("Chandler"),
             lastName = "Johnsored",
-            isAdmin = true
+            isAdmin = true,
+            socialId = Some(UUID.randomUUID())
           ),
           PersonCreator(
             firstName = None,
             lastName = "Odysseus",
-            isAdmin = false
+            isAdmin = false,
+            socialId = None
           ),
           PersonCreator(
             firstName = Some("Jorge"),
             lastName = "Masvidal",
-            isAdmin = true
+            isAdmin = true,
+            socialId = None
           )
         )
         val people = personRepo.insertAllReturning(newPc)
@@ -271,7 +281,7 @@ class SqliteTests extends FunSuite:
   test("insert invalid"):
     intercept[SqlException]:
       connect(ds()):
-        val invalidP = PersonCreator(None, null, false)
+        val invalidP = PersonCreator(None, null, false, None)
         personRepo.insert(invalidP)
 
   test("update"):
@@ -294,17 +304,20 @@ class SqliteTests extends FunSuite:
         PersonCreator(
           firstName = Some("Chandler"),
           lastName = "Johnsored",
-          isAdmin = true
+          isAdmin = true,
+          socialId = Some(UUID.randomUUID())
         ),
         PersonCreator(
           firstName = None,
           lastName = "Odysseus",
-          isAdmin = false
+          isAdmin = false,
+          socialId = None
         ),
         PersonCreator(
           firstName = Some("Jorge"),
           lastName = "Masvidal",
-          isAdmin = true
+          isAdmin = true,
+          socialId = None
         )
       )
       personRepo.insertAll(newPeople)
@@ -329,7 +342,8 @@ class SqliteTests extends FunSuite:
       val p = PersonCreator(
         firstName = Some("Chandler"),
         lastName = "Brown",
-        isAdmin = false
+        isAdmin = false,
+        socialId = Some(UUID.randomUUID())
       )
       personRepo.insert(p)
       personRepo.count
@@ -340,7 +354,8 @@ class SqliteTests extends FunSuite:
     val p = PersonCreator(
       firstName = Some("Chandler"),
       lastName = "Brown",
-      isAdmin = false
+      isAdmin = false,
+      socialId = Some(UUID.randomUUID())
     )
     try
       transact(dataSource):
@@ -357,13 +372,14 @@ class SqliteTests extends FunSuite:
       val p = PersonCreator(
         firstName = Some("Chandler"),
         lastName = "Brown",
-        isAdmin = false
+        isAdmin = false,
+        socialId = Some(UUID.randomUUID())
       )
       val update =
         sql"insert into $person ${person.insertColumns} values ($p)".update
       assertNoDiff(
         update.frag.sqlString,
-        "insert into person (first_name, last_name, is_admin) values (?, ?, ?)"
+        "insert into person (first_name, last_name, is_admin, social_id) values (?, ?, ?, ?)"
       )
       val rowsInserted = update.run()
       assertEquals(rowsInserted, 1)
@@ -379,7 +395,8 @@ class SqliteTests extends FunSuite:
         PersonCreator(
           firstName = Some("Chandler"),
           lastName = "Brown",
-          isAdmin = false
+          isAdmin = false,
+          socialId = Some(UUID.randomUUID())
         )
       )
       val newIsAdmin = true
@@ -424,19 +441,20 @@ class SqliteTests extends FunSuite:
             |    first_name text,
             |    last_name text not null,
             |    is_admin integer not null,
-            |    created text default(datetime())
+            |    created text default(datetime()),
+            |    social_id varchar(36)
             |)""".stripMargin
       )
       stmt.execute(
-        """insert into person (first_name, last_name, is_admin, created) values
-            |('George', 'Washington', true, datetime()),
-            |('Alexander', 'Hamilton', true, datetime()),
-            |('John', 'Adams', true, datetime()),
-            |('Benjamin', 'Franklin', true, datetime()),
-            |('John', 'Jay', true, datetime()),
-            |('Thomas', 'Jefferson', true, datetime()),
-            |('James', 'Madison', true, datetime()),
-            |(null, 'Nagro', false, datetime())""".stripMargin
+        """insert into person (first_name, last_name, is_admin, created, social_id) values
+            |('George', 'Washington', true, datetime(), 'd06443a6-3efb-46c4-a66a-a80a8a9a5388'),
+            |('Alexander', 'Hamilton', true, datetime(), '529b6c6d-7228-4da5-81d7-13b706f78ddb'),
+            |('John', 'Adams', true, datetime(), null),
+            |('Benjamin', 'Franklin', true, datetime(), null),
+            |('John', 'Jay', true, datetime(), null),
+            |('Thomas', 'Jefferson', true, datetime(), null),
+            |('James', 'Madison', true, datetime(), null),
+            |(null, 'Nagro', false, datetime(), null)""".stripMargin
       )
     ).get
     ds

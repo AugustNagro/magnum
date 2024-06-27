@@ -590,6 +590,21 @@ case class Address(
 ) derives DbCodec
 ```
 
+#### UUID DbCodec doesn't work for my database
+
+Some databases directly support the UUID type; these include Postgres, Clickhouse, and H2. When using the built-in `DbCodec[UUID]`, defined in `DbCodec.scala`, serialization and deserialization of `java.util.UUID` will work as expected.
+
+Other databases like MySql, Oracle, and Sqlite, however, do not natively support UUID columns. Users have to choose an alternate datatype to store the UUID: most commonly `varchar(36)` or `binary(16)`. The JDBC drivers for these databases do not support direct serialization and deserialization of `java.util.UUID`, therefore the default `DbCodec[UUID]` will not be sufficient. Instead, import the appropriate codec from `com.augustnagro.magnum.UUIDCodec`. For example,
+
+```scala
+import com.augustnagro.magnum.*
+import com.augustnagro.magnum.UUIDCodec.VarCharUUIDCodec
+import java.util.UUID
+
+@Table(MySqlDbType)
+case class Person(@Id id: Long, name: String, tracking_id: Option[UUID]) derives DbCodec
+```
+
 ## Todo
 * JSON / XML support
 * Support MSSql
