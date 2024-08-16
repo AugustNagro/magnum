@@ -235,15 +235,8 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
   assertECIsSubsetOfE[EC, E]
 
   val idIndex = idAnnotIndex[E]
-  val tableAnnot = TypeRepr.of[Table]
   val table: Expr[Table] =
-    TypeRepr
-      .of[E]
-      .typeSymbol
-      .annotations
-      .collectFirst {
-        case term if term.tpe =:= tableAnnot => term.asExprOf[Table]
-      } match
+    DerivingUtil.tableAnnot[E] match
       case Some(table) => table
       case None =>
         report.errorAndAbort(
@@ -266,7 +259,7 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
             }) =>
           val tableNameScala = Type.valueOfConstant[eLabel].get.toString
           val tableNameScalaExpr = Expr(tableNameScala)
-          val tableNameSql = sqlTableNameAnnot[E] match
+          val tableNameSql = DerivingUtil.sqlTableNameAnnot[E] match
             case Some(sqlName) => '{ $sqlName.name }
             case None => '{ $nameMapper.toTableName($tableNameScalaExpr) }
           val eElemNames = elemNames[eMels]()
@@ -317,16 +310,6 @@ private def idAnnotIndex[E: Type](using q: Quotes): Expr[Int] =
     case -1 => 0
     case x  => x
   Expr(index)
-
-private def sqlTableNameAnnot[T: Type](using Quotes): Option[Expr[SqlName]] =
-  import quotes.reflect._
-  val annot = TypeRepr.of[SqlName]
-  TypeRepr
-    .of[T]
-    .typeSymbol
-    .annotations
-    .find(_.tpe =:= annot)
-    .map(term => term.asExprOf[SqlName])
 
 private def elemNames[Mels: Type](res: List[String] = Nil)(using
     Quotes

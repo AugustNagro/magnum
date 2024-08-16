@@ -6,6 +6,7 @@ import org.postgresql.ds.PGSimpleDataSource
 import org.postgresql.geometric.*
 import com.augustnagro.magnum.*
 import com.augustnagro.magnum.pg.PgCodec.given
+import com.augustnagro.magnum.pg.SimpleEnumCodec.given
 import org.postgresql.util.PGInterval
 
 import java.nio.file.{Files, Path}
@@ -16,6 +17,9 @@ import javax.sql.DataSource
 import scala.util.Using.Manager
 
 class PgCodecTests extends FunSuite, TestContainersFixtures:
+
+  enum Color derives DbCodec:
+    case Red, Green, Blue
 
   @Table(PostgresDbType)
   @SqlName("mag_user")
@@ -33,7 +37,9 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       lSeg: PGlseg,
       p: PGpath,
       pnt: PGpoint,
-      poly: PGpolygon
+      poly: PGpolygon,
+      colors: List[Color],
+      colorMap: List[Vector[Color]]
   ) derives DbCodec:
     override def equals(obj: Any): Boolean =
       obj match
@@ -43,8 +49,9 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
           Objects.deepEquals(test, u.test) &&
           Objects.deepEquals(dates, u.dates) &&
           bx == u.bx && c == u.c && iv == u.iv && l == u.l && lSeg == u.lSeg
-          && p == u.p && pnt == u.pnt && poly == u.poly
+          && p == u.p && pnt == u.pnt && poly == u.poly && colors == u.colors && colorMap == u.colorMap
         case _ => false
+  end MagUser
 
   val userRepo = Repo[MagUser, MagUser, Long]
 
@@ -66,7 +73,10 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       lSeg = PGlseg(1, 1, 2, 2),
       p = PGpath(Array(PGpoint(1, 1), PGpoint(2, 2)), true),
       pnt = PGpoint(1, 1),
-      poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, 1), PGpoint(1, 1)))
+      poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, 1), PGpoint(1, 1))),
+      colors = List(Color.Red, Color.Green),
+      colorMap =
+        List(Vector(Color.Red, Color.Red), Vector(Color.Green, Color.Green))
     ),
     MagUser(
       id = 2L,
@@ -82,7 +92,10 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       lSeg = PGlseg(2, 2, 3, 3),
       p = PGpath(Array(PGpoint(2, 2), PGpoint(3, 3)), true),
       pnt = PGpoint(2, 2),
-      poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, -1), PGpoint(1, -1)))
+      poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, -1), PGpoint(1, -1))),
+      colors = List(Color.Green, Color.Blue),
+      colorMap =
+        List(Vector(Color.Red, Color.Green), Vector(Color.Green, Color.Blue))
     )
   )
 
@@ -106,7 +119,9 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
         lSeg = PGlseg(0, 0, -1, -1),
         p = PGpath(Array(PGpoint(3, 3), PGpoint(4, 4)), true),
         pnt = PGpoint(3, 4),
-        poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, 1), PGpoint(1, 1)))
+        poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, 1), PGpoint(1, 1))),
+        colors = List(Color.Blue),
+        colorMap = List(Vector(Color.Blue), Vector(Color.Green))
       )
       userRepo.insert(u)
       val dbU = userRepo.findById(3L).get
@@ -143,3 +158,4 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       stmt.execute(userSql)
     }.get
     ds
+end PgCodecTests
