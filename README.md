@@ -57,7 +57,7 @@ For example:
 ```scala
 import com.augustnagro.magnum.*
 
-val ds: java.sql.DataSource = ???
+val ds: javax.sql.DataSource = ???
 
 val users: Vector[User] = connect(ds):
   sql"SELECT * FROM user".query[User].run()
