@@ -497,6 +497,40 @@ transact(ds):
 
 The import of `PgCodec.given` is required to bring Geo/Array DbCodecs into scope.
 
+#### Arrays of Enums
+
+The `pg` module supports arrays of simple (non-ADT) enums.
+
+If you want to map an array of [Postgres enums](https://www.postgresql.org/docs/current/datatype-enum.html) to a sequence of Scala enums, use the following import when deriving the DbCodec:
+
+```scala
+import com.augustnagro.magnum.pg.PgCodec.given
+import com.augustnagro.magnum.pg.enums.PgEnumToScalaEnumSqlArrayCodec
+
+// and, for example,
+
+enum Color derives DbCodec:
+  case Red, Green, Blue
+
+@Table(PostgresDbType)
+case class Car(@Id id: Long, colors: Vector[Color]) derives DbCodec
+```
+
+If instead your Postgres type is an array of varchar or text, use the following import:
+
+```scala
+import com.augustnagro.magnum.pg.PgCodec.given
+import com.augustnagro.magnum.pg.enums.PgStringToScalaEnumSqlArrayCodec
+
+// and, for example,
+
+enum Color derives DbCodec:
+case Red, Green, Blue
+
+@Table(PostgresDbType)
+case class Car(@Id id: Long, colors: Vector[Color]) derives DbCodec
+```
+
 ### Logging SQL queries
 
 If you set the java.util Logging level to DEBUG, all SQL queries will be logged.
