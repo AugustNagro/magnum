@@ -31,7 +31,6 @@ ThisBuild / publishTo := {
   else
     Some("releases" at nexus + "service/local/staging/deploy/maven2")
 }
-ThisBuild / credentials += Credentials(Path.userHome / ".sbt" / ".credentials")
 ThisBuild / publish / skip := true
 
 val testcontainersVersion = "0.40.12"
