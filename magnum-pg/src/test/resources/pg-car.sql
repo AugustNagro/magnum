@@ -7,5 +7,5 @@ create table mag_car (
 );
 
 insert into mag_car values
-(1, '{"Red", "Green"}', '{{"Red", "Red"}, {"Green", "Green"}}'),
-(2, '{"Green", "Blue"}', '{{"Red", "Green"}, {"Green", "Blue"}}');
+(1, '{"red_orange", "Greenish"}', '{{"red_orange", "red_orange"}, {"Greenish", "Greenish"}}'),
+(2, '{"Greenish", "blue"}', '{{"red_orange", "Greenish"}, {"Greenish", "blue"}}');

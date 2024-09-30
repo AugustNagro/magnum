@@ -61,13 +61,12 @@ object DerivingUtil:
     val scalaNames = getScalaNames[Mels]()
 
     val sqlNameAnnot = TypeRepr.of[SqlName].typeSymbol
-    val constructorParams =
-      TypeRepr.of[E].typeSymbol.primaryConstructor.paramSymss.head
+    val enumCaseSymbols = TypeRepr.of[E].typeSymbol.children
 
     val sqlNameExprs: Vector[Expr[(String, E)]] = scalaNames
       .zip(sumValueExprs)
       .map((scalaName, sumExpr) =>
-        val nameAnnot = constructorParams
+        val nameAnnot = enumCaseSymbols
           .find(sym => sym.name == scalaName && sym.hasAnnotation(sqlNameAnnot))
           .flatMap(sym => sym.getAnnotation(sqlNameAnnot))
         nameAnnot match
