@@ -98,9 +98,11 @@ class SpecTests extends FunSuite:
     assertEquals(spec.params, Vector(age, name))
 
   test("everything"):
+    val idOpt = Option.empty[Long]
     val age = 3
     val name = "John"
     val spec = Spec[User]
+      .where(idOpt.map(id => sql"id = $id").getOrElse(sql""))
       .where(sql"age > $age")
       .orderBy("age")
       .limit(10)
@@ -111,3 +113,4 @@ class SpecTests extends FunSuite:
       "WHERE (age > ?) AND (name < ?) ORDER BY age ASC NULLS LAST, name DESC NULLS LAST LIMIT 10"
     )
     assertEquals(spec.params, Vector(age, name))
+end SpecTests
