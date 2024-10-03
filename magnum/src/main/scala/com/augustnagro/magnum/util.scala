@@ -164,7 +164,7 @@ end batchUpdate
 
 private def logSql(sql: Frag): Unit = logSql(sql.sqlString, sql.params)
 
-private val Log = System.getLogger(getClass.getName)
+private val Log = System.getLogger("com.augustnagro.magnum")
 
 private def logSql(query: String, params: Any): Unit =
   if Log.isLoggable(Level.TRACE) then
