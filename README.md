@@ -8,7 +8,7 @@ Yet another database client for Scala. No dependencies, high productivity.
   * [`connect` creates a database connection](#connect-creates-a-database-connection)
   * [`transact` creates a database transaction](#transact-creates-a-database-transaction)
   * [Type-safe Transaction & Connection Management](#type-safe-transaction--connection-management)
-  * [Customizing the transaction's JDBC Connection](#customizing-the-transactions-jdbc-connection)
+  * [Customizing Transactions](#customizing-transactions)
   * [Sql Interpolator, Frag, Query, Update, Returning](#sql-interpolator-frag-query-and-update)
   * [Batch Updates](#batch-updates)
   * [Immutable Repositories](#immutable-repositories)
@@ -100,16 +100,20 @@ def runSomeQueries(using DbCon): Vector[User] =
   runUpdateAndGetUsers()
 ```
 
-### Customizing the transaction's JDBC Connection.
+### Customizing transactions
 
-`transact` lets you customize the underlying java.sql.Connection.
+`Transactor` lets you customize the transaction/connection behavior.
 
 ```scala
-transact(ds(), withRepeatableRead):
-  ???
+val transactor = Transactor(
+  dataSource = ???,
+  sqlLogger = SqlLogger.logSlowQueries(500.milliseconds),
+  connectionConfig = con =>
+    con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
+)
 
-def withRepeatableRead(con: Connection): Unit =
-  con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
+transact(transactor):
+  sql"SELECT id from myUser".query[Long].run()
 ```
 
 ### Sql Interpolator, Frag, Query, and Update
@@ -503,6 +507,10 @@ The import of `PgCodec.given` is required to bring Geo/Array DbCodecs into scope
 
 If you set the java.util Logging level to DEBUG, all SQL queries will be logged.
 Setting to TRACE will log SQL queries and their parameters.
+
+#### Logging Slow Queries
+
+You can log slow queries by using the `Transactor` class in conjunction with `SqlLogger.logSlowQueries(FiniteDuration)`. See [Customizing Transactions](#customizing-transactions) for an example. You can also implement your own SqlLogger subclass as desired.
 
 ## Motivation
 

@@ -102,53 +102,40 @@ object ClickhouseDbType extends DbType:
       def deleteAllById(ids: Iterable[ID])(using
           con: DbCon
       ): BatchUpdateResult =
-        logSql(deleteByIdSql, ids)
-        Using(con.connection.prepareStatement(deleteByIdSql))(ps =>
-          idCodec.write(ids, ps)
-          batchUpdateResult(ps.executeBatch())
-        ) match
-          case Success(res) => res
-          case Failure(t)   => throw SqlException(deleteByIdSql, ids, t)
+        handleQuery(deleteByIdSql, ids):
+          Using(con.connection.prepareStatement(deleteByIdSql)): ps =>
+            idCodec.write(ids, ps)
+            timed(batchUpdateResult(ps.executeBatch()))
 
       def insert(entityCreator: EC)(using con: DbCon): Unit =
-        logSql(insertSql, entityCreator)
-        Using(con.connection.prepareStatement(insertSql))(ps =>
-          ecCodec.writeSingle(entityCreator, ps)
-          ps.executeUpdate()
-        ) match
-          case Success(_)  => ()
-          case Failure(ex) => throw SqlException(insertSql, entityCreator, ex)
+        handleQuery(insertSql, entityCreator):
+          Using(con.connection.prepareStatement(insertSql)): ps =>
+            ecCodec.writeSingle(entityCreator, ps)
+            timed(ps.executeUpdate())
 
       def insertAll(entityCreators: Iterable[EC])(using con: DbCon): Unit =
-        logSql(insertSql, entityCreators)
-        Using(con.connection.prepareStatement(insertSql))(ps =>
-          ecCodec.write(entityCreators, ps)
-          batchUpdateResult(ps.executeBatch())
-        ) match
-          case Success(_) => ()
-          case Failure(t) => throw SqlException(insertSql, entityCreators, t)
+        handleQuery(insertSql, entityCreators):
+          Using(con.connection.prepareStatement(insertSql)): ps =>
+            ecCodec.write(entityCreators, ps)
+            timed(batchUpdateResult(ps.executeBatch()))
 
       def insertReturning(entityCreator: EC)(using con: DbCon): E =
-        logSql(insertSql, entityCreator)
-        Using(con.connection.prepareStatement(insertSql))(ps =>
-          ecCodec.writeSingle(entityCreator, ps)
-          ps.executeUpdate()
-          entityCreator.asInstanceOf[E]
-        ) match
-          case Success(res) => res
-          case Failure(t)   => throw SqlException(insertSql, entityCreator, t)
+        handleQuery(insertSql, entityCreator):
+          Using(con.connection.prepareStatement(insertSql)): ps =>
+            ecCodec.writeSingle(entityCreator, ps)
+            timed:
+              ps.executeUpdate()
+              entityCreator.asInstanceOf[E]
 
       def insertAllReturning(
           entityCreators: Iterable[EC]
       )(using con: DbCon): Vector[E] =
-        logSql(insertSql, entityCreators)
-        Using(con.connection.prepareStatement(insertSql))(ps =>
-          ecCodec.write(entityCreators, ps)
-          batchUpdateResult(ps.executeBatch())
-          entityCreators.toVector.asInstanceOf[Vector[E]]
-        ) match
-          case Success(res) => res
-          case Failure(t)   => throw SqlException(insertSql, entityCreators, t)
+        handleQuery(insertSql, entityCreators):
+          Using(con.connection.prepareStatement(insertSql)): ps =>
+            ecCodec.write(entityCreators, ps)
+            timed:
+              batchUpdateResult(ps.executeBatch())
+              entityCreators.toVector.asInstanceOf[Vector[E]]
 
       def update(entity: E)(using DbCon): Unit =
         throw UnsupportedOperationException()
