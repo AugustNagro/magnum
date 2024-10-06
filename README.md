@@ -58,8 +58,9 @@ For example:
 import com.augustnagro.magnum.*
 
 val ds: javax.sql.DataSource = ???
+val xa = Transactor(ds)
 
-val users: Vector[User] = connect(ds):
+val users: Vector[User] = connect(xa):
   sql"SELECT * FROM user".query[User].run()
 ```
 
@@ -71,7 +72,7 @@ If the function throws, the transaction will be rolled back.
 
 ```scala
 // update is rolled back
-transact(ds):
+transact(xa):
   sql"UPDATE user SET first_name = $firstName WHERE id = $id".update.run()
   thisMethodThrows()
 ```
@@ -105,14 +106,14 @@ def runSomeQueries(using DbCon): Vector[User] =
 `Transactor` lets you customize the transaction/connection behavior.
 
 ```scala
-val transactor = Transactor(
+val xa = Transactor(
   dataSource = ???,
   sqlLogger = SqlLogger.logSlowQueries(500.milliseconds),
   connectionConfig = con =>
     con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
 )
 
-transact(transactor):
+transact(xa):
   sql"SELECT id from myUser".query[Long].run()
 ```
 
@@ -147,7 +148,7 @@ val update: Update =
 
 Or an update with a `RETURNING` clause via `returning`:
 
-```
+```scala
 val updateReturning: Returning =
   sql"""
      UPDATE user SET first_name = 'Buddha'
@@ -159,7 +160,7 @@ val updateReturning: Returning =
 All are executed via `run()(using DbCon)`:
 
 ```scala
-transact(ds):
+transact(xa):
   val tuples: Vector[(Long, String)] = query.run()
   val updatedRows: Int = update.run()
   val updatedIds: Vector[Long] = updateReturning.run()
@@ -170,7 +171,7 @@ transact(ds):
 Batch updates are supported via `batchUpdate` method in package `com.augustnagro.magnum`.
 
 ```scala
-connect(ds):
+connect(xa):
   val users: Iterable[User] = ???
   val updateResult: BatchUpdateResult =
     batchUpdate(users): user =>
@@ -205,7 +206,7 @@ case class User(
 
 val userRepo = ImmutableRepo[User, Long]
 
-transact(ds):
+transact(xa):
   val cnt = userRepo.count
   val userOpt = userRepo.findById(2L)
 ```
@@ -266,7 +267,7 @@ case class User(
 
 val userRepo = Repo[User, User, Long]
 
-val countAfterUpdate = transact(ds):
+val countAfterUpdate = transact(xa):
   userRepo.deleteById(2L)
   userRepo.count
 ```
@@ -303,7 +304,7 @@ case class User(
 
 val userRepo = Repo[UserCreator, User, Long]
 
-val newUser: User = transact(ds):
+val newUser: User = transact(xa):
   userRepo.insertReturning(
     UserCreator(Some("Adam"), "Smith")
   )
@@ -373,7 +374,7 @@ object MyId:
   given DbCodec[MyId] =
     DbCodec[Long].biMap(MyId.apply, _.underlying)
 
-transact(ds):
+transact(xa):
   val id = MyId(123L)
   sql"UPDATE my_table SET x = true WHERE id = $id".update.run()
 ```
@@ -494,10 +495,11 @@ import com.augustnagro.magnum.pg.PgCodec.given
 case class MyGeo(@Id id: Long, pnts: IArray[PGpoint]) derives DbCodec
 
 val ds: javax.sql.DataSource = ???
+val xa = Transactor(ds)
 
 val myGeoRepo = Repo[MyGeo, MyGeo, Long]
 
-transact(ds):
+transact(xa):
   myGeoRepo.insert(MyGeo(1L, IArray(PGpoint(1, 1), PGPoint(2, 2))))
 ```
 
