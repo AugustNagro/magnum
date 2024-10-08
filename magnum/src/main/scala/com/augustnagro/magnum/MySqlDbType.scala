@@ -58,6 +58,7 @@ object MySqlDbType extends DbType:
       s"INSERT INTO $tableNameSql $ecInsertKeys VALUES (${ecCodec.queryRepr})"
     val updateSql =
       s"UPDATE $tableNameSql SET $updateKeys WHERE $idName = ${idCodec.queryRepr}"
+    val insertAndFindByIdSql = insertSql + "\n" + findByIdSql
 
     def idWriter(id: ID): FragWriter = (ps, pos) =>
       idCodec.writeSingle(id, ps, pos)
@@ -115,95 +116,57 @@ object MySqlDbType extends DbType:
       def deleteAllById(ids: Iterable[ID])(using
           con: DbCon
       ): BatchUpdateResult =
-        logSql(deleteByIdSql, ids)
-        Using(con.connection.prepareStatement(deleteByIdSql))(ps =>
-          idCodec.write(ids, ps)
-          batchUpdateResult(ps.executeBatch())
-        ) match
-          case Success(res) => res
-          case Failure(t)   => throw SqlException(deleteByIdSql, ids, t)
+        handleQuery(deleteByIdSql, ids):
+          Using(con.connection.prepareStatement(deleteByIdSql)): ps =>
+            idCodec.write(ids, ps)
+            timed(batchUpdateResult(ps.executeBatch()))
 
       def insert(entityCreator: EC)(using con: DbCon): Unit =
-        logSql(insertSql, entityCreator)
-        Using(con.connection.prepareStatement(insertSql))(ps =>
-          ecCodec.writeSingle(entityCreator, ps)
-          ps.executeUpdate()
-        ) match
-          case Success(_)  => ()
-          case Failure(ex) => throw SqlException(insertSql, entityCreator, ex)
+        handleQuery(insertSql, entityCreator):
+          Using(con.connection.prepareStatement(insertSql)): ps =>
+            ecCodec.writeSingle(entityCreator, ps)
+            timed(ps.executeUpdate())
 
       def insertAll(entityCreators: Iterable[EC])(using con: DbCon): Unit =
-        logSql(insertSql, entityCreators)
-        Using(con.connection.prepareStatement(insertSql))(ps =>
-          ecCodec.write(entityCreators, ps)
-          batchUpdateResult(ps.executeBatch())
-        ) match
-          case Success(_) => ()
-          case Failure(t) => throw SqlException(insertSql, entityCreators, t)
+        handleQuery(insertSql, entityCreators):
+          Using(con.connection.prepareStatement(insertSql)): ps =>
+            ecCodec.write(entityCreators, ps)
+            timed(batchUpdateResult(ps.executeBatch()))
 
       def insertReturning(entityCreator: EC)(using con: DbCon): E =
-        logSql(insertSql, entityCreator)
-        Using.Manager(use =>
-          val ps =
-            use(con.connection.prepareStatement(insertSql, insertGenKeys))
-          ecCodec.writeSingle(entityCreator, ps)
-          ps.executeUpdate()
-          val rs = use(ps.getGeneratedKeys)
-          rs.next()
-          val id = idCodec.readSingle(rs)
-          // unfortunately, mysql only will return auto_incremented keys.
-          // it doesn't return default columns, and adding other columns to
-          // the insertGenKeys array doesn't change this behavior. So we need
-          // to query by ID after every insert.
-          findById(id).get
-        ) match
-          case Success(res) => res
-          case Failure(t)   => throw SqlException(insertSql, entityCreator, t)
+        handleQuery(insertAndFindByIdSql, entityCreator):
+          Using.Manager: use =>
+            val ps =
+              use(con.connection.prepareStatement(insertSql, insertGenKeys))
+            ecCodec.writeSingle(entityCreator, ps)
+            timed:
+              ps.executeUpdate()
+              val rs = use(ps.getGeneratedKeys)
+              rs.next()
+              val id = idCodec.readSingle(rs)
+              // unfortunately, mysql only will return auto_incremented keys.
+              // it doesn't return default columns, and adding other columns to
+              // the insertGenKeys array doesn't change this behavior. So we need
+              // to query by ID after every insert.
+              findById(id).get
 
       def insertAllReturning(
           entityCreators: Iterable[EC]
       )(using con: DbCon): Vector[E] =
-        logSql(insertSql, entityCreators)
-        Using.Manager(use =>
-          val ps =
-            use(con.connection.prepareStatement(insertSql, insertGenKeys))
-          ecCodec.write(entityCreators, ps)
-          batchUpdateResult(ps.executeBatch())
-          val rs = use(ps.getGeneratedKeys)
-          val ids = idCodec.read(rs)
-          ids.map(findById(_).get)
-        ) match
-          case Success(res) => res
-          case Failure(t)   => throw SqlException(insertSql, entityCreators, t)
+        handleQuery(insertAndFindByIdSql, entityCreators):
+          Using.Manager: use =>
+            val ps =
+              use(con.connection.prepareStatement(insertSql, insertGenKeys))
+            ecCodec.write(entityCreators, ps)
+            timed:
+              batchUpdateResult(ps.executeBatch())
+              val rs = use(ps.getGeneratedKeys)
+              val ids = idCodec.read(rs)
+              ids.map(findById(_).get)
 
       def update(entity: E)(using con: DbCon): Unit =
-        logSql(updateSql, entity)
-        Using(con.connection.prepareStatement(updateSql))(ps =>
-          val entityValues: Vector[Any] = entity
-            .asInstanceOf[Product]
-            .productIterator
-            .toVector
-          // put ID at the end
-          val updateValues = entityValues
-            .patch(idIndex, Vector.empty, 1)
-            .appended(entityValues(idIndex))
-
-          var pos = 1
-          for (field, codec) <- updateValues.lazyZip(updateCodecs) do
-            codec.writeSingle(field, ps, pos)
-            pos += codec.cols.length
-          ps.executeUpdate()
-        ) match
-          case Success(_) => ()
-          case Failure(t) => throw SqlException(updateSql, entity, t)
-      end update
-
-      def updateAll(entities: Iterable[E])(using
-          con: DbCon
-      ): BatchUpdateResult =
-        logSql(updateSql, entities)
-        Using(con.connection.prepareStatement(updateSql))(ps =>
-          for entity <- entities do
+        handleQuery(updateSql, entity):
+          Using(con.connection.prepareStatement(updateSql)): ps =>
             val entityValues: Vector[Any] = entity
               .asInstanceOf[Product]
               .productIterator
@@ -217,14 +180,30 @@ object MySqlDbType extends DbType:
             for (field, codec) <- updateValues.lazyZip(updateCodecs) do
               codec.writeSingle(field, ps, pos)
               pos += codec.cols.length
-            ps.addBatch()
+            timed(ps.executeUpdate())
 
-          batchUpdateResult(ps.executeBatch())
-        ) match
-          case Success(res) => res
-          case Failure(t)   => throw SqlException(updateSql, entities, t)
-        end match
-      end updateAll
+      def updateAll(entities: Iterable[E])(using
+          con: DbCon
+      ): BatchUpdateResult =
+        handleQuery(updateSql, entities):
+          Using(con.connection.prepareStatement(updateSql)): ps =>
+            for entity <- entities do
+              val entityValues: Vector[Any] = entity
+                .asInstanceOf[Product]
+                .productIterator
+                .toVector
+              // put ID at the end
+              val updateValues = entityValues
+                .patch(idIndex, Vector.empty, 1)
+                .appended(entityValues(idIndex))
+
+              var pos = 1
+              for (field, codec) <- updateValues.lazyZip(updateCodecs) do
+                codec.writeSingle(field, ps, pos)
+                pos += codec.cols.length
+              ps.addBatch()
+
+            timed(batchUpdateResult(ps.executeBatch()))
     end new
   end buildRepoDefaults
 end MySqlDbType

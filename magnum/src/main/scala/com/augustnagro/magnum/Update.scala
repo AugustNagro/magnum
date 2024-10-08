@@ -1,14 +1,13 @@
 package com.augustnagro.magnum
 
+import java.util.concurrent.TimeUnit
+import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success, Using}
 
 case class Update(frag: Frag):
   /** Exactly like [[java.sql.PreparedStatement]].executeUpdate */
   def run()(using con: DbCon): Int =
-    logSql(frag)
-    Using(con.connection.prepareStatement(frag.sqlString))(ps =>
-      frag.writer.write(ps, 1)
-      ps.executeUpdate()
-    ) match
-      case Success(res) => res
-      case Failure(t)   => throw SqlException(frag, t)
+    handleQuery(frag.sqlString, frag.params):
+      Using(con.connection.prepareStatement(frag.sqlString)): ps =>
+        frag.writer.write(ps, 1)
+        timed(ps.executeUpdate())

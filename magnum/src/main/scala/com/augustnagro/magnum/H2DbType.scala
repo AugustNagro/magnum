@@ -135,89 +135,51 @@ object H2DbType extends DbType:
       def deleteAllById(ids: Iterable[ID])(using
           con: DbCon
       ): BatchUpdateResult =
-        logSql(deleteByIdSql, ids)
-        Using(con.connection.prepareStatement(deleteByIdSql))(ps =>
-          idCodec.write(ids, ps)
-          batchUpdateResult(ps.executeBatch())
-        ) match
-          case Success(res) => res
-          case Failure(t)   => throw SqlException(deleteByIdSql, ids, t)
+        handleQuery(deleteByIdSql, ids):
+          Using(con.connection.prepareStatement(deleteByIdSql)): ps =>
+            idCodec.write(ids, ps)
+            timed(batchUpdateResult(ps.executeBatch()))
 
       def insert(entityCreator: EC)(using con: DbCon): Unit =
-        logSql(insertSql, entityCreator)
-        Using(con.connection.prepareStatement(insertSql))(ps =>
-          ecCodec.writeSingle(entityCreator, ps)
-          ps.executeUpdate()
-        ) match
-          case Success(_)  => ()
-          case Failure(ex) => throw SqlException(insertSql, entityCreator, ex)
+        handleQuery(insertSql, entityCreator):
+          Using(con.connection.prepareStatement(insertSql)): ps =>
+            ecCodec.writeSingle(entityCreator, ps)
+            timed(ps.executeUpdate())
 
       def insertAll(entityCreators: Iterable[EC])(using con: DbCon): Unit =
-        logSql(insertSql, entityCreators)
-        Using(con.connection.prepareStatement(insertSql))(ps =>
-          ecCodec.write(entityCreators, ps)
-          batchUpdateResult(ps.executeBatch())
-        ) match
-          case Success(_) => ()
-          case Failure(t) => throw SqlException(insertSql, entityCreators, t)
+        handleQuery(insertSql, entityCreators):
+          Using(con.connection.prepareStatement(insertSql)): ps =>
+            ecCodec.write(entityCreators, ps)
+            timed(batchUpdateResult(ps.executeBatch()))
 
       def insertReturning(entityCreator: EC)(using con: DbCon): E =
-        logSql(insertSql, entityCreator)
-        Using.Manager(use =>
-          val ps =
-            use(con.connection.prepareStatement(insertSql, insertGenKeys))
-          ecCodec.writeSingle(entityCreator, ps)
-          ps.executeUpdate()
-          val rs = use(ps.getGeneratedKeys)
-          rs.next()
-          eCodec.readSingle(rs)
-        ) match
-          case Success(res) => res
-          case Failure(t)   => throw SqlException(insertSql, entityCreator, t)
+        handleQuery(insertSql, entityCreator):
+          Using.Manager: use =>
+            val ps =
+              use(con.connection.prepareStatement(insertSql, insertGenKeys))
+            ecCodec.writeSingle(entityCreator, ps)
+            timed:
+              ps.executeUpdate()
+              val rs = use(ps.getGeneratedKeys)
+              rs.next()
+              eCodec.readSingle(rs)
 
       def insertAllReturning(
           entityCreators: Iterable[EC]
       )(using con: DbCon): Vector[E] =
-        logSql(insertSql, entityCreators)
-        Using.Manager(use =>
-          val ps =
-            use(con.connection.prepareStatement(insertSql, insertGenKeys))
-          ecCodec.write(entityCreators, ps)
-          batchUpdateResult(ps.executeBatch())
-          val rs = use(ps.getGeneratedKeys)
-          eCodec.read(rs)
-        ) match
-          case Success(res) => res
-          case Failure(t)   => throw SqlException(insertSql, entityCreators, t)
+        handleQuery(insertSql, entityCreators):
+          Using.Manager: use =>
+            val ps =
+              use(con.connection.prepareStatement(insertSql, insertGenKeys))
+            ecCodec.write(entityCreators, ps)
+            timed:
+              batchUpdateResult(ps.executeBatch())
+              val rs = use(ps.getGeneratedKeys)
+              eCodec.read(rs)
 
       def update(entity: E)(using con: DbCon): Unit =
-        logSql(updateSql, entity)
-        Using(con.connection.prepareStatement(updateSql))(ps =>
-          val entityValues: Vector[Any] = entity
-            .asInstanceOf[Product]
-            .productIterator
-            .toVector
-          // put ID at the end
-          val updateValues = entityValues
-            .patch(idIndex, Vector.empty, 1)
-            .appended(entityValues(idIndex))
-
-          var pos = 1
-          for (field, codec) <- updateValues.lazyZip(updateCodecs) do
-            codec.writeSingle(field, ps, pos)
-            pos += codec.cols.length
-          ps.executeUpdate()
-        ) match
-          case Success(_) => ()
-          case Failure(t) => throw SqlException(updateSql, entity, t)
-      end update
-
-      def updateAll(entities: Iterable[E])(using
-          con: DbCon
-      ): BatchUpdateResult =
-        logSql(updateSql, entities)
-        Using(con.connection.prepareStatement(updateSql))(ps =>
-          for entity <- entities do
+        handleQuery(updateSql, entity):
+          Using(con.connection.prepareStatement(updateSql)): ps =>
             val entityValues: Vector[Any] = entity
               .asInstanceOf[Product]
               .productIterator
@@ -231,14 +193,30 @@ object H2DbType extends DbType:
             for (field, codec) <- updateValues.lazyZip(updateCodecs) do
               codec.writeSingle(field, ps, pos)
               pos += codec.cols.length
-            ps.addBatch()
+            timed(ps.executeUpdate())
 
-          batchUpdateResult(ps.executeBatch())
-        ) match
-          case Success(res) => res
-          case Failure(t)   => throw SqlException(updateSql, entities, t)
-        end match
-      end updateAll
+      def updateAll(entities: Iterable[E])(using
+          con: DbCon
+      ): BatchUpdateResult =
+        handleQuery(updateSql, entities):
+          Using(con.connection.prepareStatement(updateSql)): ps =>
+            for entity <- entities do
+              val entityValues: Vector[Any] = entity
+                .asInstanceOf[Product]
+                .productIterator
+                .toVector
+              // put ID at the end
+              val updateValues = entityValues
+                .patch(idIndex, Vector.empty, 1)
+                .appended(entityValues(idIndex))
+
+              var pos = 1
+              for (field, codec) <- updateValues.lazyZip(updateCodecs) do
+                codec.writeSingle(field, ps, pos)
+                pos += codec.cols.length
+              ps.addBatch()
+
+            timed(batchUpdateResult(ps.executeBatch()))
 
     end new
   end buildRepoDefaults

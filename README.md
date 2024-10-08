@@ -8,7 +8,7 @@ Yet another database client for Scala. No dependencies, high productivity.
   * [`connect` creates a database connection](#connect-creates-a-database-connection)
   * [`transact` creates a database transaction](#transact-creates-a-database-transaction)
   * [Type-safe Transaction & Connection Management](#type-safe-transaction--connection-management)
-  * [Customizing the transaction's JDBC Connection](#customizing-the-transactions-jdbc-connection)
+  * [Customizing Transactions](#customizing-transactions)
   * [Sql Interpolator, Frag, Query, Update, Returning](#sql-interpolator-frag-query-and-update)
   * [Batch Updates](#batch-updates)
   * [Immutable Repositories](#immutable-repositories)
@@ -50,28 +50,29 @@ https://javadoc.io/doc/com.augustnagro/magnum_3
 
 ### `connect` creates a database connection.
 
-`connect` takes two parameters; the database DataSource,
+`connect` takes two parameters; the database Transactor,
 and a context function with a given `DbCon` connection.
 For example:
 
 ```scala
 import com.augustnagro.magnum.*
 
-val ds: javax.sql.DataSource = ???
+val dataSource: javax.sql.DataSource = ???
+val xa = Transactor(dataSource)
 
-val users: Vector[User] = connect(ds):
+val users: Vector[User] = connect(xa):
   sql"SELECT * FROM user".query[User].run()
 ```
 
 ### `transact` creates a database transaction.
 
-Like `connect`, `transact` accepts a DataSource and context function.
+Like `connect`, `transact` accepts a Transactor and context function.
 The context function provides a `DbTx` instance.
 If the function throws, the transaction will be rolled back.
 
 ```scala
 // update is rolled back
-transact(ds):
+transact(xa):
   sql"UPDATE user SET first_name = $firstName WHERE id = $id".update.run()
   thisMethodThrows()
 ```
@@ -100,16 +101,20 @@ def runSomeQueries(using DbCon): Vector[User] =
   runUpdateAndGetUsers()
 ```
 
-### Customizing the transaction's JDBC Connection.
+### Customizing transactions
 
-`transact` lets you customize the underlying java.sql.Connection.
+`Transactor` lets you customize the transaction (or connection) behavior.
 
 ```scala
-transact(ds(), withRepeatableRead):
-  ???
+val xa = Transactor(
+  dataSource = ???,
+  sqlLogger = SqlLogger.logSlowQueries(500.milliseconds),
+  connectionConfig = con =>
+    con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
+)
 
-def withRepeatableRead(con: Connection): Unit =
-  con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
+transact(xa):
+  sql"SELECT id from myUser".query[Long].run()
 ```
 
 ### Sql Interpolator, Frag, Query, and Update
@@ -143,7 +148,7 @@ val update: Update =
 
 Or an update with a `RETURNING` clause via `returning`:
 
-```
+```scala
 val updateReturning: Returning =
   sql"""
      UPDATE user SET first_name = 'Buddha'
@@ -155,7 +160,7 @@ val updateReturning: Returning =
 All are executed via `run()(using DbCon)`:
 
 ```scala
-transact(ds):
+transact(xa):
   val tuples: Vector[(Long, String)] = query.run()
   val updatedRows: Int = update.run()
   val updatedIds: Vector[Long] = updateReturning.run()
@@ -166,7 +171,7 @@ transact(ds):
 Batch updates are supported via `batchUpdate` method in package `com.augustnagro.magnum`.
 
 ```scala
-connect(ds):
+connect(xa):
   val users: Iterable[User] = ???
   val updateResult: BatchUpdateResult =
     batchUpdate(users): user =>
@@ -201,7 +206,7 @@ case class User(
 
 val userRepo = ImmutableRepo[User, Long]
 
-transact(ds):
+transact(xa):
   val cnt = userRepo.count
   val userOpt = userRepo.findById(2L)
 ```
@@ -262,7 +267,7 @@ case class User(
 
 val userRepo = Repo[User, User, Long]
 
-val countAfterUpdate = transact(ds):
+val countAfterUpdate = transact(xa):
   userRepo.deleteById(2L)
   userRepo.count
 ```
@@ -299,7 +304,7 @@ case class User(
 
 val userRepo = Repo[UserCreator, User, Long]
 
-val newUser: User = transact(ds):
+val newUser: User = transact(xa):
   userRepo.insertReturning(
     UserCreator(Some("Adam"), "Smith")
   )
@@ -369,7 +374,7 @@ object MyId:
   given DbCodec[MyId] =
     DbCodec[Long].biMap(MyId.apply, _.underlying)
 
-transact(ds):
+transact(xa):
   val id = MyId(123L)
   sql"UPDATE my_table SET x = true WHERE id = $id".update.run()
 ```
@@ -417,7 +422,7 @@ def allUsers(using DbCon): Vector[User] =
   val u = User.Table
   // equiv to 
   // SELECT id, first_name, age FROM user
-  sql"SELECT ${u.all} FROM $u".query.run()
+  sql"SELECT ${u.all} FROM $u".query[User].run()
 
 def firstNamesForLast(lastName: String)(using DbCon): Vector[String] =
   val u = User.Table
@@ -426,7 +431,7 @@ def firstNamesForLast(lastName: String)(using DbCon): Vector[String] =
   sql"""
     SELECT DISTINCT ${u.firstName} FROM $u
     WHERE ${u.lastName} = $lastName
-  """.query.run()
+  """.query[String].run()
 
 def insertOrIgnore(creator: UserCreator)(using DbCon): Unit =
   val u = User.Table
@@ -489,11 +494,12 @@ import com.augustnagro.magnum.pg.PgCodec.given
 @Table(PostgresDbType)
 case class MyGeo(@Id id: Long, pnts: IArray[PGpoint]) derives DbCodec
 
-val ds: javax.sql.DataSource = ???
+val dataSource: javax.sql.DataSource = ???
+val xa = Transactor(dataSource)
 
 val myGeoRepo = Repo[MyGeo, MyGeo, Long]
 
-transact(ds):
+transact(xa):
   myGeoRepo.insert(MyGeo(1L, IArray(PGpoint(1, 1), PGPoint(2, 2))))
 ```
 
@@ -527,6 +533,10 @@ import com.augustnagro.magnum.pg.enums.PgStringToScalaEnumSqlArrayCodec
 
 If you set the java.util Logging level to DEBUG, all SQL queries will be logged.
 Setting to TRACE will log SQL queries and their parameters.
+
+#### Logging Slow Queries
+
+You can log slow queries by using the `Transactor` class in conjunction with `SqlLogger.logSlowQueries(FiniteDuration)`. See [Customizing Transactions](#customizing-transactions) for an example. You can also implement your own SqlLogger subclass as desired.
 
 ## Motivation
 

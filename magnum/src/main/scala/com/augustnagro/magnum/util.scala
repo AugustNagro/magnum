@@ -4,9 +4,10 @@ import com.augustnagro.magnum.SqlException
 
 import java.lang.System.Logger.Level
 import java.sql.{Connection, PreparedStatement, ResultSet, Statement}
+import java.util.concurrent.TimeUnit
 import javax.sql.DataSource
 import scala.collection.mutable.ReusableBuilder
-import scala.util.{Failure, Success, Using, boundary}
+import scala.util.{Failure, Success, Try, Using, boundary}
 import scala.deriving.Mirror
 import scala.compiletime.{
   constValue,
@@ -17,40 +18,40 @@ import scala.compiletime.{
 }
 import scala.compiletime.ops.any.==
 import scala.compiletime.ops.boolean.&&
+import scala.concurrent.duration.FiniteDuration
 import scala.reflect.ClassTag
 import scala.quoted.*
 
-def connect[T](dataSource: DataSource)(f: DbCon ?=> T): T =
-  Using.resource(dataSource.getConnection)(con => f(using DbCon(con)))
+def connect[T](transactor: Transactor)(f: DbCon ?=> T): T =
+  Using.resource(transactor.dataSource.getConnection): con =>
+    transactor.connectionConfig(con)
+    f(using DbCon(con, transactor.sqlLogger))
 
-def transact[T](dataSource: DataSource)(f: DbTx ?=> T): T =
-  Using.resource(dataSource.getConnection)(con =>
+def connect[T](dataSource: DataSource)(f: DbCon ?=> T): T =
+  connect(Transactor(dataSource))(f)
+
+def transact[T](transactor: Transactor)(f: DbTx ?=> T): T =
+  Using.resource(transactor.dataSource.getConnection): con =>
+    transactor.connectionConfig(con)
     con.setAutoCommit(false)
     try
-      val res = f(using DbTx(con))
+      val res = f(using DbTx(con, transactor.sqlLogger))
       con.commit()
       res
     catch
       case t =>
         con.rollback()
         throw t
-  )
+
+def transact[T](dataSource: DataSource)(f: DbTx ?=> T): T =
+  transact(Transactor(dataSource))(f)
 
 def transact[T](dataSource: DataSource, connectionConfig: Connection => Unit)(
     f: DbTx ?=> T
 ): T =
-  Using.resource(dataSource.getConnection)(con =>
-    connectionConfig(con)
-    con.setAutoCommit(false)
-    try
-      val res = f(using DbTx(con))
-      con.commit()
-      res
-    catch
-      case t =>
-        con.rollback()
-        throw t
-  )
+  val transactor =
+    Transactor(dataSource = dataSource, connectionConfig = connectionConfig)
+  transact(transactor)(f)
 
 extension (inline sc: StringContext)
   inline def sql(inline args: Any*): Frag =
@@ -159,42 +160,42 @@ def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
     batchUpdateResult(ps.executeBatch())
   ) match
     case Success(res) => res
-    case Failure(ex)  => throw SqlException(firstFrag, ex)
+    case Failure(t) =>
+      throw SqlException(
+        con.sqlLogger.exceptionMsg(
+          SqlExceptionEvent(firstFrag.sqlString, firstFrag.params, t)
+        ),
+        t
+      )
+  end match
 end batchUpdate
-
-private def logSql(sql: Frag): Unit = logSql(sql.sqlString, sql.params)
 
 private val Log = System.getLogger("com.augustnagro.magnum")
 
-private def logSql(query: String, params: Any): Unit =
-  if Log.isLoggable(Level.TRACE) then
-    Log.log(
-      Level.TRACE,
-      s"""Executing Query:
-         |$query
-         |
-         |With values:
-         |${logSqlParams(params)}""".stripMargin
-    )
-  else if Log.isLoggable(Level.DEBUG) then
-    Log.log(
-      Level.DEBUG,
-      s"""Executing Query:
-         |$query""".stripMargin
-    )
-
-private def logSqlParams(params: Any): String =
+private def parseParams(params: Any): Iterator[Iterator[Any]] =
   params match
-    case p: Product => p.productIterator.mkString("(", ", ", ")")
+    case p: Product => Iterator(p.productIterator)
     case it: Iterable[?] =>
       it.headOption match
         case Some(h: Product) =>
           it.asInstanceOf[Iterable[Product]]
-            .map(_.productIterator.mkString("(", ", ", ")"))
-            .mkString("[\n", ",\n", "]\n")
+            .iterator
+            .map(_.productIterator)
         case _ =>
-          it.mkString("(", ", ", ")")
-    case x => x.toString
+          Iterator(it.iterator)
+    case x => Iterator(Iterator(x))
+
+private def paramsString(params: Iterator[Iterator[Any]]): String =
+  params.map(_.mkString("(", ", ", ")")).mkString("", ",\n", "\n")
+
+private def timed[T](f: => T): (T, FiniteDuration) =
+  val start = System.currentTimeMillis()
+  val res = f
+  val execTime = FiniteDuration(
+    System.currentTimeMillis() - start,
+    TimeUnit.MILLISECONDS
+  )
+  (res, execTime)
 
 private def batchUpdateResult(updateCounts: Array[Int]): BatchUpdateResult =
   boundary:
@@ -336,3 +337,14 @@ private def sqlNameAnnot[T: Type](elemName: String)(using
     .find(sym => sym.name == elemName && sym.hasAnnotation(annot))
     .flatMap(sym => sym.getAnnotation(annot))
     .map(term => term.asExprOf[SqlName])
+
+private def handleQuery[A](sql: String, params: Any)(
+    attempt: Try[(A, FiniteDuration)]
+)(using con: DbCon): A =
+  attempt match
+    case Success((res, execTime)) =>
+      con.sqlLogger.log(SqlSuccessEvent(sql, params, execTime))
+      res
+    case Failure(t) =>
+      val msg = con.sqlLogger.exceptionMsg(SqlExceptionEvent(sql, params, t))
+      throw SqlException(msg, t)
