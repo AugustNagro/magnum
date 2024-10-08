@@ -50,15 +50,15 @@ https://javadoc.io/doc/com.augustnagro/magnum_3
 
 ### `connect` creates a database connection.
 
-`connect` takes two parameters; the database DataSource,
+`connect` takes two parameters; the database Transactor,
 and a context function with a given `DbCon` connection.
 For example:
 
 ```scala
 import com.augustnagro.magnum.*
 
-val ds: javax.sql.DataSource = ???
-val xa = Transactor(ds)
+val dataSource: javax.sql.DataSource = ???
+val xa = Transactor(dataSource)
 
 val users: Vector[User] = connect(xa):
   sql"SELECT * FROM user".query[User].run()
@@ -66,7 +66,7 @@ val users: Vector[User] = connect(xa):
 
 ### `transact` creates a database transaction.
 
-Like `connect`, `transact` accepts a DataSource and context function.
+Like `connect`, `transact` accepts a Transactor and context function.
 The context function provides a `DbTx` instance.
 If the function throws, the transaction will be rolled back.
 
@@ -103,7 +103,7 @@ def runSomeQueries(using DbCon): Vector[User] =
 
 ### Customizing transactions
 
-`Transactor` lets you customize the transaction/connection behavior.
+`Transactor` lets you customize the transaction (or connection) behavior.
 
 ```scala
 val xa = Transactor(
@@ -422,7 +422,7 @@ def allUsers(using DbCon): Vector[User] =
   val u = User.Table
   // equiv to 
   // SELECT id, first_name, age FROM user
-  sql"SELECT ${u.all} FROM $u".query.run()
+  sql"SELECT ${u.all} FROM $u".query[User].run()
 
 def firstNamesForLast(lastName: String)(using DbCon): Vector[String] =
   val u = User.Table
@@ -431,7 +431,7 @@ def firstNamesForLast(lastName: String)(using DbCon): Vector[String] =
   sql"""
     SELECT DISTINCT ${u.firstName} FROM $u
     WHERE ${u.lastName} = $lastName
-  """.query.run()
+  """.query[String].run()
 
 def insertOrIgnore(creator: UserCreator)(using DbCon): Unit =
   val u = User.Table
@@ -494,8 +494,8 @@ import com.augustnagro.magnum.pg.PgCodec.given
 @Table(PostgresDbType)
 case class MyGeo(@Id id: Long, pnts: IArray[PGpoint]) derives DbCodec
 
-val ds: javax.sql.DataSource = ???
-val xa = Transactor(ds)
+val dataSource: javax.sql.DataSource = ???
+val xa = Transactor(dataSource)
 
 val myGeoRepo = Repo[MyGeo, MyGeo, Long]
 

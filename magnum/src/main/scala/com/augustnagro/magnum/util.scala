@@ -360,7 +360,7 @@ private def handleQuery[A](sql: String, params: Any)(
 )(using con: DbCon): A =
   attempt match
     case Success((res, execTime)) =>
-      con.sqlLogger.log(SqlLogEvent(sql, params, execTime))
+      con.sqlLogger.log(SqlSuccessEvent(sql, params, execTime))
       res
     case Failure(t) =>
       val msg = con.sqlLogger.exceptionMsg(SqlExceptionEvent(sql, params, t))

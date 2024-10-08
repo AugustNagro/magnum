@@ -3,7 +3,7 @@ package com.augustnagro.magnum
 import scala.concurrent.duration.FiniteDuration
 
 /** Metadata for a successfully executed SQL statement. */
-class SqlLogEvent private[magnum] (
+class SqlSuccessEvent private[magnum] (
     /** The SQL String */
     val sql: String,
     anyParams: Any,

@@ -9,33 +9,33 @@ trait SqlLogger:
   /** Log a successful SQL statement execution. If a query fails a
     * [[SqlException]] will be thrown, and this logger will not be triggered.
     */
-  def log(logEvent: SqlLogEvent): Unit
+  def log(successEvent: SqlSuccessEvent): Unit
 
   /** Constructs the exception message for [[SqlException]]s */
   def exceptionMsg(exceptionEvent: SqlExceptionEvent): String
 
 object SqlLogger:
   object NoOp extends SqlLogger:
-    override def log(logEvent: SqlLogEvent): Unit = ()
+    override def log(successEvent: SqlSuccessEvent): Unit = ()
     override def exceptionMsg(exceptionEvent: SqlExceptionEvent): String =
       exceptionEvent.cause.getMessage
 
   object Default extends SqlLogger:
-    override def log(logEvent: SqlLogEvent): Unit =
+    override def log(successEvent: SqlSuccessEvent): Unit =
       if Log.isLoggable(Level.TRACE) then
         Log.log(
           Level.TRACE,
-          s"""Executed Query in ${logEvent.execTime}:
-             |${logEvent.sql}
+          s"""Executed Query in ${successEvent.execTime}:
+             |${successEvent.sql}
              |
              |With values:
-             |${paramsString(logEvent.params)}""".stripMargin
+             |${paramsString(successEvent.params)}""".stripMargin
         )
       else if Log.isLoggable(Level.DEBUG) then
         Log.log(
           Level.DEBUG,
-          s"""Executed Query in ${logEvent.execTime}:
-             |${logEvent.sql}""".stripMargin
+          s"""Executed Query in ${successEvent.execTime}:
+             |${successEvent.sql}""".stripMargin
         )
 
     override def exceptionMsg(exceptionEvent: SqlExceptionEvent): String =
@@ -55,7 +55,7 @@ object SqlLogger:
   end Default
 
   def logSlowQueries(slowerThan: FiniteDuration): SqlLogger = new:
-    override def log(logEvent: SqlLogEvent): Unit =
+    override def log(logEvent: SqlSuccessEvent): Unit =
       if logEvent.execTime > slowerThan then
         if Log.isLoggable(Level.TRACE) then
           Log.log(

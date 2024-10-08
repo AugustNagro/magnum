@@ -135,7 +135,7 @@ object SqliteDbType extends DbType:
             timed(batchUpdateResult(ps.executeBatch()))
 
       def insertReturning(entityCreator: EC)(using con: DbCon): E =
-        handleQuery(insertSql, entityCreator):
+        handleQuery(insertAndFindByIdSql, entityCreator):
           Using.Manager: use =>
             val ps =
               use(

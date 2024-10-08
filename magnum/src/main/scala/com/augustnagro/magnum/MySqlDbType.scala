@@ -134,7 +134,7 @@ object MySqlDbType extends DbType:
             timed(batchUpdateResult(ps.executeBatch()))
 
       def insertReturning(entityCreator: EC)(using con: DbCon): E =
-        handleQuery(insertSql, entityCreator):
+        handleQuery(insertAndFindByIdSql, entityCreator):
           Using.Manager: use =>
             val ps =
               use(con.connection.prepareStatement(insertSql, insertGenKeys))
@@ -153,7 +153,7 @@ object MySqlDbType extends DbType:
       def insertAllReturning(
           entityCreators: Iterable[EC]
       )(using con: DbCon): Vector[E] =
-        handleQuery(insertSql, entityCreators):
+        handleQuery(insertAndFindByIdSql, entityCreators):
           Using.Manager: use =>
             val ps =
               use(con.connection.prepareStatement(insertSql, insertGenKeys))
