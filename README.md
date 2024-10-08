@@ -507,8 +507,7 @@ If you want to map an array of [Postgres enums](https://www.postgresql.org/docs/
 import com.augustnagro.magnum.pg.PgCodec.given
 import com.augustnagro.magnum.pg.enums.PgEnumToScalaEnumSqlArrayCodec
 
-// and, for example,
-
+// in postgres: `create type Color as enum ('Red', 'Green', 'Blue');`
 enum Color derives DbCodec:
   case Red, Green, Blue
 
@@ -519,16 +518,7 @@ case class Car(@Id id: Long, colors: Vector[Color]) derives DbCodec
 If instead your Postgres type is an array of varchar or text, use the following import:
 
 ```scala
-import com.augustnagro.magnum.pg.PgCodec.given
 import com.augustnagro.magnum.pg.enums.PgStringToScalaEnumSqlArrayCodec
-
-// and, for example,
-
-enum Color derives DbCodec:
-case Red, Green, Blue
-
-@Table(PostgresDbType)
-case class Car(@Id id: Long, colors: Vector[Color]) derives DbCodec
 ```
 
 ### Logging SQL queries
