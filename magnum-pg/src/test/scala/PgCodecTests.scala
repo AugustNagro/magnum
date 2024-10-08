@@ -6,6 +6,7 @@ import org.postgresql.ds.PGSimpleDataSource
 import org.postgresql.geometric.*
 import com.augustnagro.magnum.*
 import com.augustnagro.magnum.pg.PgCodec.given
+import com.augustnagro.magnum.pg.enums.PgEnumToScalaEnumSqlArrayCodec
 import org.postgresql.util.PGInterval
 
 import java.nio.file.{Files, Path}
@@ -16,36 +17,6 @@ import javax.sql.DataSource
 import scala.util.Using.Manager
 
 class PgCodecTests extends FunSuite, TestContainersFixtures:
-
-  @Table(PostgresDbType)
-  @SqlName("mag_user")
-  case class MagUser(
-      @Id id: Long,
-      name: String,
-      friends: Vector[String],
-      matrix: IArray[IArray[Int]],
-      test: IArray[Int],
-      dates: IArray[OffsetDateTime],
-      bx: PGbox,
-      c: PGcircle,
-      iv: PGInterval,
-      l: PGline,
-      lSeg: PGlseg,
-      p: PGpath,
-      pnt: PGpoint,
-      poly: PGpolygon
-  ) derives DbCodec:
-    override def equals(obj: Any): Boolean =
-      obj match
-        case u: MagUser =>
-          id == u.id && name == u.name && friends == u.friends &&
-          Objects.deepEquals(matrix, u.matrix) &&
-          Objects.deepEquals(test, u.test) &&
-          Objects.deepEquals(dates, u.dates) &&
-          bx == u.bx && c == u.c && iv == u.iv && l == u.l && lSeg == u.lSeg
-          && p == u.p && pnt == u.pnt && poly == u.poly
-        case _ => false
-
   val userRepo = Repo[MagUser, MagUser, Long]
 
   val allUsers = Vector(
@@ -66,7 +37,10 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       lSeg = PGlseg(1, 1, 2, 2),
       p = PGpath(Array(PGpoint(1, 1), PGpoint(2, 2)), true),
       pnt = PGpoint(1, 1),
-      poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, 1), PGpoint(1, 1)))
+      poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, 1), PGpoint(1, 1))),
+      colors = List(Color.RedOrange, Color.Green),
+      colorMap =
+        List(Vector(Color.RedOrange, Color.RedOrange), Vector(Color.Green, Color.Green)),
     ),
     MagUser(
       id = 2L,
@@ -82,15 +56,39 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       lSeg = PGlseg(2, 2, 3, 3),
       p = PGpath(Array(PGpoint(2, 2), PGpoint(3, 3)), true),
       pnt = PGpoint(2, 2),
-      poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, -1), PGpoint(1, -1)))
+      poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, -1), PGpoint(1, -1))),
+      colors = List(Color.Green, Color.Blue),
+      colorMap =
+        List(Vector(Color.RedOrange, Color.Green), Vector(Color.Green, Color.Blue))
     )
   )
 
-  test("select all"):
+  val carRepo = Repo[MagCar, MagCar, Long]
+
+  val allCars = Vector(
+    MagCar(
+      id = 1,
+      textColors = Seq(Color.RedOrange, Color.Green),
+      textColorMap =
+        Vector(List(Color.RedOrange, Color.RedOrange), List(Color.Green, Color.Green))
+    ),
+    MagCar(
+      id = 2,
+      textColors = Seq(Color.Green, Color.Blue),
+      textColorMap =
+        Vector(List(Color.RedOrange, Color.Green), List(Color.Green, Color.Blue))
+    )
+  )
+
+  test("select all MagUser"):
     connect(ds()):
       assertEquals(userRepo.findAll, allUsers)
 
-  test("insert"):
+  test("select all MagCar"):
+    connect(ds()):
+      assertEquals(carRepo.findAll, allCars)
+
+  test("insert MagUser"):
     connect(ds()):
       val u = MagUser(
         id = 3L,
@@ -106,19 +104,42 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
         lSeg = PGlseg(0, 0, -1, -1),
         p = PGpath(Array(PGpoint(3, 3), PGpoint(4, 4)), true),
         pnt = PGpoint(3, 4),
-        poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, 1), PGpoint(1, 1)))
+        poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, 1), PGpoint(1, 1))),
+        colors = List(Color.Blue),
+        colorMap = List(Vector(Color.Blue), Vector(Color.Green))
       )
       userRepo.insert(u)
       val dbU = userRepo.findById(3L).get
       assertEquals(dbU, u)
 
-  test("update arrays"):
+  test("insert MagCar"):
+    connect(ds()):
+      val c = MagCar(
+        id = 3L,
+        textColors = Vector(Color.RedOrange, Color.RedOrange),
+        textColorMap =
+          Vector(List(Color.RedOrange, Color.RedOrange), List(Color.RedOrange, Color.RedOrange))
+      )
+      carRepo.insert(c)
+      val dbC = carRepo.findById(3L).get
+      assertEquals(dbC, c)
+
+  test("update MagUser arrays"):
     connect(ds()):
       val newMatrix = IArray(IArray(0, 0), IArray(0, 9))
       sql"UPDATE mag_user SET matrix = $newMatrix WHERE id = 2".update
         .run()
       val newUser = userRepo.findById(2L).get
       assert(Objects.deepEquals(newUser.matrix, newMatrix))
+
+  test("update MagCar arrays"):
+    connect(ds()):
+      val newTextColorMap =
+        Vector(List(Color.Blue, Color.Blue), List(Color.Blue, Color.Blue))
+      sql"UPDATE mag_car SET text_color_map = $newTextColorMap WHERE id = 2".update
+        .run()
+      val newCar = carRepo.findById(2L).get
+      assertEquals(newCar.textColorMap, newTextColorMap)
 
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
@@ -137,9 +158,13 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
     ds.setPassword(pg.password)
     val userSql =
       Files.readString(Path.of(getClass.getResource("/pg-user.sql").toURI))
+    val carSql =
+      Files.readString(Path.of(getClass.getResource("/pg-car.sql").toURI))
     Manager { use =>
       val con = use(ds.getConnection)
       val stmt = use(con.createStatement)
       stmt.execute(userSql)
+      stmt.execute(carSql)
     }.get
     ds
+end PgCodecTests

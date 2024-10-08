@@ -420,8 +420,8 @@ object DbCodec:
               type MirroredLabel = mel
             }
           } =>
-        val nameMapExpr = buildSqlNameMap[E, mels, mets]
-        val melExpr = Expr(Type.valueOfConstant[mel].toString)
+        val nameMapExpr = DerivingUtil.buildSqlNameMapForEnum[E, mels, mets]
+        val melExpr = Expr(Type.valueOfConstant[mel].get.toString)
         '{
           new DbCodec[E] {
             val nameMap: Seq[(String, E)] = $nameMapExpr
@@ -461,89 +461,6 @@ object DbCodec:
       case '[EmptyTuple] =>
         val seqExpr = Expr.ofSeq(elemReprs)
         '{ $seqExpr.mkString(", ") }
-
-  private def buildSqlNameMap[
-      E: Type,
-      Mels: Type,
-      Mets: Type
-  ](using q: Quotes): Expr[Seq[(String, E)]] =
-    import q.reflect.*
-    val tableAnnot = TypeRepr.of[Table].typeSymbol
-    val defaultNameMapper: Expr[SqlNameMapper] =
-      TypeRepr
-        .of[E]
-        .typeSymbol
-        .getAnnotation(tableAnnot) match
-        case Some(term) =>
-          val tableExpr = term.asExprOf[Table]
-          '{ $tableExpr.nameMapper }
-        case None =>
-          '{ SqlNameMapper.SameCase }
-
-    val sumValueExprs: Vector[Expr[E]] = sumValues[E, Mets]()
-    val scalaNames = getScalaNames[Mels]()
-
-    val sqlNameAnnot = TypeRepr.of[SqlName].typeSymbol
-    val constructorParams =
-      TypeRepr.of[E].typeSymbol.primaryConstructor.paramSymss.head
-
-    val sqlNameExprs: Vector[Expr[(String, E)]] = scalaNames
-      .zip(sumValueExprs)
-      .map((scalaName, sumExpr) =>
-        val nameAnnot = constructorParams
-          .find(sym => sym.name == scalaName && sym.hasAnnotation(sqlNameAnnot))
-          .flatMap(sym => sym.getAnnotation(sqlNameAnnot))
-        nameAnnot match
-          case Some(term) =>
-            val sqlNameExpr: Expr[SqlName] = term.asExprOf[SqlName]
-            '{ ($sqlNameExpr.name.toString, $sumExpr) }
-          case None =>
-            val scalaNameExpr = Expr(scalaName)
-            '{ ($defaultNameMapper.toColumnName($scalaNameExpr), $sumExpr) }
-      )
-    Expr.ofSeq(sqlNameExprs)
-  end buildSqlNameMap
-
-  private def getScalaNames[Mels: Type](res: Vector[String] = Vector.empty)(
-      using Quotes
-  ): Vector[String] =
-    import quotes.reflect.*
-    Type.of[Mels] match
-      case '[mel *: melTail] =>
-        val melString = Type.valueOfConstant[mel].get.toString
-        getScalaNames[melTail](res :+ melString)
-      case '[EmptyTuple] => res
-
-  private def sumValues[E: Type, Mets: Type](
-      res: Vector[Expr[E]] = Vector.empty
-  )(using Quotes): Vector[Expr[E]] =
-    import quotes.reflect.*
-    Type.of[Mets] match
-      case '[met *: metTail] =>
-        val expr = Expr.summon[Mirror.ProductOf[met]] match
-          case Some(m) if isSingleton[met] =>
-            '{ $m.fromProduct(EmptyTuple).asInstanceOf[E] }
-          case _ =>
-            report.errorAndAbort("Can only derive simple (non-adt) enums")
-        sumValues[E, metTail](res :+ expr)
-      case '[EmptyTuple] => res
-
-  private def isSingleton[T: Type](using Quotes): Boolean =
-    import quotes.reflect.*
-    Expr.summon[Mirror.ProductOf[T]] match
-      case Some('{
-            $mp: Mirror.ProductOf[T] {
-              type MirroredElemTypes = mets
-            }
-          }) =>
-        tupleArity[mets]() == 0
-      case _ => false
-
-  private def tupleArity[T: Type](res: Int = 0)(using Quotes): Int =
-    import quotes.reflect.*
-    Type.of[T] match
-      case '[x *: xs]    => tupleArity[xs](res + 1)
-      case '[EmptyTuple] => res
 
   private def buildColsExpr[Mets: Type](
       res: Vector[Expr[IArray[Int]]] = Vector.empty
