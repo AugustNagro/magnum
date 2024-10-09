@@ -1,11 +1,7 @@
 import com.augustnagro.magnum.*
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
-import com.dimafeng.testcontainers.{
-  ContainerDef,
-  JdbcDatabaseContainer,
-  PostgreSQLContainer
-}
-import munit.{FunSuite, Location, TestOptions}
+import com.dimafeng.testcontainers.{ContainerDef, JdbcDatabaseContainer, PostgreSQLContainer}
+import munit.{AnyFixture, FunSuite, Location, TestOptions}
 import org.postgresql.ds.PGSimpleDataSource
 import org.testcontainers.utility.DockerImageName
 
@@ -486,7 +482,7 @@ class PgTests extends FunSuite, TestContainersFixtures:
       noIdRepo.insert(entity)
       assert(noIdRepo.findAll.exists(_.userName == "Dan"))
 
-  override def munitFixtures: Seq[Fixture[_]] =
+  override def munitFixtures: Seq[AnyFixture[_]] =
     super.munitFixtures :+ pgContainer
 
   def ds(): DataSource =
