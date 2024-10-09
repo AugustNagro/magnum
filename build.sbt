@@ -37,7 +37,7 @@ val testcontainersVersion = "0.40.12"
 
 lazy val root = project
   .in(file("."))
-  .aggregate(magnum, magnumPg)
+  .aggregate(magnum, magnumPg, magnumZio)
 
 lazy val magnum = project
   .in(file("magnum"))
@@ -71,5 +71,16 @@ lazy val magnumPg = project
       "org.scalameta" %% "munit" % "0.7.29" % Test,
       "com.dimafeng" %% "testcontainers-scala-munit" % testcontainersVersion % Test,
       "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion % Test
+    )
+  )
+
+lazy val magnumZio = project
+  .in(file("magnum-zio"))
+  .dependsOn(magnum)
+  .settings(
+    Test / fork := true,
+    publish / skip := false,
+    libraryDependencies ++= Seq(
+      "dev.zio" %% "zio" % "2.1.9" % Provided
     )
   )
