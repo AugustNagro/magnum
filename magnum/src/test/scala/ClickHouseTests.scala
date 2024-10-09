@@ -1,11 +1,7 @@
 import com.augustnagro.magnum.*
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
-import com.dimafeng.testcontainers.{
-  ClickHouseContainer,
-  ContainerDef,
-  JdbcDatabaseContainer
-}
-import munit.{FunSuite, Location, TestOptions}
+import com.dimafeng.testcontainers.{ClickHouseContainer, ContainerDef, JdbcDatabaseContainer}
+import munit.{AnyFixture, FunSuite, Location, TestOptions}
 import com.clickhouse.jdbc.ClickHouseDataSource
 import org.testcontainers.utility.DockerImageName
 
@@ -398,7 +394,7 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
       .createContainer()
   )
 
-  override def munitFixtures: Seq[Fixture[_]] =
+  override def munitFixtures: Seq[AnyFixture[_]] =
     super.munitFixtures :+ clickHouseContainer
 
   def ds(): DataSource =
