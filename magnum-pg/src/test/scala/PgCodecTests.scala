@@ -143,7 +143,7 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
 
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
-      .Def(dockerImageName = DockerImageName.parse("postgres:15.2"))
+      .Def(dockerImageName = DockerImageName.parse("postgres:17.0"))
       .createContainer()
   )
 
