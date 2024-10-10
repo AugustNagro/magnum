@@ -8,8 +8,8 @@ import scala.util.control.NonFatal
 
 /** Executes a given query on a given DataSource
   *
-  * Re-implementation of
-  * [[com.augustnagro.magnum.connect(dataSource: DataSource)]] for ZIO
+  * Re-implementation for ZIO of
+  * [[com.augustnagro.magnum.connect(dataSource: DataSource)]]
   *
   * Usage:
   * {{{
@@ -23,8 +23,8 @@ def connect[A](dataSource: DataSource)(q: DbCon ?=> A)(implicit
 
 /** Executes a given query on a given Transactor
   *
-  * Re-implementation of
-  * [[com.augustnagro.magnum.connect(dataSource: DataSource)]] for ZIO
+  * Re-implementation for ZIO of
+  * [[com.augustnagro.magnum.connect(dataSource: DataSource)]]
   *
   * Usage:
   * {{{
@@ -49,8 +49,8 @@ def connect[A](
 
 /** Executes a given transaction on a given DataSource
   *
-  * Re-implementation of
-  * [[com.augustnagro.magnum.transact(transactor: Transactor)]] for ZIO
+  * Re-implementation for ZIO of
+  * [[com.augustnagro.magnum.transact(transactor: Transactor)]]
   *
   * Usage:
   * {{{
@@ -64,8 +64,8 @@ def transact[A](dataSource: DataSource)(q: DbTx ?=> A)(implicit
 
 /** Executes a given transaction on a given Transactor
   *
-  * Re-implementation of
-  * [[com.augustnagro.magnum.transact(transactor: Transactor)]] for ZIO
+  * Re-implementation for ZIO of
+  * [[com.augustnagro.magnum.transact(transactor: Transactor)]]
   *
   * Usage:
   * {{{
