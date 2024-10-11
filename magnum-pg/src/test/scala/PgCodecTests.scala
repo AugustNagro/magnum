@@ -10,7 +10,7 @@ import com.augustnagro.magnum.pg.enums.PgEnumToScalaEnumSqlArrayCodec
 import org.postgresql.util.PGInterval
 
 import java.nio.file.{Files, Path}
-import java.time.{OffsetDateTime, ZoneOffset}
+import java.time.{LocalDate, OffsetDateTime, ZoneOffset}
 import java.util
 import java.util.Objects
 import javax.sql.DataSource
@@ -39,8 +39,10 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       pnt = PGpoint(1, 1),
       poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, 1), PGpoint(1, 1))),
       colors = List(Color.RedOrange, Color.Green),
-      colorMap =
-        List(Vector(Color.RedOrange, Color.RedOrange), Vector(Color.Green, Color.Green)),
+      colorMap = List(
+        Vector(Color.RedOrange, Color.RedOrange),
+        Vector(Color.Green, Color.Green)
+      )
     ),
     MagUser(
       id = 2L,
@@ -58,8 +60,10 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       pnt = PGpoint(2, 2),
       poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, -1), PGpoint(1, -1))),
       colors = List(Color.Green, Color.Blue),
-      colorMap =
-        List(Vector(Color.RedOrange, Color.Green), Vector(Color.Green, Color.Blue))
+      colorMap = List(
+        Vector(Color.RedOrange, Color.Green),
+        Vector(Color.Green, Color.Blue)
+      )
     )
   )
 
@@ -69,14 +73,22 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
     MagCar(
       id = 1,
       textColors = Seq(Color.RedOrange, Color.Green),
-      textColorMap =
-        Vector(List(Color.RedOrange, Color.RedOrange), List(Color.Green, Color.Green))
+      textColorMap = Vector(
+        List(Color.RedOrange, Color.RedOrange),
+        List(Color.Green, Color.Green)
+      ),
+      lastService = Some(LastService("Bob", LocalDate.of(2024, 5, 4))),
+      myJsonB = Some(MyJsonB(Vector(1, 2, 3), "hello world"))
     ),
     MagCar(
       id = 2,
       textColors = Seq(Color.Green, Color.Blue),
-      textColorMap =
-        Vector(List(Color.RedOrange, Color.Green), List(Color.Green, Color.Blue))
+      textColorMap = Vector(
+        List(Color.RedOrange, Color.Green),
+        List(Color.Green, Color.Blue)
+      ),
+      lastService = None,
+      myJsonB = None
     )
   )
 
@@ -117,8 +129,12 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       val c = MagCar(
         id = 3L,
         textColors = Vector(Color.RedOrange, Color.RedOrange),
-        textColorMap =
-          Vector(List(Color.RedOrange, Color.RedOrange), List(Color.RedOrange, Color.RedOrange))
+        textColorMap = Vector(
+          List(Color.RedOrange, Color.RedOrange),
+          List(Color.RedOrange, Color.RedOrange)
+        ),
+        lastService = Some(LastService("James", LocalDate.of(1970, 4, 22))),
+        myJsonB = None
       )
       carRepo.insert(c)
       val dbC = carRepo.findById(3L).get
