@@ -11,9 +11,10 @@ trait JsonBDbCodec[A] extends DbCodec[A]:
 
   def decode(json: String): A
 
+  // todo can use just '?'
   override def queryRepr: String = "?::jsonb"
 
-  override val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
+  override val cols: IArray[Int] = IArray(Types.OTHER)
 
   override def readSingle(resultSet: ResultSet, pos: Int): A =
     val rawJson = resultSet.getString(pos)
@@ -23,8 +24,9 @@ trait JsonBDbCodec[A] extends DbCodec[A]:
   override def writeSingle(entity: A, ps: PreparedStatement, pos: Int): Unit =
     val jsonObject = PGobject()
     jsonObject.setType("jsonb")
+    // todo needed?
     val encoded = if entity == null then null else encode(entity)
-    jsonObject.setValue(encoded)
+    jsonObject.setValue(encode(entity))
     ps.setObject(pos, jsonObject)
 
 end JsonBDbCodec
