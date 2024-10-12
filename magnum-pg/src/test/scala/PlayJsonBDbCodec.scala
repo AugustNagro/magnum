@@ -1,4 +1,4 @@
-import com.augustnagro.magnum.pg.JsonBDbCodec
+import com.augustnagro.magnum.pg.json.JsonBDbCodec
 import play.api.libs.json.OFormat
 import play.api.libs.json.Json
 

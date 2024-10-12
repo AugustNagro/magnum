@@ -531,9 +531,9 @@ import com.augustnagro.magnum.pg.enums.PgStringToScalaEnumSqlArrayCodec
 
 #### Json & JsonB
 
-You can easily map `json` and `jsonb` columns to Scala classes by implementing `JsonDbCodec` and `JsonBDbCodec` (respectively).
+You can map `json` and `jsonb` columns to Scala classes by implementing `JsonDbCodec` and `JsonBDbCodec` (respectively).
 
-As an example, assume we have the table `car`
+As an example, assume we have table `car`:
 
 ```sql
 CREATE TABLE car (
@@ -542,13 +542,13 @@ CREATE TABLE car (
 );
 ```
 
-An `last_service` looks like
+And `last_service` looks like:
 
 ```json
 {"mechanic": "Bob", "date":  "2024-05-04"}
 ```
 
-We can create scala case classes like this to model the relations:
+We can model the relation in Scala with:
 
 ```scala
 @Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
@@ -560,7 +560,7 @@ case class Car(
 case class LastService(mechanic: String, date: LocalDate)
 ```
 
-However, this won't compile because we're missing a given `DbCodec[LastService]`. To get there, first we have to pick a Scala JSON library. Nearly all of them support creating derived codecs; the example below shows how it's done in [Play Json](https://github.com/playframework/play-json).
+However, this won't compile because we're missing a given `DbCodec[LastService]`. To get there, first we have to pick a Scala JSON library. Nearly all of them support creating derived codecs; the example below shows how it's done in [Play Json](https://github.com/playframework/play-json):
 
 ```scala
 case class LastService(mechanic: String, date: LocalDate)
@@ -572,6 +572,9 @@ object LastService:
 Next, we should extend `JsonDbCodec` to implement our own `PlayJsonDbCodec`:
 
 ```scala
+import com.augustnagro.magnum.pg.json.JsonDbCodec
+import import play.api.libs.json.*
+
 trait PlayJsonDbCodec[A] extends JsonDbCodec[A]
 
 object PlayJsonDbCodec:
@@ -581,7 +584,7 @@ object PlayJsonDbCodec:
     def decode(json: String): A = jsonCodec.reads(Json.parse(json)).get
 ```
 
-Note the `derived` method in the companion object; this allows us to use `derives PlayJsonDbCodec` on our JSON classes!
+Note the `derived` method in the companion object; this allows us to use `derives PlayJsonDbCodec` on our JSON class, like so:
 
 ```scala
 case class LastService(mechanic: String, date: LocalDate) derives PlayJsonDbCodec
@@ -590,9 +593,7 @@ object LastService:
   given OFormat[LastService] = Json.format[LastService]
 ```
 
-Now, you can insert, read, and update car objects and the JSON mapping be magically handled.
-
-Todo: How to store/map a Json array in the column.
+The `Car` example will now compile and work as expected.
 
 ### Logging SQL queries
 

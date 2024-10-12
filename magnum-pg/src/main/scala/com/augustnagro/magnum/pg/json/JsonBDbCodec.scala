@@ -1,4 +1,4 @@
-package com.augustnagro.magnum.pg
+package com.augustnagro.magnum.pg.json
 
 import com.augustnagro.magnum.DbCodec
 import org.postgresql.util.PGobject
