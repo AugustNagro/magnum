@@ -29,7 +29,7 @@ Yet another database client for Scala. No dependencies, high productivity.
 ## Installing
 
 ```
-"com.augustnagro" %% "magnum" % "1.2.1"
+"com.augustnagro" %% "magnum" % "1.3.0"
 ```
 
 Magnum requires Scala >= 3.3.0
@@ -472,7 +472,7 @@ This feature should be used sparingly and never with untrusted input.
 The Postgres Module adds support for [Geometric Types](https://www.postgresql.org/docs/current/datatype-geometric.html) and [Arrays](https://www.postgresql.org/docs/current/arrays.html). Postgres Arrays can be decoded into Scala List/Vector/IArray, etc; multi-dimensionality is also supported.
 
 ```
-"com.augustnagro" %% "magnumpg" % "1.2.1"
+"com.augustnagro" %% "magnumpg" % "1.3.0"
 ```
 
 Example: Insert into a table with a `point[]` type column.
