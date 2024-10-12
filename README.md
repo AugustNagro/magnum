@@ -469,7 +469,7 @@ This feature should be used sparingly and never with untrusted input.
 
 ### Postgres Module
 
-The Postgres Module adds support for [Geometric Types](https://www.postgresql.org/docs/current/datatype-geometric.html) and [Arrays](https://www.postgresql.org/docs/current/arrays.html). Postgres Arrays can be decoded into Scala List/Vector/IArray, etc; multi-dimensionality is also supported.
+The Postgres Module adds support for [Geometric Types](https://www.postgresql.org/docs/current/datatype-geometric.html), [Arrays](https://www.postgresql.org/docs/current/arrays.html), and [Json/JsonB](https://www.postgresql.org/docs/current/datatype-json.html). Postgres Arrays can be decoded into Scala List/Vector/IArray, etc; multi-dimensionality is also supported.
 
 ```
 "com.augustnagro" %% "magnumpg" % "1.2.1"
@@ -528,6 +528,71 @@ If instead your Postgres type is an array of varchar or text, use the following 
 ```scala
 import com.augustnagro.magnum.pg.enums.PgStringToScalaEnumSqlArrayCodec
 ```
+
+#### Json & JsonB
+
+You can easily map `json` and `jsonb` columns to Scala classes by implementing `JsonDbCodec` and `JsonBDbCodec` (respectively).
+
+As an example, assume we have the table `car`
+
+```sql
+CREATE TABLE car (
+  id bigint primary key,
+  last_service json not null
+);
+```
+
+An `last_service` looks like
+
+```json
+{"mechanic": "Bob", "date":  "2024-05-04"}
+```
+
+We can create scala case classes like this to model the relations:
+
+```scala
+@Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
+case class Car(
+    @Id id: Long,
+    lastService: LastService
+) derives DbCodec
+
+case class LastService(mechanic: String, date: LocalDate)
+```
+
+However, this won't compile because we're missing a given `DbCodec[LastService]`. To get there, first we have to pick a Scala JSON library. Nearly all of them support creating derived codecs; the example below shows how it's done in [Play Json](https://github.com/playframework/play-json).
+
+```scala
+case class LastService(mechanic: String, date: LocalDate)
+
+object LastService:
+  given OFormat[LastService] = Json.format[LastService]
+```
+
+Next, we should extend `JsonDbCodec` to implement our own `PlayJsonDbCodec`:
+
+```scala
+trait PlayJsonDbCodec[A] extends JsonDbCodec[A]
+
+object PlayJsonDbCodec:
+
+  def derived[A](using jsonCodec: OFormat[A]): PlayJsonDbCodec[A] = new:
+    def encode(a: A): String = jsonCodec.writes(a).toString
+    def decode(json: String): A = jsonCodec.reads(Json.parse(json)).get
+```
+
+Note the `derived` method in the companion object; this allows us to use `derives PlayJsonDbCodec` on our JSON classes!
+
+```scala
+case class LastService(mechanic: String, date: LocalDate) derives PlayJsonDbCodec
+
+object LastService:
+  given OFormat[LastService] = Json.format[LastService]
+```
+
+Now, you can insert, read, and update car objects and the JSON mapping be magically handled.
+
+Todo: How to store/map a Json array in the column.
 
 ### Logging SQL queries
 

@@ -11,9 +11,9 @@ trait JsonDbCodec[A] extends DbCodec[A]:
 
   def decode(json: String): A
 
-  override def queryRepr: String = "?::json"
+  override def queryRepr: String = "?"
 
-  override val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
+  override val cols: IArray[Int] = IArray(Types.OTHER)
 
   override def readSingle(resultSet: ResultSet, pos: Int): A =
     val rawJson = resultSet.getString(pos)
