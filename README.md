@@ -469,7 +469,7 @@ This feature should be used sparingly and never with untrusted input.
 
 ### Postgres Module
 
-The Postgres Module adds support for [Geometric Types](https://www.postgresql.org/docs/current/datatype-geometric.html) and [Arrays](https://www.postgresql.org/docs/current/arrays.html). Postgres Arrays can be decoded into Scala List/Vector/IArray, etc; multi-dimensionality is also supported.
+The Postgres Module adds support for [Geometric Types](https://www.postgresql.org/docs/current/datatype-geometric.html), [Arrays](https://www.postgresql.org/docs/current/arrays.html), [Json/JsonB](https://www.postgresql.org/docs/current/datatype-json.html), and [xml](https://www.postgresql.org/docs/current/datatype-xml.html). Postgres Arrays can be decoded into Scala List/Vector/IArray, etc; multi-dimensionality is also supported.
 
 ```
 "com.augustnagro" %% "magnumpg" % "1.3.0"
@@ -527,6 +527,86 @@ If instead your Postgres type is an array of varchar or text, use the following 
 
 ```scala
 import com.augustnagro.magnum.pg.enums.PgStringToScalaEnumSqlArrayCodec
+```
+
+#### Json, JsonB, XML
+
+You can map `json`, `jsonb`, and `xml` columns to Scala classes by implementing `JsonDbCodec`, `JsonBDbCodec`, and `XmlDbCodec` (respectively).
+
+As an example, assume we have table `car`:
+
+```sql
+CREATE TABLE car (
+  id bigint primary key,
+  last_service json not null
+);
+```
+
+And `last_service` looks like:
+
+```json
+{"mechanic": "Bob", "date":  "2024-05-04"}
+```
+
+We can model the relation in Scala with:
+
+```scala
+@Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
+case class Car(
+    @Id id: Long,
+    lastService: LastService
+) derives DbCodec
+
+case class LastService(mechanic: String, date: LocalDate)
+```
+
+However, this won't compile because we're missing a given `DbCodec[LastService]`. To get there, first we have to pick a Scala JSON library. Nearly all of them support creating derived codecs; the example below shows how it's done in [Play Json](https://github.com/playframework/play-json):
+
+```scala
+case class LastService(mechanic: String, date: LocalDate)
+
+object LastService:
+  given OFormat[LastService] = Json.format[LastService]
+```
+
+Next, we should extend `JsonDbCodec` to implement our own `PlayJsonDbCodec`:
+
+```scala
+import com.augustnagro.magnum.pg.json.JsonDbCodec
+import play.api.libs.json.*
+
+trait PlayJsonDbCodec[A] extends JsonDbCodec[A]
+
+object PlayJsonDbCodec:
+  def derived[A](using jsonCodec: OFormat[A]): PlayJsonDbCodec[A] = new:
+    def encode(a: A): String = jsonCodec.writes(a).toString
+    def decode(json: String): A = jsonCodec.reads(Json.parse(json)).get
+```
+
+Note the `derived` method in the companion object; this allows us to use `derives PlayJsonDbCodec` on our JSON class, like so:
+
+```scala
+case class LastService(mechanic: String, date: LocalDate) derives PlayJsonDbCodec
+
+object LastService:
+  given OFormat[LastService] = Json.format[LastService]
+```
+
+The `Car` example will now compile and work as expected.
+
+For XML, there a few options. If using a library that maps XML to case classes like [scalaxb](https://github.com/eed3si9n/scalaxb), we can follow the JSON pattern above, but using `XmlDbCodec`. If the case classes are generated sources, we can put the DbCodec givens in the entity companion object.
+
+Another pattern is to use a library like [scala-xml](https://github.com/scala/scala-xml) directly and encapsulate the NodeSeq. Then, we can define our DbCodec on the wrapper:
+
+```scala
+class LastService(val xml: Elem):
+  def mechanic: String = (xml \ "mechanic").head.text.trim
+  def date: LocalDate = LocalDate.parse((xml \ "date").head.text.trim)
+
+object LastService:
+  given DbCodec[LastService] = new XmlDbCodec[LastService]:
+    def encode(a: LastService): String = a.xml.toString
+    def decode(xml: String): LastService = LastService(XML.loadString(xml))
 ```
 
 ### Logging SQL queries
