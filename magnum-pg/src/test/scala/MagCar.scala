@@ -14,5 +14,6 @@ case class MagCar(
     textColors: Seq[Color],
     textColorMap: Vector[List[Color]],
     lastService: Option[LastService],
-    myJsonB: Option[MyJsonB]
+    myJsonB: Option[MyJsonB],
+    myXml: Option[MyXml]
 ) derives DbCodec

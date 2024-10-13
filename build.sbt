@@ -71,6 +71,7 @@ lazy val magnumPg = project
       "org.scalameta" %% "munit" % "0.7.29" % Test,
       "com.dimafeng" %% "testcontainers-scala-munit" % testcontainersVersion % Test,
       "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion % Test,
-      "org.playframework" %% "play-json" % "3.0.4" % Test
+      "org.playframework" %% "play-json" % "3.0.4" % Test,
+      "org.scala-lang.modules" %% "scala-xml" % "2.3.0" % Test
     )
   )

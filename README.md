@@ -529,9 +529,9 @@ If instead your Postgres type is an array of varchar or text, use the following 
 import com.augustnagro.magnum.pg.enums.PgStringToScalaEnumSqlArrayCodec
 ```
 
-#### Json & JsonB
+#### Json, JsonB, XML
 
-You can map `json` and `jsonb` columns to Scala classes by implementing `JsonDbCodec` and `JsonBDbCodec` (respectively).
+You can map `json`, `jsonb`, and `xml` columns to Scala classes by implementing `JsonDbCodec`, `JsonBDbCodec`, and `XmlDbCodec` (respectively).
 
 As an example, assume we have table `car`:
 
@@ -573,7 +573,7 @@ Next, we should extend `JsonDbCodec` to implement our own `PlayJsonDbCodec`:
 
 ```scala
 import com.augustnagro.magnum.pg.json.JsonDbCodec
-import import play.api.libs.json.*
+import play.api.libs.json.*
 
 trait PlayJsonDbCodec[A] extends JsonDbCodec[A]
 
@@ -594,6 +594,21 @@ object LastService:
 ```
 
 The `Car` example will now compile and work as expected.
+
+For XML, there a few options. If using a library that maps XML to case classes like [scalaxb](https://github.com/eed3si9n/scalaxb), we can follow the JSON pattern above, but using `XmlDbCodec`. If the case classes are generated sources, we can put the DbCodec givens in the entity companion object.
+
+Another pattern is to use a library like [scala-xml](https://github.com/scala/scala-xml) directly and encapsulate the NodeSeq. Then, we can define our DbCodec on the wrapper:
+
+```scala
+class LastService(val xml: Elem):
+  def mechanic: String = (xml \ "mechanic").head.text.trim
+  def date: LocalDate = LocalDate.parse((xml \ "date").head.text.trim)
+
+object LastService:
+  given DbCodec[LastService] = new XmlDbCodec[LastService]:
+    def encode(a: LastService): String = a.xml.toString
+    def decode(xml: String): LastService = LastService(XML.loadString(xml))
+```
 
 ### Logging SQL queries
 

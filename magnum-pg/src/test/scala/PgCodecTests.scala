@@ -78,7 +78,8 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
         List(Color.Green, Color.Green)
       ),
       lastService = Some(LastService("Bob", LocalDate.of(2024, 5, 4))),
-      myJsonB = Some(MyJsonB(Vector(1, 2, 3), "hello world"))
+      myJsonB = Some(MyJsonB(Vector(1, 2, 3), "hello world")),
+      myXml = Some(MyXml(<color>blue</color>))
     ),
     MagCar(
       id = 2,
@@ -88,7 +89,8 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
         List(Color.Green, Color.Blue)
       ),
       lastService = None,
-      myJsonB = None
+      myJsonB = None,
+      myXml = None
     )
   )
 
@@ -134,7 +136,8 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
           List(Color.RedOrange, Color.RedOrange)
         ),
         lastService = Some(LastService("James", LocalDate.of(1970, 4, 22))),
-        myJsonB = None
+        myJsonB = None,
+        myXml = None
       )
       carRepo.insert(c)
       val dbC = carRepo.findById(3L).get
@@ -156,6 +159,18 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
         .run()
       val newCar = carRepo.findById(2L).get
       assertEquals(newCar.textColorMap, newTextColorMap)
+
+  test("MagCar xml string values"):
+    connect(ds()):
+      val found =
+        sql"SELECT my_xml FROM mag_car"
+          .query[Option[MyXml]]
+          .run()
+          .flatten
+          .map(_.elem.toString)
+      val expected = allCars.flatMap(_.myXml).map(_.elem.toString)
+      println(found)
+      assertEquals(found, expected)
 
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
