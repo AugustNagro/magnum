@@ -469,7 +469,7 @@ This feature should be used sparingly and never with untrusted input.
 
 ### Postgres Module
 
-The Postgres Module adds support for [Geometric Types](https://www.postgresql.org/docs/current/datatype-geometric.html), [Arrays](https://www.postgresql.org/docs/current/arrays.html), and [Json/JsonB](https://www.postgresql.org/docs/current/datatype-json.html). Postgres Arrays can be decoded into Scala List/Vector/IArray, etc; multi-dimensionality is also supported.
+The Postgres Module adds support for [Geometric Types](https://www.postgresql.org/docs/current/datatype-geometric.html), [Arrays](https://www.postgresql.org/docs/current/arrays.html), [Json/JsonB](https://www.postgresql.org/docs/current/datatype-json.html), and [xml](https://www.postgresql.org/docs/current/datatype-xml.html). Postgres Arrays can be decoded into Scala List/Vector/IArray, etc; multi-dimensionality is also supported.
 
 ```
 "com.augustnagro" %% "magnumpg" % "1.2.1"
@@ -578,7 +578,6 @@ import play.api.libs.json.*
 trait PlayJsonDbCodec[A] extends JsonDbCodec[A]
 
 object PlayJsonDbCodec:
-
   def derived[A](using jsonCodec: OFormat[A]): PlayJsonDbCodec[A] = new:
     def encode(a: A): String = jsonCodec.writes(a).toString
     def decode(json: String): A = jsonCodec.reads(Json.parse(json)).get
