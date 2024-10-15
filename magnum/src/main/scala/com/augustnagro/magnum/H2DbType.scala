@@ -79,10 +79,16 @@ object H2DbType extends DbType:
       def findAll(using DbCon): Vector[E] = findAllQuery.run()
 
       def findAll(spec: Spec[E])(using DbCon): Vector[E] =
-        val f = spec.build
-        Frag(s"SELECT * FROM $tableNameSql ${f.sqlString}", f.params, f.writer)
-          .query[E]
-          .run()
+        if spec.prefix.isDefined then spec.query.run()
+        else
+          val f = spec.build
+          Frag(
+            s"SELECT * FROM $tableNameSql ${f.sqlString}",
+            f.params,
+            f.writer
+          )
+            .query[E]
+            .run()
 
       def findById(id: ID)(using DbCon): Option[E] =
         Frag(findByIdSql, IArray(id), idWriter(id))
