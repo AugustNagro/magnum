@@ -113,4 +113,13 @@ class SpecTests extends FunSuite:
       "WHERE (age > ?) AND (name < ?) ORDER BY age ASC NULLS LAST, name DESC NULLS LAST LIMIT 10"
     )
     assertEquals(spec.params, Vector(age, name))
+
+  test("spec with prefix"):
+    val age = 3
+    val frag = Spec[User](sql"SELECT * FROM user")
+      .where(sql"age > $age")
+      .build
+    assertEquals(frag.sqlString, "SELECT * FROM user WHERE (age > ?)")
+    assertEquals(frag.params, Vector(age))
+
 end SpecTests

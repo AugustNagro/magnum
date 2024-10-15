@@ -3,7 +3,9 @@ package com.augustnagro.magnum
 import java.sql.PreparedStatement
 import java.util.StringJoiner
 
+// todo PrefixSpec <: Spec ?
 class Spec[E] private (
+    private[magnum] val prefix: Option[Frag],
     predicates: List[Frag],
     limit: Option[Int],
     offset: Option[Int],
@@ -11,7 +13,7 @@ class Spec[E] private (
 ):
 
   def where(sql: Frag): Spec[E] =
-    new Spec(sql :: predicates, limit, offset, sorts)
+    new Spec(prefix, sql :: predicates, limit, offset, sorts)
 
   def orderBy(
       column: String,
@@ -19,13 +21,13 @@ class Spec[E] private (
       nullOrder: NullOrder = NullOrder.Last
   ): Spec[E] =
     val sort = Sort(column, direction, nullOrder)
-    new Spec(predicates, limit, offset, sort :: sorts)
+    new Spec(prefix, predicates, limit, offset, sort :: sorts)
 
   def limit(limit: Int): Spec[E] =
-    new Spec(predicates, Some(limit), offset, sorts)
+    new Spec(prefix, predicates, Some(limit), offset, sorts)
 
   def offset(offset: Int): Spec[E] =
-    new Spec(predicates, limit, Some(offset), sorts)
+    new Spec(prefix, predicates, limit, Some(offset), sorts)
 
   def seek[V](
       column: String,
@@ -43,11 +45,14 @@ class Spec[E] private (
           codec.writeSingle(value, ps, pos)
           pos + codec.cols.length
       )
-    new Spec(pred :: predicates, limit, offset, sort :: sorts)
+    new Spec(prefix, pred :: predicates, limit, offset, sort :: sorts)
 
   def build: Frag =
     val whereClause = StringJoiner(" AND ", "WHERE ", "").setEmptyValue("")
     val allParams = Vector.newBuilder[Any]
+
+    val prefixFrag = prefix.getOrElse(Frag(""))
+    allParams ++= prefixFrag.params
 
     val validFrags = predicates.reverse.filter(_.sqlString.nonEmpty)
     for frag <- validFrags do
@@ -59,6 +64,8 @@ class Spec[E] private (
       orderByClause.add(col + " " + dir.sql + " " + nullOrder.sql)
 
     val finalSj = StringJoiner(" ")
+    val prefixSql = prefixFrag.sqlString
+    if prefixSql.nonEmpty then finalSj.add(prefixSql)
     val whereClauseStr = whereClause.toString
     if whereClauseStr.nonEmpty then finalSj.add(whereClauseStr)
     val orderByClauseStr = orderByClause.toString
@@ -67,14 +74,25 @@ class Spec[E] private (
     for o <- offset do finalSj.add("OFFSET " + o)
 
     val fragWriter: FragWriter = (ps, startingPos) =>
-      validFrags.foldLeft(startingPos)((pos, frag) =>
+      (prefixFrag :: validFrags).foldLeft(startingPos)((pos, frag) =>
         pos + frag.writer.write(ps, pos)
       )
 
     Frag(finalSj.toString, allParams.result(), fragWriter)
   end build
+
+  def query(using DbCodec[E]): Query[E] =
+    build.query[E]
+
 end Spec
 
 object Spec:
   def apply[E]: Spec[E] =
-    new Spec(Nil, None, None, Nil)
+    new Spec(None, Nil, None, None, Nil)
+
+  /** Create a Spec with the desired prefix.
+    * @param prefix
+    *   a SQL fragment that ends before the WHERE clause.
+    */
+  def apply[E](prefix: Frag): Spec[E] =
+    new Spec(Some(prefix), Nil, None, None, Nil)
