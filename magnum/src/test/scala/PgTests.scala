@@ -453,6 +453,14 @@ class PgTests extends FunSuite, TestContainersFixtures:
         assertEquals(it.size, 8)
       )
 
+  test("embed Frag into Frag"):
+    def findPersonCnt(filter: Frag)(using DbCon): Int =
+      sql"SELECT count(*) FROM person WHERE $filter".query[Int].run().head
+    val isAdminFrag = sql"is_admin = true"
+    connect(ds()):
+      val johnCnt = findPersonCnt(sql"first_name = 'John' AND $isAdminFrag")
+      assertEquals(johnCnt, 2)
+
   @Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
   case class BigDec(id: Int, myBigDec: Option[BigDecimal]) derives DbCodec
 

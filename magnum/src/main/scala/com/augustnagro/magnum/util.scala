@@ -68,6 +68,7 @@ private def sqlImpl(sc: Expr[StringContext], args: Expr[Seq[Any]])(using
 
   val interpolatedVarargs = Varargs(argsExprs.map {
     case '{ $arg: SqlLiteral } => '{ $arg.queryRepr }
+    case '{ $arg: Frag }       => '{ $arg.sqlString }
     case '{ $arg: tp } =>
       val codecExpr = summonWriter[tp]
       '{ $codecExpr.queryRepr }
@@ -101,6 +102,15 @@ private def sqlWriter(
   argsExprs match
     case head +: tail =>
       head match
+        case '{ $arg: Frag } =>
+          '{
+            val i = $iExpr
+            val frag = $args(i).asInstanceOf[Frag]
+            val pos = $posExpr
+            val newPos = frag.writer.write($psExpr, pos)
+            val newI = i + 1
+            ${ sqlWriter(psExpr, '{ newPos }, args, tail, '{ newI }) }
+          }
         case '{ $arg: tp } =>
           val codecExpr = summonWriter[tp]
           '{
@@ -116,6 +126,7 @@ private def sqlWriter(
         case _ =>
           report.errorAndAbort("Args must be explicit", head)
     case Seq() => posExpr
+  end match
 end sqlWriter
 
 private def summonWriter[T: Type](using Quotes): Expr[DbCodec[T]] =
