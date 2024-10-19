@@ -392,7 +392,7 @@ class OracleTests extends FunSuite, TestContainersFixtures:
     OracleContainer
       .Def(dockerImageName =
         DockerImageName.parse(
-          "gvenzl/oracle-xe:21.3.0"
+          "gvenzl/oracle-free:23.5-faststart"
         )
       )
       .createContainer()

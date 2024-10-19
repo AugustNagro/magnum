@@ -390,7 +390,7 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
 
   val mySqlContainer = ForAllContainerFixture(
     MySQLContainer
-      .Def(dockerImageName = DockerImageName.parse("mysql:8.0.32"))
+      .Def(dockerImageName = DockerImageName.parse("mysql:8.4.3"))
       .createContainer()
   )
 
