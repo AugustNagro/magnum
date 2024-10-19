@@ -1,0 +1,59 @@
+name-template: '$RESOLVED_VERSION'
+tag-template: '$RESOLVED_VERSION'
+
+version-resolver:
+  major:
+    labels:
+      - 'major'
+  minor:
+    labels:
+      - 'minor'
+  patch:
+    labels:
+      - 'patch'
+  default: minor
+
+categories:
+  - title: 'Features'
+    label: 'enhancement'
+  - title: 'Bug Fixes'
+    label: 'bug'
+
+exclude-labels:
+  - 'skip'
+
+autolabeler:
+  - label: 'bug'
+    title:
+      - '/.*\[fix\].*/'
+  - label: 'patch'
+    title:
+      - '/.*\[fix\].*/'
+  - label: 'enhancement'
+    title:
+      - '/.*\[feat\].*/'
+  - label: 'minor'
+    title:
+      - '/.*\[feat\].*/'
+  - label: 'skip'
+    title:
+      - '/.*\[skip\].*/'
+  - label: 'major'
+    title:
+      - '/.*\[breaking\].*/'
+
+replacers:
+  - search: '/\[feat\]/g'
+    replace: ''
+  - search: '/\[fix\]/g'
+    replace: ''
+  - search: '/\[skip\]/g'
+    replace: ''
+  - search: '/\[breaking\]/g'
+    replace: ''
+
+template: |
+  # What's Changed
+
+  $CHANGES
+
