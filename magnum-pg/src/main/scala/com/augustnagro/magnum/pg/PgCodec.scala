@@ -263,3 +263,4 @@ object PgCodec:
       resultSet.getObject(pos, classOf[PGpolygon])
     def writeSingle(entity: PGpolygon, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
+end PgCodec

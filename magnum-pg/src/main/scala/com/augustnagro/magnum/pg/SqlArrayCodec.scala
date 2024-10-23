@@ -9,7 +9,7 @@ import scala.collection.mutable as m
 /** Typeclass for converting between raw JDBC Object arrays and type A */
 trait SqlArrayCodec[A]:
   def jdbcTypeName: String
-  
+
   /** Converts the raw JDBC array to an IArray[A] */
   def readArray(array: Object): Array[A]
 
@@ -174,3 +174,4 @@ object SqlArrayCodec:
       objArray.map(obj => m.Buffer.from(aCodec.readArray(obj)))
     def toArrayObj(entity: m.Buffer[A]): Object =
       entity.iterator.map(aCodec.toArrayObj).toArray
+end SqlArrayCodec
