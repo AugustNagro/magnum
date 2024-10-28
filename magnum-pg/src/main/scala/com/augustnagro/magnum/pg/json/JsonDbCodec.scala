@@ -17,7 +17,7 @@ trait JsonDbCodec[A] extends DbCodec[A]:
 
   override def readSingle(resultSet: ResultSet, pos: Int): A =
     val rawJson = resultSet.getString(pos)
-    if rawJson == null then null.asInstanceOf[A]
+    if rawJson eq null then null.asInstanceOf[A]
     else decode(rawJson)
 
   override def writeSingle(entity: A, ps: PreparedStatement, pos: Int): Unit =
