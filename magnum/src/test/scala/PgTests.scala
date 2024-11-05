@@ -65,6 +65,15 @@ class PgTests extends FunSuite, TestContainersFixtures:
         .where(sql"${car.topSpeed} > $topSpeed")
       assertEquals(carRepo.findAll(spec), Vector(allCars(1)))
 
+  test("findAll spec with multiple conditions"):
+    connect(ds()):
+      val topSpeed = 211
+      val model = "Ferrari F8 Tributo"
+      val spec = Spec[Car]
+        .where(sql"${car.topSpeed} > $topSpeed")
+        .where(sql"${car.model} = $model")
+      assertEquals(carRepo.findAll(spec), Vector(allCars(1)))
+
   test("findById"):
     connect(ds()):
       assertEquals(carRepo.findById(3L).get, allCars.last)
