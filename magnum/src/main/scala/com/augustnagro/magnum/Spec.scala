@@ -16,7 +16,7 @@ class Spec[E] private (
   def orderBy(
       column: String,
       direction: SortOrder = SortOrder.Asc,
-      nullOrder: NullOrder = NullOrder.Last
+      nullOrder: NullOrder = NullOrder.Empty
   ): Spec[E] =
     val sort = Sort(column, direction, nullOrder)
     new Spec(predicates, limit, offset, sort :: sorts)
