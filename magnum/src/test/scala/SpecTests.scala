@@ -104,7 +104,7 @@ class SpecTests extends FunSuite:
     val spec = Spec[User]
       .where(idOpt.map(id => sql"id = $id").getOrElse(sql""))
       .where(sql"age > $age")
-      .orderBy("age")
+      .orderBy("age", SortOrder.Asc, NullOrder.Last)
       .limit(10)
       .seek("name", SeekDir.Lt, name, SortOrder.Desc)
       .build

@@ -24,3 +24,7 @@ hs_err_pid*
 
 *.sc
 *.db
+
+*metals*
+.bloop
+.vscode

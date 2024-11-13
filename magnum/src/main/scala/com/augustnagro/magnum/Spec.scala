@@ -16,7 +16,7 @@ class Spec[E] private (
   def orderBy(
       column: String,
       direction: SortOrder = SortOrder.Asc,
-      nullOrder: NullOrder = NullOrder.Last
+      nullOrder: NullOrder = NullOrder.Empty
   ): Spec[E] =
     val sort = Sort(column, direction, nullOrder)
     new Spec(predicates, limit, offset, sort :: sorts)
@@ -68,7 +68,7 @@ class Spec[E] private (
 
     val fragWriter: FragWriter = (ps, startingPos) =>
       validFrags.foldLeft(startingPos)((pos, frag) =>
-        pos + frag.writer.write(ps, pos)
+        frag.writer.write(ps, pos)
       )
 
     Frag(finalSj.toString, allParams.result(), fragWriter)
