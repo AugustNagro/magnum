@@ -39,8 +39,10 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       pnt = PGpoint(1, 1),
       poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, 1), PGpoint(1, 1))),
       colors = List(Color.RedOrange, Color.Green),
-      colorMap =
-        List(Vector(Color.RedOrange, Color.RedOrange), Vector(Color.Green, Color.Green)),
+      colorMap = List(
+        Vector(Color.RedOrange, Color.RedOrange),
+        Vector(Color.Green, Color.Green)
+      ),
     ),
     MagUser(
       id = 2L,
@@ -58,8 +60,10 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       pnt = PGpoint(2, 2),
       poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, -1), PGpoint(1, -1))),
       colors = List(Color.Green, Color.Blue),
-      colorMap =
-        List(Vector(Color.RedOrange, Color.Green), Vector(Color.Green, Color.Blue))
+      colorMap = List(
+        Vector(Color.RedOrange, Color.Green),
+        Vector(Color.Green, Color.Blue)
+      )
     )
   )
 
@@ -69,14 +73,18 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
     MagCar(
       id = 1,
       textColors = Seq(Color.RedOrange, Color.Green),
-      textColorMap =
-        Vector(List(Color.RedOrange, Color.RedOrange), List(Color.Green, Color.Green))
+      textColorMap = Vector(
+        List(Color.RedOrange, Color.RedOrange),
+        List(Color.Green, Color.Green)
+      )
     ),
     MagCar(
       id = 2,
       textColors = Seq(Color.Green, Color.Blue),
-      textColorMap =
-        Vector(List(Color.RedOrange, Color.Green), List(Color.Green, Color.Blue))
+      textColorMap = Vector(
+        List(Color.RedOrange, Color.Green),
+        List(Color.Green, Color.Blue)
+      )
     )
   )
 
@@ -117,8 +125,10 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       val c = MagCar(
         id = 3L,
         textColors = Vector(Color.RedOrange, Color.RedOrange),
-        textColorMap =
-          Vector(List(Color.RedOrange, Color.RedOrange), List(Color.RedOrange, Color.RedOrange))
+        textColorMap = Vector(
+          List(Color.RedOrange, Color.RedOrange),
+          List(Color.RedOrange, Color.RedOrange)
+        )
       )
       carRepo.insert(c)
       val dbC = carRepo.findById(3L).get

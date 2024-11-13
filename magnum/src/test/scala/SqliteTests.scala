@@ -410,6 +410,19 @@ class SqliteTests extends FunSuite:
       assertEquals(rowsUpdated, 1)
       assertEquals(personRepo.findById(p.id).get.isAdmin, true)
 
+  test("embed Frag into Frag"):
+    def findPersonCnt(filter: Frag, limit: Long = 1)(using DbCon): Int =
+      val offsetFrag = sql"OFFSET 0"
+      val limitFrag = sql"LIMIT $limit"
+      sql"SELECT count(*) FROM person WHERE $filter $limitFrag $offsetFrag"
+        .query[Int]
+        .run()
+        .head
+    val isAdminFrag = sql"is_admin = true"
+    connect(ds()):
+      val johnCnt = findPersonCnt(sql"$isAdminFrag AND first_name = 'John'", 2)
+      assertEquals(johnCnt, 2)
+
   lazy val sqliteDbPath = Files.createTempFile(null, ".db").toAbsolutePath
 
   def ds(): DataSource =

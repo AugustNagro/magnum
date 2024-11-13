@@ -7,8 +7,8 @@ class EffectiveSubsetTests extends FunSuite:
     case class PersonCreator(first: String, last: String)
     case class Person(id: Long, last: String) derives DbCodec
     compileErrors("DbSchema[PersonCreator, Person, Long]")
-    
+
   test("Repo macro error if EC not an effective subset of E"):
     case class PersonCreator(first: String, last: String)
-    case class Person(id: Long, last: String)derives DbCodec
+    case class Person(id: Long, last: String) derives DbCodec
     compileErrors("Repo[PersonCreator, Person, Long]")
