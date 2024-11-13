@@ -19,7 +19,7 @@ Yet another database client for Scala. No dependencies, high productivity.
   * [`DbCodec`: Typeclass for JDBC reading & writing](#dbcodec-typeclass-for-jdbc-reading--writing)
   * [Future-Proof Queries](#future-proof-queries)
   * [Splicing Literal Values into Frags](#splicing-literal-values-into-frags)
-  * [Postgres Module](/PG-MODULE.md)
+  * [Postgres Module](#postgres-module)
   * [Logging](#logging-sql-queries)
 * [Motivation](#motivation)
 * [Feature List And Database Support](#feature-list)
@@ -466,6 +466,68 @@ sql"select * from $table"
 ```
 
 This feature should be used sparingly and never with untrusted input. 
+
+### Postgres Module
+
+The Postgres Module adds support for [Geometric Types](https://www.postgresql.org/docs/current/datatype-geometric.html) and [Arrays](https://www.postgresql.org/docs/current/arrays.html). Postgres Arrays can be decoded into Scala List/Vector/IArray, etc; multi-dimensionality is also supported.
+
+```
+"com.augustnagro" %% "magnumpg" % "1.3.0"
+```
+
+Example: Insert into a table with a `point[]` type column.
+
+With table:
+
+```sql
+create table my_geo (
+  id bigint primary key,
+  pnts point[] not null
+);
+```
+
+```scala
+import org.postgresql.geometric.*
+import com.augustnagro.magnum.*
+import com.augustnagro.magnum.pg.PgCodec.given
+
+@Table(PostgresDbType)
+case class MyGeo(@Id id: Long, pnts: IArray[PGpoint]) derives DbCodec
+
+val dataSource: javax.sql.DataSource = ???
+val xa = Transactor(dataSource)
+
+val myGeoRepo = Repo[MyGeo, MyGeo, Long]
+
+transact(xa):
+  myGeoRepo.insert(MyGeo(1L, IArray(PGpoint(1, 1), PGPoint(2, 2))))
+```
+
+The import of `PgCodec.given` is required to bring Geo/Array DbCodecs into scope.
+
+#### Arrays of Enums
+
+The `pg` module supports arrays of simple (non-ADT) enums.
+
+If you want to map an array of [Postgres enums](https://www.postgresql.org/docs/current/datatype-enum.html) to a sequence of Scala enums, use the following import when deriving the DbCodec:
+
+```scala
+import com.augustnagro.magnum.pg.PgCodec.given
+import com.augustnagro.magnum.pg.enums.PgEnumToScalaEnumSqlArrayCodec
+
+// in postgres: `create type Color as enum ('Red', 'Green', 'Blue');`
+enum Color derives DbCodec:
+  case Red, Green, Blue
+
+@Table(PostgresDbType)
+case class Car(@Id id: Long, colors: Vector[Color]) derives DbCodec
+```
+
+If instead your Postgres type is an array of varchar or text, use the following import:
+
+```scala
+import com.augustnagro.magnum.pg.enums.PgStringToScalaEnumSqlArrayCodec
+```
 
 ### Logging SQL queries
 
