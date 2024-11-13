@@ -1,6 +1,10 @@
 import com.augustnagro.magnum.*
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
-import com.dimafeng.testcontainers.{ContainerDef, JdbcDatabaseContainer, MySQLContainer}
+import com.dimafeng.testcontainers.{
+  ContainerDef,
+  JdbcDatabaseContainer,
+  MySQLContainer
+}
 import com.mysql.cj.jdbc.MysqlDataSource
 import munit.{AnyFixture, FunSuite, Location, TestOptions}
 import org.testcontainers.utility.DockerImageName
@@ -390,7 +394,7 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
 
   val mySqlContainer = ForAllContainerFixture(
     MySQLContainer
-      .Def(dockerImageName = DockerImageName.parse("mysql:8.4.3"))
+      .Def(dockerImageName = DockerImageName.parse("mysql:8.0.32"))
       .createContainer()
   )
 
