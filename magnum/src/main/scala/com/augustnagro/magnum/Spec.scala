@@ -68,7 +68,7 @@ class Spec[E] private (
 
     val fragWriter: FragWriter = (ps, startingPos) =>
       validFrags.foldLeft(startingPos)((pos, frag) =>
-        pos + frag.writer.write(ps, pos)
+        frag.writer.write(ps, pos)
       )
 
     Frag(finalSj.toString, allParams.result(), fragWriter)
