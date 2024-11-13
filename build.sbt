@@ -34,6 +34,7 @@ ThisBuild / publishTo := {
 ThisBuild / publish / skip := true
 
 val testcontainersVersion = "0.40.12"
+val circeVersion = "0.14.10"
 
 lazy val root = project
   .in(file("."))
@@ -71,7 +72,8 @@ lazy val magnumPg = project
       "org.scalameta" %% "munit" % "0.7.29" % Test,
       "com.dimafeng" %% "testcontainers-scala-munit" % testcontainersVersion % Test,
       "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion % Test,
-      "org.playframework" %% "play-json" % "3.0.4" % Test,
+      "io.circe" %% "circe-core" % circeVersion % Test,
+      "io.circe" %% "circe-parser" % circeVersion % Test,
       "org.scala-lang.modules" %% "scala-xml" % "2.3.0" % Test
     )
   )

@@ -1,10 +1,7 @@
 import com.augustnagro.magnum.pg.json.JsonDbCodec
-import play.api.libs.json.{Json, OFormat}
 
+import io.circe.Codec
 import java.time.LocalDate
 
 case class LastService(mechanic: String, date: LocalDate)
-    derives PlayJsonDbCodec
-
-object LastService:
-  given jsonCodec: OFormat[LastService] = Json.format[LastService]
+    derives Codec.AsObject, CirceJsonDbCodec
