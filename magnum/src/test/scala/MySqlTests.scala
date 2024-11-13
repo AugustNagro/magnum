@@ -61,6 +61,14 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
         .where(sql"${car.topSpeed} > $topSpeed")
       assertEquals(carRepo.findAll(spec), Vector(allCars(1)))
 
+  test("findAll spec with ordering"):
+    connect(ds()):
+      val topSpeed = 211
+      val spec = Spec[Car]
+        .where(sql"${car.topSpeed} > $topSpeed")
+        .orderBy(s"id", SortOrder.Asc)
+      assertEquals(carRepo.findAll(spec), Vector(allCars(1)))
+
   test("findById"):
     connect(ds()):
       assertEquals(carRepo.findById(3L).get, allCars.last)
