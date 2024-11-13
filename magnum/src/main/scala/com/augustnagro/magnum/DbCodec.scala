@@ -481,7 +481,6 @@ object DbCodec:
           val iArrays: Seq[IArray[Int]] = ${ Expr.ofSeq(res) }
           IArray.concat(iArrays*)
         }
-  end buildColsExpr
 
   private def productReadSingle[E: Type, Mets: Type](
       rs: Expr[ResultSet],

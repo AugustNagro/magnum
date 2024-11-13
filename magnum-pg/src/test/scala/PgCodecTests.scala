@@ -42,7 +42,7 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       colorMap = List(
         Vector(Color.RedOrange, Color.RedOrange),
         Vector(Color.Green, Color.Green)
-      ),
+      )
     ),
     MagUser(
       id = 2L,
