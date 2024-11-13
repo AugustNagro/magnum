@@ -29,7 +29,7 @@ Yet another database client for Scala. No dependencies, high productivity.
 ## Installing
 
 ```
-"com.augustnagro" %% "magnum" % "1.2.1"
+"com.augustnagro" %% "magnum" % "1.3.0"
 ```
 
 Magnum requires Scala >= 3.3.0

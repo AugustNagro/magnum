@@ -3,7 +3,7 @@
 The Postgres Module adds support for [Geometric Types](https://www.postgresql.org/docs/current/datatype-geometric.html), [Arrays](https://www.postgresql.org/docs/current/arrays.html), [Json/JsonB](https://www.postgresql.org/docs/current/datatype-json.html), and [xml](https://www.postgresql.org/docs/current/datatype-xml.html). Postgres Arrays can be decoded into Scala List/Vector/IArray, etc; multi-dimensionality is also supported.
 
 ```
-"com.augustnagro" %% "magnumpg" % "1.2.1"
+"com.augustnagro" %% "magnumpg" % "1.3.0"
 ```
 
 Example: Insert into a table with a `point[]` type column.

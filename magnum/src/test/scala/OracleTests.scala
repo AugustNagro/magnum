@@ -2,7 +2,7 @@ import com.augustnagro.magnum.*
 import com.augustnagro.magnum.UUIDCodec.VarCharUUIDCodec
 import com.dimafeng.testcontainers.OracleContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
-import munit.FunSuite
+import munit.{AnyFixture, FunSuite}
 import org.testcontainers.utility.DockerImageName
 import oracle.jdbc.datasource.impl.OracleDataSource
 
@@ -388,6 +388,19 @@ class OracleTests extends FunSuite, TestContainersFixtures:
       assertEquals(rowsUpdated, 1)
       assertEquals(personRepo.findById(p.id).get.isAdmin, "Y")
 
+  test("embed Frag into Frag"):
+    def findPersonCnt(filter: Frag, limit: Long = 1)(using DbCon): Int =
+      val offsetFrag = sql"OFFSET 0 ROWS"
+      val limitFrag = sql"FETCH NEXT $limit ROWS ONLY"
+      sql"SELECT count(*) FROM person WHERE $filter $offsetFrag $limitFrag"
+        .query[Int]
+        .run()
+        .head
+    val isAdminFrag = sql"is_admin = 'Y'"
+    connect(ds()):
+      val johnCnt = findPersonCnt(sql"$isAdminFrag AND first_name = 'John'", 2)
+      assertEquals(johnCnt, 2)
+
   val oracleContainer = ForAllContainerFixture(
     OracleContainer
       .Def(dockerImageName =
@@ -398,7 +411,7 @@ class OracleTests extends FunSuite, TestContainersFixtures:
       .createContainer()
   )
 
-  override def munitFixtures: Seq[Fixture[_]] =
+  override def munitFixtures: Seq[AnyFixture[_]] =
     super.munitFixtures :+ oracleContainer
 
   def ds(): DataSource =

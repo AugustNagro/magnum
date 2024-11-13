@@ -26,8 +26,7 @@ class TableInfo[EC, E, ID](
     val queryRepr: String,
     private[magnum] val table: String,
     private[magnum] val eClassName: String
-) extends Selectable,
-      SqlLiteral:
+) extends Selectable, SqlLiteral:
 
   def selectDynamic(scalaName: String): ColumnName =
     all.columnNames.find(_.scalaName == scalaName).get

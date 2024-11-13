@@ -5,7 +5,7 @@ import com.dimafeng.testcontainers.{
   JdbcDatabaseContainer,
   PostgreSQLContainer
 }
-import munit.{FunSuite, Location, TestOptions}
+import munit.{AnyFixture, FunSuite, Location, TestOptions}
 import org.postgresql.ds.PGSimpleDataSource
 import org.testcontainers.utility.DockerImageName
 
@@ -63,6 +63,15 @@ class PgTests extends FunSuite, TestContainersFixtures:
       val topSpeed = 211
       val spec = Spec[Car]
         .where(sql"${car.topSpeed} > $topSpeed")
+      assertEquals(carRepo.findAll(spec), Vector(allCars(1)))
+
+  test("findAll spec with multiple conditions"):
+    connect(ds()):
+      val topSpeed = 211
+      val model = "Ferrari F8 Tributo"
+      val spec = Spec[Car]
+        .where(sql"${car.topSpeed} > $topSpeed")
+        .where(sql"${car.model} = $model")
       assertEquals(carRepo.findAll(spec), Vector(allCars(1)))
 
   test("findById"):
@@ -453,6 +462,19 @@ class PgTests extends FunSuite, TestContainersFixtures:
         assertEquals(it.size, 8)
       )
 
+  test("embed Frag into Frag"):
+    def findPersonCnt(filter: Frag, limit: Long = 1)(using DbCon): Int =
+      val offsetFrag = sql"OFFSET 0"
+      val limitFrag = sql"LIMIT $limit"
+      sql"SELECT count(*) FROM person WHERE $filter $limitFrag $offsetFrag"
+        .query[Int]
+        .run()
+        .head
+    val isAdminFrag = sql"is_admin = true"
+    connect(ds()):
+      val johnCnt = findPersonCnt(sql"$isAdminFrag AND first_name = 'John'", 2)
+      assertEquals(johnCnt, 2)
+
   @Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
   case class BigDec(id: Int, myBigDec: Option[BigDecimal]) derives DbCodec
 
@@ -467,7 +489,7 @@ class PgTests extends FunSuite, TestContainersFixtures:
 
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
-      .Def(dockerImageName = DockerImageName.parse("postgres:15.2"))
+      .Def(dockerImageName = DockerImageName.parse("postgres:17.0"))
       .createContainer()
   )
 
@@ -486,7 +508,7 @@ class PgTests extends FunSuite, TestContainersFixtures:
       noIdRepo.insert(entity)
       assert(noIdRepo.findAll.exists(_.userName == "Dan"))
 
-  override def munitFixtures: Seq[Fixture[_]] =
+  override def munitFixtures: Seq[AnyFixture[_]] =
     super.munitFixtures :+ pgContainer
 
   def ds(): DataSource =

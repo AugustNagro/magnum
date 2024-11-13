@@ -6,7 +6,7 @@ import com.dimafeng.testcontainers.{
   MySQLContainer
 }
 import com.mysql.cj.jdbc.MysqlDataSource
-import munit.{FunSuite, Location, TestOptions}
+import munit.{AnyFixture, FunSuite, Location, TestOptions}
 import org.testcontainers.utility.DockerImageName
 
 import java.nio.file.{Files, Path}
@@ -59,6 +59,14 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
       val topSpeed = 211
       val spec = Spec[Car]
         .where(sql"${car.topSpeed} > $topSpeed")
+      assertEquals(carRepo.findAll(spec), Vector(allCars(1)))
+
+  test("findAll spec with ordering"):
+    connect(ds()):
+      val topSpeed = 211
+      val spec = Spec[Car]
+        .where(sql"${car.topSpeed} > $topSpeed")
+        .orderBy(s"id", SortOrder.Asc)
       assertEquals(carRepo.findAll(spec), Vector(allCars(1)))
 
   test("findById"):
@@ -392,13 +400,26 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
       assertEquals(rowsUpdated, 1)
       assertEquals(personRepo.findById(p.id).get.isAdmin, true)
 
+  test("embed Frag into Frag"):
+    def findPersonCnt(filter: Frag, limit: Long = 1)(using DbCon): Int =
+      val offsetFrag = sql"OFFSET 0"
+      val limitFrag = sql"LIMIT $limit"
+      sql"SELECT count(*) FROM person WHERE $filter $limitFrag $offsetFrag"
+        .query[Int]
+        .run()
+        .head
+    val isAdminFrag = sql"is_admin = true"
+    connect(ds()):
+      val johnCnt = findPersonCnt(sql"$isAdminFrag AND first_name = 'John'", 2)
+      assertEquals(johnCnt, 2)
+
   val mySqlContainer = ForAllContainerFixture(
     MySQLContainer
       .Def(dockerImageName = DockerImageName.parse("mysql:8.0.32"))
       .createContainer()
   )
 
-  override def munitFixtures: Seq[Fixture[_]] =
+  override def munitFixtures: Seq[AnyFixture[_]] =
     super.munitFixtures :+ mySqlContainer
 
   def ds(): DataSource =

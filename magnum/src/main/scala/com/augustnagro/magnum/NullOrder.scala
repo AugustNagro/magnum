@@ -9,3 +9,6 @@ object NullOrder:
 
   object Last extends NullOrder:
     def sql: String = "NULLS LAST"
+
+  object Empty extends NullOrder:
+    def sql: String = ""
