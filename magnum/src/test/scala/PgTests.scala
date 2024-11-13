@@ -5,7 +5,7 @@ import com.dimafeng.testcontainers.{
   JdbcDatabaseContainer,
   PostgreSQLContainer
 }
-import munit.{FunSuite, Location, TestOptions}
+import munit.{AnyFixture, FunSuite, Location, TestOptions}
 import org.postgresql.ds.PGSimpleDataSource
 import org.testcontainers.utility.DockerImageName
 
@@ -489,7 +489,7 @@ class PgTests extends FunSuite, TestContainersFixtures:
 
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
-      .Def(dockerImageName = DockerImageName.parse("postgres:15.2"))
+      .Def(dockerImageName = DockerImageName.parse("postgres:17.0"))
       .createContainer()
   )
 
@@ -508,7 +508,7 @@ class PgTests extends FunSuite, TestContainersFixtures:
       noIdRepo.insert(entity)
       assert(noIdRepo.findAll.exists(_.userName == "Dan"))
 
-  override def munitFixtures: Seq[Fixture[_]] =
+  override def munitFixtures: Seq[AnyFixture[_]] =
     super.munitFixtures :+ pgContainer
 
   def ds(): DataSource =

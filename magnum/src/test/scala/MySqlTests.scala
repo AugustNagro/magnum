@@ -6,7 +6,7 @@ import com.dimafeng.testcontainers.{
   MySQLContainer
 }
 import com.mysql.cj.jdbc.MysqlDataSource
-import munit.{FunSuite, Location, TestOptions}
+import munit.{AnyFixture, FunSuite, Location, TestOptions}
 import org.testcontainers.utility.DockerImageName
 
 import java.nio.file.{Files, Path}
@@ -419,7 +419,7 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
       .createContainer()
   )
 
-  override def munitFixtures: Seq[Fixture[_]] =
+  override def munitFixtures: Seq[AnyFixture[_]] =
     super.munitFixtures :+ mySqlContainer
 
   def ds(): DataSource =

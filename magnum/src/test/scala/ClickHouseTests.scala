@@ -5,7 +5,7 @@ import com.dimafeng.testcontainers.{
   ContainerDef,
   JdbcDatabaseContainer
 }
-import munit.{FunSuite, Location, TestOptions}
+import munit.{AnyFixture, FunSuite, Location, TestOptions}
 import com.clickhouse.jdbc.ClickHouseDataSource
 import org.testcontainers.utility.DockerImageName
 
@@ -393,7 +393,7 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
   val clickHouseContainer = ForAllContainerFixture(
     ClickHouseContainer
       .Def(dockerImageName =
-        DockerImageName.parse("clickhouse/clickhouse-server:23.2.2.20")
+        DockerImageName.parse("clickhouse/clickhouse-server:24.3.12.75")
       )
       .createContainer()
   )
@@ -411,7 +411,7 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
       val johnCnt = findPersonCnt(sql"$isAdminFrag AND first_name = 'John'", 2)
       assertEquals(johnCnt, 2)
 
-  override def munitFixtures: Seq[Fixture[_]] =
+  override def munitFixtures: Seq[AnyFixture[_]] =
     super.munitFixtures :+ clickHouseContainer
 
   def ds(): DataSource =

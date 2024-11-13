@@ -1,6 +1,6 @@
 import com.dimafeng.testcontainers.PostgreSQLContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
-import munit.FunSuite
+import munit.{AnyFixture, FunSuite}
 import org.testcontainers.utility.DockerImageName
 import org.postgresql.ds.PGSimpleDataSource
 import org.postgresql.geometric.*
@@ -153,11 +153,11 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
 
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
-      .Def(dockerImageName = DockerImageName.parse("postgres:15.2"))
+      .Def(dockerImageName = DockerImageName.parse("postgres:17.0"))
       .createContainer()
   )
 
-  override def munitFixtures: Seq[Fixture[_]] =
+  override def munitFixtures: Seq[AnyFixture[_]] =
     super.munitFixtures :+ pgContainer
 
   def ds(): DataSource =

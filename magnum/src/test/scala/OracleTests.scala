@@ -2,7 +2,7 @@ import com.augustnagro.magnum.*
 import com.augustnagro.magnum.UUIDCodec.VarCharUUIDCodec
 import com.dimafeng.testcontainers.OracleContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
-import munit.FunSuite
+import munit.{AnyFixture, FunSuite}
 import org.testcontainers.utility.DockerImageName
 import oracle.jdbc.datasource.impl.OracleDataSource
 
@@ -411,7 +411,7 @@ class OracleTests extends FunSuite, TestContainersFixtures:
       .createContainer()
   )
 
-  override def munitFixtures: Seq[Fixture[_]] =
+  override def munitFixtures: Seq[AnyFixture[_]] =
     super.munitFixtures :+ oracleContainer
 
   def ds(): DataSource =
