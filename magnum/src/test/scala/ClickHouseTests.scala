@@ -1,6 +1,10 @@
 import com.augustnagro.magnum.*
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
-import com.dimafeng.testcontainers.{ClickHouseContainer, ContainerDef, JdbcDatabaseContainer}
+import com.dimafeng.testcontainers.{
+  ClickHouseContainer,
+  ContainerDef,
+  JdbcDatabaseContainer
+}
 import munit.{AnyFixture, FunSuite, Location, TestOptions}
 import com.clickhouse.jdbc.ClickHouseDataSource
 import org.testcontainers.utility.DockerImageName
