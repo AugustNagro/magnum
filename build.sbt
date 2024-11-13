@@ -4,9 +4,12 @@ ThisBuild / versionScheme := Some("early-semver")
 ThisBuild / scalaVersion := "3.3.4"
 ThisBuild / scalacOptions ++= Seq("-deprecation")
 ThisBuild / homepage := Some(url("https://github.com/AugustNagro/magnum"))
-ThisBuild / licenses += ("Apache-2.0", url(
-  "https://opensource.org/licenses/Apache-2.0"
-))
+ThisBuild / licenses += (
+  "Apache-2.0",
+  url(
+    "https://opensource.org/licenses/Apache-2.0"
+  )
+)
 ThisBuild / scmInfo := Some(
   ScmInfo(
     url("https://github.com/AugustNagro/magnum"),
@@ -55,7 +58,7 @@ lazy val magnum = project
       "com.mysql" % "mysql-connector-j" % "9.0.0" % Test,
       "com.h2database" % "h2" % "2.3.232" % Test,
       "com.dimafeng" %% "testcontainers-scala-oracle-xe" % testcontainersVersion % Test,
-      "com.oracle.database.jdbc" % "ojdbc11" % "23.5.0.24.07" % Test,
+      "com.oracle.database.jdbc" % "ojdbc11" % "21.9.0.0" % Test,
       "com.dimafeng" %% "testcontainers-scala-clickhouse" % testcontainersVersion % Test,
       "com.clickhouse" % "clickhouse-jdbc" % "0.6.0" % Test classifier "http",
       "org.xerial" % "sqlite-jdbc" % "3.46.1.3" % Test
