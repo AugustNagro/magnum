@@ -1,12 +1,13 @@
 ThisBuild / organization := "com.augustnagro"
-ThisBuild / version := "1.3.1-SNAPSHOT"
+ThisBuild / version := "1.3.1"
 ThisBuild / versionScheme := Some("early-semver")
 ThisBuild / scalaVersion := "3.3.0"
 ThisBuild / scalacOptions ++= Seq("-deprecation")
 ThisBuild / homepage := Some(url("https://github.com/AugustNagro/magnum"))
-ThisBuild / licenses += ("Apache-2.0", url(
-  "https://opensource.org/licenses/Apache-2.0"
-))
+ThisBuild / licenses += (
+  "Apache-2.0",
+  url("https://opensource.org/licenses/Apache-2.0")
+)
 ThisBuild / scmInfo := Some(
   ScmInfo(
     url("https://github.com/AugustNagro/magnum"),
