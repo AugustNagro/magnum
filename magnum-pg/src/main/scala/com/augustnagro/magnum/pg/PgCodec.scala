@@ -15,7 +15,7 @@ import org.postgresql.util.PGInterval
 import java.sql
 import java.sql.{JDBCType, PreparedStatement, ResultSet, Types}
 import scala.reflect.ClassTag
-import scala.collection.mutable as m
+import scala.collection.{mutable as m}
 import scala.compiletime.*
 
 object PgCodec:
@@ -64,6 +64,15 @@ object PgCodec:
         val arr = aArrayCodec.readArray(jdbcArray.getArray)
         IArray.unsafeFromArray(arr)
       finally jdbcArray.free()
+    def readSingleOption(resultSet: ResultSet, pos: Int): Option[IArray[A]] =
+      val jdbcArray = resultSet.getArray(pos)
+      if resultSet.wasNull then None
+      else
+        try
+          val arr = aArrayCodec.readArray(jdbcArray.getArray)
+          Some(IArray.unsafeFromArray(arr))
+        finally jdbcArray.free()
+
     def writeSingle(entity: IArray[A], ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
@@ -81,6 +90,14 @@ object PgCodec:
         val arr = aArrayCodec.readArray(jdbcArray.getArray)
         IArray.unsafeFromArray(arr)
       finally jdbcArray.free()
+    def readSingleOption(resultSet: ResultSet, pos: Int): Option[IArray[A]] =
+      val jdbcArray = resultSet.getArray(pos)
+      if resultSet.wasNull then None
+      else
+        try
+          val arr = aArrayCodec.readArray(jdbcArray.getArray)
+          Some(IArray.unsafeFromArray(arr))
+        finally jdbcArray.free()
     def writeSingle(entity: IArray[A], ps: PreparedStatement, pos: Int): Unit =
       val arr = entity.iterator.map(aArrayCodec.toArrayObj).toArray
       val jdbcArr =
@@ -99,6 +116,12 @@ object PgCodec:
       val jdbcArray = resultSet.getArray(pos)
       try aArrayCodec.readArray(jdbcArray.getArray)
       finally jdbcArray.free()
+    def readSingleOption(resultSet: ResultSet, pos: Int): Option[Array[A]] =
+      val jdbcArray = resultSet.getArray(pos)
+      if resultSet.wasNull then None
+      else
+        try Some(aArrayCodec.readArray(jdbcArray.getArray))
+        finally jdbcArray.free()
     def writeSingle(entity: Array[A], ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
@@ -114,6 +137,12 @@ object PgCodec:
       val jdbcArray = resultSet.getArray(pos)
       try aArrayCodec.readArray(jdbcArray.getArray)
       finally jdbcArray.free()
+    def readSingleOption(resultSet: ResultSet, pos: Int): Option[Array[A]] =
+      val jdbcArray = resultSet.getArray(pos)
+      if resultSet.wasNull then None
+      else
+        try Some(aArrayCodec.readArray(jdbcArray.getArray))
+        finally jdbcArray.free()
     def writeSingle(entity: Array[A], ps: PreparedStatement, pos: Int): Unit =
       val arr = entity.iterator.map(aArrayCodec.toArrayObj).toArray
       val jdbcArr =
@@ -133,6 +162,14 @@ object PgCodec:
         val arr = aArrayCodec.readArray(jdbcArray.getArray)
         List.from(arr)
       finally jdbcArray.free()
+    def readSingleOption(resultSet: ResultSet, pos: Int): Option[Seq[A]] =
+      val jdbcArray = resultSet.getArray(pos)
+      if resultSet.wasNull then None
+      else
+        try
+          val arr = aArrayCodec.readArray(jdbcArray.getArray)
+          Some(List.from(arr))
+        finally jdbcArray.free()
     def writeSingle(entity: Seq[A], ps: PreparedStatement, pos: Int): Unit =
       val arr = entity.iterator.map(aArrayCodec.toArrayObj).toArray
       val jdbcArr =
@@ -152,6 +189,14 @@ object PgCodec:
         val arr = aArrayCodec.readArray(jdbcArray.getArray)
         List.from(arr)
       finally jdbcArray.free()
+    def readSingleOption(resultSet: ResultSet, pos: Int): Option[List[A]] =
+      val jdbcArray = resultSet.getArray(pos)
+      if resultSet.wasNull then None
+      else
+        try
+          val arr = aArrayCodec.readArray(jdbcArray.getArray)
+          Some(List.from(arr))
+        finally jdbcArray.free()
     def writeSingle(entity: List[A], ps: PreparedStatement, pos: Int): Unit =
       val arr = entity.iterator.map(aArrayCodec.toArrayObj).toArray
       val jdbcArr =
@@ -171,6 +216,14 @@ object PgCodec:
         val arr = aArrayCodec.readArray(jdbcArray.getArray)
         Vector.from(arr)
       finally jdbcArray.free()
+    def readSingleOption(resultSet: ResultSet, pos: Int): Option[Vector[A]] =
+      val jdbcArray = resultSet.getArray(pos)
+      if resultSet.wasNull then None
+      else
+        try
+          val arr = aArrayCodec.readArray(jdbcArray.getArray)
+          Some(Vector.from(arr))
+        finally jdbcArray.free()
     def writeSingle(entity: Vector[A], ps: PreparedStatement, pos: Int): Unit =
       val arr = entity.iterator.map(aArrayCodec.toArrayObj).toArray
       val jdbcArr =
@@ -191,6 +244,14 @@ object PgCodec:
         val arr = aArrayCodec.readArray(jdbcArray.getArray)
         m.Buffer.from(arr)
       finally jdbcArray.free()
+    def readSingleOption(resultSet: ResultSet, pos: Int): Option[m.Buffer[A]] =
+      val jdbcArray = resultSet.getArray(pos)
+      if resultSet.wasNull then None
+      else
+        try
+          val arr = aArrayCodec.readArray(jdbcArray.getArray)
+          Some(m.Buffer.from(arr))
+        finally jdbcArray.free()
     def writeSingle(
         entity: m.Buffer[A],
         ps: PreparedStatement,
@@ -205,6 +266,10 @@ object PgCodec:
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(resultSet: ResultSet, pos: Int): PGbox =
       resultSet.getObject(pos, classOf[PGbox])
+    def readSingleOption(resultSet: ResultSet, pos: Int): Option[PGbox] =
+      val res = resultSet.getObject(pos, classOf[PGbox])
+      if resultSet.wasNull then None
+      else Some(res)
     def writeSingle(entity: PGbox, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
@@ -213,6 +278,10 @@ object PgCodec:
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(resultSet: ResultSet, pos: Int): PGcircle =
       resultSet.getObject(pos, classOf[PGcircle])
+    def readSingleOption(resultSet: ResultSet, pos: Int): Option[PGcircle] =
+      val res = resultSet.getObject(pos, classOf[PGcircle])
+      if resultSet.wasNull then None
+      else Some(res)
     def writeSingle(entity: PGcircle, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
@@ -221,6 +290,10 @@ object PgCodec:
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(resultSet: ResultSet, pos: Int): PGInterval =
       resultSet.getObject(pos, classOf[PGInterval])
+    def readSingleOption(resultSet: ResultSet, pos: Int): Option[PGInterval] =
+      val res = resultSet.getObject(pos, classOf[PGInterval])
+      if resultSet.wasNull then None
+      else Some(res)
     def writeSingle(entity: PGInterval, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
@@ -229,6 +302,10 @@ object PgCodec:
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(resultSet: ResultSet, pos: Int): PGline =
       resultSet.getObject(pos, classOf[PGline])
+    def readSingleOption(resultSet: ResultSet, pos: Int): Option[PGline] =
+      val res = resultSet.getObject(pos, classOf[PGline])
+      if resultSet.wasNull then None
+      else Some(res)
     def writeSingle(entity: PGline, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
@@ -237,6 +314,10 @@ object PgCodec:
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(resultSet: ResultSet, pos: Int): PGlseg =
       resultSet.getObject(pos, classOf[PGlseg])
+    def readSingleOption(resultSet: ResultSet, pos: Int): Option[PGlseg] =
+      val res = resultSet.getObject(pos, classOf[PGlseg])
+      if resultSet.wasNull then None
+      else Some(res)
     def writeSingle(entity: PGlseg, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
@@ -245,6 +326,10 @@ object PgCodec:
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(resultSet: ResultSet, pos: Int): PGpath =
       resultSet.getObject(pos, classOf[PGpath])
+    def readSingleOption(resultSet: ResultSet, pos: Int): Option[PGpath] =
+      val res = resultSet.getObject(pos, classOf[PGpath])
+      if resultSet.wasNull then None
+      else Some(res)
     def writeSingle(entity: PGpath, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
@@ -253,6 +338,10 @@ object PgCodec:
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(resultSet: ResultSet, pos: Int): PGpoint =
       resultSet.getObject(pos, classOf[PGpoint])
+    def readSingleOption(resultSet: ResultSet, pos: Int): Option[PGpoint] =
+      val res = resultSet.getObject(pos, classOf[PGpoint])
+      if resultSet.wasNull then None
+      else Some(res)
     def writeSingle(entity: PGpoint, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
@@ -261,6 +350,10 @@ object PgCodec:
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(resultSet: ResultSet, pos: Int): PGpolygon =
       resultSet.getObject(pos, classOf[PGpolygon])
+    def readSingleOption(resultSet: ResultSet, pos: Int): Option[PGpolygon] =
+      val res = resultSet.getObject(pos, classOf[PGpolygon])
+      if resultSet.wasNull then None
+      else Some(res)
     def writeSingle(entity: PGpolygon, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 end PgCodec

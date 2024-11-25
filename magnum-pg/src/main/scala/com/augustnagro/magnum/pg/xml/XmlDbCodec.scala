@@ -16,15 +16,17 @@ trait XmlDbCodec[A] extends DbCodec[A]:
   override val cols: IArray[Int] = IArray(Types.SQLXML)
 
   override def readSingle(resultSet: ResultSet, pos: Int): A =
+    decode(resultSet.getString(pos))
+
+  override def readSingleOption(resultSet: ResultSet, pos: Int): Option[A] =
     val xmlString = resultSet.getString(pos)
-    if xmlString == null then null.asInstanceOf[A]
-    else decode(xmlString)
+    if xmlString == null then None
+    else Some(decode(xmlString))
 
   override def writeSingle(entity: A, ps: PreparedStatement, pos: Int): Unit =
     val xmlObject = PGobject()
     xmlObject.setType("xml")
-    val encoded = if entity == null then null else encode(entity)
-    xmlObject.setValue(encoded)
+    xmlObject.setValue(encode(entity))
     ps.setObject(pos, xmlObject)
 
 end XmlDbCodec

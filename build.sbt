@@ -36,7 +36,7 @@ ThisBuild / publishTo := {
 }
 ThisBuild / publish / skip := true
 
-Global / onChangedBuildSource := ReloadOnSourceChanges
+addCommandAlias("fmt", "scalafmtAll")
 
 val testcontainersVersion = "0.41.4"
 val circeVersion = "0.14.10"

@@ -4,9 +4,10 @@ import com.augustnagro.magnum.SqlException
 
 import java.lang.System.Logger.Level
 import java.sql.{Connection, PreparedStatement, ResultSet, Statement}
+import java.util.StringJoiner
 import java.util.concurrent.TimeUnit
 import javax.sql.DataSource
-import scala.collection.mutable.ReusableBuilder
+import scala.collection.mutable as m
 import scala.util.{Failure, Success, Try, Using, boundary}
 import scala.deriving.Mirror
 import scala.compiletime.{
@@ -79,17 +80,32 @@ private def sqlImpl(sc: Expr[StringContext], args: Expr[Seq[Any]])(using
     case _                     => true
   }
 
+  val flattenedParamExprs =
+    flattenParamExprs(paramExprs, '{ Vector.newBuilder[Any] })
+
   val queryExpr = '{ $sc.s($interpolatedVarargs: _*) }
   val exprParams = Expr.ofSeq(paramExprs)
 
   '{
     val argValues = $exprParams
+    val flattenedParams = $flattenedParamExprs
     val writer: FragWriter = (ps: PreparedStatement, pos: Int) => {
       ${ sqlWriter('{ ps }, '{ pos }, '{ argValues }, paramExprs, '{ 0 }) }
     }
-    Frag($queryExpr, argValues, writer)
+    Frag($queryExpr, flattenedParams, writer)
   }
 end sqlImpl
+
+private def flattenParamExprs(
+    paramExprs: Seq[Expr[Any]],
+    res: Expr[m.Builder[Any, Vector[Any]]]
+)(using q: Quotes): Expr[Seq[Any]] =
+  paramExprs match
+    case '{ $arg: Frag } +: tail =>
+      flattenParamExprs(tail, '{ $res ++= $arg.params })
+    case arg +: tail =>
+      flattenParamExprs(tail, '{ $res += $arg })
+    case Seq() => '{ $res.result() }
 
 private def sqlWriter(
     psExpr: Expr[PreparedStatement],

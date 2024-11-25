@@ -7,3 +7,6 @@ trait FragWriter:
     * position.
     */
   def write(ps: PreparedStatement, pos: Int): Int
+
+object FragWriter:
+  val empty: FragWriter = (_, pos) => pos
