@@ -1,80 +1,48 @@
 package com.augustnagro.magnum
 
-import java.sql.PreparedStatement
 import java.util.StringJoiner
 
 class Spec[E] private (
-    predicates: List[Frag],
-    limit: Option[Int],
-    offset: Option[Int],
-    sorts: List[Sort]
+    val prefix: Option[Frag],
+    val predicates: Vector[Frag],
+    val limit: Option[Int],
+    val offset: Option[Long],
+    val sorts: Vector[Sort],
+    val seeks: Vector[Seek]
 ):
 
+  def prefix(sql: Frag): Spec[E] =
+    new Spec(Some(sql), predicates, limit, offset, sorts, seeks)
+
   def where(sql: Frag): Spec[E] =
-    new Spec(sql :: predicates, limit, offset, sorts)
+    new Spec(prefix, predicates :+ sql, limit, offset, sorts, seeks)
 
   def orderBy(
       column: String,
-      direction: SortOrder = SortOrder.Asc,
-      nullOrder: NullOrder = NullOrder.Empty
+      direction: SortOrder = SortOrder.Default,
+      nullOrder: NullOrder = NullOrder.Default
   ): Spec[E] =
     val sort = Sort(column, direction, nullOrder)
-    new Spec(predicates, limit, offset, sort :: sorts)
+    new Spec(prefix, predicates, limit, offset, sorts :+ sort, seeks)
 
   def limit(limit: Int): Spec[E] =
-    new Spec(predicates, Some(limit), offset, sorts)
+    new Spec(prefix, predicates, Some(limit), offset, sorts, seeks)
 
-  def offset(offset: Int): Spec[E] =
-    new Spec(predicates, limit, Some(offset), sorts)
+  def offset(offset: Long): Spec[E] =
+    new Spec(prefix, predicates, limit, Some(offset), sorts, seeks)
 
   def seek[V](
       column: String,
       seekDirection: SeekDir,
       value: V,
       columnSort: SortOrder,
-      nullOrder: NullOrder = NullOrder.Last
+      nullOrder: NullOrder = NullOrder.Default
   )(using codec: DbCodec[V]): Spec[E] =
-    val sort = Sort(column, columnSort, nullOrder)
-    val pred =
-      Frag(
-        s"$column ${seekDirection.sql} ?",
-        Vector(value),
-        (ps, pos) =>
-          codec.writeSingle(value, ps, pos)
-          pos + codec.cols.length
-      )
-    new Spec(pred :: predicates, limit, offset, sort :: sorts)
+    val seek = Seek(column, seekDirection, value, columnSort, nullOrder, codec)
+    new Spec(prefix, predicates, limit, offset, sorts, seeks :+ seek)
 
-  def build: Frag =
-    val whereClause = StringJoiner(" AND ", "WHERE ", "").setEmptyValue("")
-    val allParams = Vector.newBuilder[Any]
-
-    val validFrags = predicates.reverse.filter(_.sqlString.nonEmpty)
-    for frag <- validFrags do
-      whereClause.add("(" + frag.sqlString + ")")
-      allParams ++= frag.params
-
-    val orderByClause = StringJoiner(", ", "ORDER BY ", "").setEmptyValue("")
-    for Sort(col, dir, nullOrder) <- sorts.reverse do
-      orderByClause.add(col + " " + dir.sql + " " + nullOrder.sql)
-
-    val finalSj = StringJoiner(" ")
-    val whereClauseStr = whereClause.toString
-    if whereClauseStr.nonEmpty then finalSj.add(whereClauseStr)
-    val orderByClauseStr = orderByClause.toString
-    if orderByClauseStr.nonEmpty then finalSj.add(orderByClauseStr)
-    for l <- limit do finalSj.add("LIMIT " + l)
-    for o <- offset do finalSj.add("OFFSET " + o)
-
-    val fragWriter: FragWriter = (ps, startingPos) =>
-      validFrags.foldLeft(startingPos)((pos, frag) =>
-        frag.writer.write(ps, pos)
-      )
-
-    Frag(finalSj.toString, allParams.result(), fragWriter)
-  end build
 end Spec
 
 object Spec:
   def apply[E]: Spec[E] =
-    new Spec(Nil, None, None, Nil)
+    new Spec(None, Vector.empty, None, None, Vector.empty, Vector.empty)

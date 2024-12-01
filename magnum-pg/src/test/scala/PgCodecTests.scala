@@ -10,7 +10,7 @@ import com.augustnagro.magnum.pg.enums.PgEnumToScalaEnumSqlArrayCodec
 import org.postgresql.util.PGInterval
 
 import java.nio.file.{Files, Path}
-import java.time.{OffsetDateTime, ZoneOffset}
+import java.time.{LocalDate, OffsetDateTime, ZoneOffset}
 import java.util
 import java.util.Objects
 import javax.sql.DataSource
@@ -76,7 +76,10 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       textColorMap = Vector(
         List(Color.RedOrange, Color.RedOrange),
         List(Color.Green, Color.Green)
-      )
+      ),
+      lastService = Some(LastService("Bob", LocalDate.of(2024, 5, 4))),
+      myJsonB = Some(MyJsonB(Vector(1, 2, 3), "hello world")),
+      myXml = Some(MyXml(<color>blue</color>))
     ),
     MagCar(
       id = 2,
@@ -84,17 +87,20 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       textColorMap = Vector(
         List(Color.RedOrange, Color.Green),
         List(Color.Green, Color.Blue)
-      )
+      ),
+      lastService = None,
+      myJsonB = None,
+      myXml = None
     )
   )
 
   test("select all MagUser"):
     connect(ds()):
-      assertEquals(userRepo.findAll, allUsers)
+      assert(userRepo.findAll == allUsers)
 
   test("select all MagCar"):
     connect(ds()):
-      assertEquals(carRepo.findAll, allCars)
+      assert(carRepo.findAll == allCars)
 
   test("insert MagUser"):
     connect(ds()):
@@ -118,7 +124,7 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       )
       userRepo.insert(u)
       val dbU = userRepo.findById(3L).get
-      assertEquals(dbU, u)
+      assert(dbU == u)
 
   test("insert MagCar"):
     connect(ds()):
@@ -128,11 +134,14 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
         textColorMap = Vector(
           List(Color.RedOrange, Color.RedOrange),
           List(Color.RedOrange, Color.RedOrange)
-        )
+        ),
+        lastService = Some(LastService("James", LocalDate.of(1970, 4, 22))),
+        myJsonB = None,
+        myXml = None
       )
       carRepo.insert(c)
       val dbC = carRepo.findById(3L).get
-      assertEquals(dbC, c)
+      assert(dbC == c)
 
   test("update MagUser arrays"):
     connect(ds()):
@@ -149,7 +158,26 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       sql"UPDATE mag_car SET text_color_map = $newTextColorMap WHERE id = 2".update
         .run()
       val newCar = carRepo.findById(2L).get
-      assertEquals(newCar.textColorMap, newTextColorMap)
+      assert(newCar.textColorMap == newTextColorMap)
+
+  test("MagCar xml string values"):
+    connect(ds()):
+      val found =
+        sql"SELECT my_xml FROM mag_car"
+          .query[Option[MyXml]]
+          .run()
+          .flatten
+          .map(_.elem.toString)
+      val expected = allCars.flatMap(_.myXml).map(_.elem.toString)
+      println(found)
+      assert(found == expected)
+
+  test("where = ANY()"):
+    connect(ds()):
+      val ids = Vector(1L, 2L)
+      val cars =
+        sql"SELECT * FROM mag_car WHERE id = ANY($ids)".query[MagCar].run()
+      assert(cars == allCars)
 
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer

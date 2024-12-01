@@ -12,5 +12,8 @@ import com.augustnagro.magnum.pg.enums.PgStringToScalaEnumSqlArrayCodec
 case class MagCar(
     @Id id: Long,
     textColors: Seq[Color],
-    textColorMap: Vector[List[Color]]
+    textColorMap: Vector[List[Color]],
+    lastService: Option[LastService],
+    myJsonB: Option[MyJsonB],
+    myXml: Option[MyXml]
 ) derives DbCodec

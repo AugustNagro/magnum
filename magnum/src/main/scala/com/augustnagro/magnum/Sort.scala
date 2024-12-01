@@ -1,7 +1,7 @@
 package com.augustnagro.magnum
 
-private case class Sort(
-    column: String,
-    direction: SortOrder,
-    nullOrder: NullOrder
+class Sort private[magnum] (
+    val column: String,
+    val direction: SortOrder,
+    val nullOrder: NullOrder
 )
