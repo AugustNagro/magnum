@@ -104,20 +104,6 @@ object MySqlDbType extends DbType:
       def findAll(spec: Spec[E])(using DbCon): Vector[E] =
         specImpl.findAll(spec, tableNameSql)
 
-      private def sortSql(sort: Sort): String =
-        val column = sort.column
-        val nullSort = sort.nullOrder match
-          case NullOrder.Default => ""
-          case NullOrder.First   => s"$column IS NOT NULL, "
-          case NullOrder.Last    => s"$column IS NULL, "
-          case _                 => throw UnsupportedOperationException()
-        val dir = sort.direction match
-          case SortOrder.Default => ""
-          case SortOrder.Asc     => " ASC"
-          case SortOrder.Desc    => " DESC"
-          case _                 => throw UnsupportedOperationException()
-        nullSort + column + dir
-
       def findById(id: ID)(using DbCon): Option[E] =
         Frag(findByIdSql, IArray(id), idWriter(id))
           .query[E]
