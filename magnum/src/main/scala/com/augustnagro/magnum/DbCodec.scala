@@ -118,9 +118,7 @@ object DbCodec:
     val cols: IArray[Int] = IArray(Types.BOOLEAN)
     def readSingle(rs: ResultSet, pos: Int): Boolean = rs.getBoolean(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Boolean] =
-      val res = rs.getBoolean(pos)
-      if rs.wasNull then None
-      else Some(res)
+      readOptImpl(this, rs, pos)
     def writeSingle(b: Boolean, ps: PreparedStatement, pos: Int): Unit =
       ps.setBoolean(pos, b)
     def queryRepr: String = "?"
@@ -129,9 +127,7 @@ object DbCodec:
     val cols: IArray[Int] = IArray(Types.TINYINT)
     def readSingle(rs: ResultSet, pos: Int): Byte = rs.getByte(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Byte] =
-      val res = rs.getByte(pos)
-      if rs.wasNull then None
-      else Some(res)
+      readOptImpl(this, rs, pos)
     def writeSingle(b: Byte, ps: PreparedStatement, pos: Int): Unit =
       ps.setByte(pos, b)
     def queryRepr: String = "?"
@@ -140,9 +136,7 @@ object DbCodec:
     val cols: IArray[Int] = IArray(Types.SMALLINT)
     def readSingle(rs: ResultSet, pos: Int): Short = rs.getShort(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Short] =
-      val res = rs.getShort(pos)
-      if rs.wasNull then None
-      else Some(res)
+      readOptImpl(this, rs, pos)
     def writeSingle(s: Short, ps: PreparedStatement, pos: Int): Unit =
       ps.setShort(pos, s)
     def queryRepr: String = "?"
@@ -151,9 +145,7 @@ object DbCodec:
     val cols: IArray[Int] = IArray(Types.INTEGER)
     def readSingle(rs: ResultSet, pos: Int): Int = rs.getInt(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Int] =
-      val res = rs.getInt(pos)
-      if rs.wasNull then None
-      else Some(res)
+      readOptImpl(this, rs, pos)
     def writeSingle(i: Int, ps: PreparedStatement, pos: Int): Unit =
       ps.setInt(pos, i)
     def queryRepr: String = "?"
@@ -162,9 +154,7 @@ object DbCodec:
     val cols: IArray[Int] = IArray(Types.BIGINT)
     def readSingle(rs: ResultSet, pos: Int): Long = rs.getLong(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Long] =
-      val res = rs.getLong(pos)
-      if rs.wasNull then None
-      else Some(res)
+      readOptImpl(this, rs, pos)
     def writeSingle(l: Long, ps: PreparedStatement, pos: Int): Unit =
       ps.setLong(pos, l)
     def queryRepr: String = "?"
@@ -173,9 +163,7 @@ object DbCodec:
     val cols: IArray[Int] = IArray(Types.REAL)
     def readSingle(rs: ResultSet, pos: Int): Float = rs.getFloat(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Float] =
-      val res = rs.getFloat(pos)
-      if rs.wasNull then None
-      else Some(res)
+      readOptImpl(this, rs, pos)
     def writeSingle(f: Float, ps: PreparedStatement, pos: Int): Unit =
       ps.setFloat(pos, f)
     def queryRepr: String = "?"
@@ -184,9 +172,7 @@ object DbCodec:
     val cols: IArray[Int] = IArray(Types.DOUBLE)
     def readSingle(rs: ResultSet, pos: Int): Double = rs.getDouble(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Double] =
-      val res = rs.getDouble(pos)
-      if rs.wasNull then None
-      else Some(res)
+      readOptImpl(this, rs, pos)
     def writeSingle(d: Double, ps: PreparedStatement, pos: Int): Unit =
       ps.setDouble(pos, d)
     def queryRepr: String = "?"
@@ -257,9 +243,7 @@ object DbCodec:
     def readSingle(rs: ResultSet, pos: Int): OffsetDateTime =
       rs.getObject(pos, classOf[OffsetDateTime])
     def readSingleOption(rs: ResultSet, pos: Int): Option[OffsetDateTime] =
-      val res = rs.getObject(pos, classOf[OffsetDateTime])
-      if rs.wasNull then None
-      else Some(res)
+      readOptImpl(this, rs, pos)
     def writeSingle(dt: OffsetDateTime, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, dt)
     def queryRepr: String = "?"
@@ -268,9 +252,7 @@ object DbCodec:
     val cols: IArray[Int] = IArray(Types.REF)
     def readSingle(rs: ResultSet, pos: Int): java.sql.Ref = rs.getRef(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.Ref] =
-      val res = rs.getRef(pos)
-      if rs.wasNull then None
-      else Some(res)
+      readOptImpl(this, rs, pos)
     def writeSingle(ref: java.sql.Ref, ps: PreparedStatement, pos: Int): Unit =
       ps.setRef(pos, ref)
     def queryRepr: String = "?"
@@ -279,9 +261,7 @@ object DbCodec:
     val cols: IArray[Int] = IArray(Types.BLOB)
     def readSingle(rs: ResultSet, pos: Int): java.sql.Blob = rs.getBlob(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.Blob] =
-      val res = rs.getBlob(pos)
-      if rs.wasNull then None
-      else Some(res)
+      readOptImpl(this, rs, pos)
     def writeSingle(b: java.sql.Blob, ps: PreparedStatement, pos: Int): Unit =
       ps.setBlob(pos, b)
     def queryRepr: String = "?"
@@ -290,9 +270,7 @@ object DbCodec:
     val cols: IArray[Int] = IArray(Types.CLOB)
     def readSingle(rs: ResultSet, pos: Int): java.sql.Clob = rs.getClob(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.Clob] =
-      val res = rs.getClob(pos)
-      if rs.wasNull then None
-      else Some(res)
+      readOptImpl(this, rs, pos)
     def writeSingle(c: java.sql.Clob, ps: PreparedStatement, pos: Int): Unit =
       ps.setClob(pos, c)
     def queryRepr: String = "?"
@@ -323,9 +301,7 @@ object DbCodec:
     val cols: IArray[Int] = IArray(Types.NCLOB)
     def readSingle(rs: ResultSet, pos: Int): java.sql.NClob = rs.getNClob(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.NClob] =
-      val res = rs.getNClob(pos)
-      if rs.wasNull then None
-      else Some(res)
+      readOptImpl(this, rs, pos)
     def writeSingle(nc: java.sql.NClob, ps: PreparedStatement, pos: Int): Unit =
       ps.setNClob(pos, nc)
     def queryRepr: String = "?"
@@ -334,9 +310,7 @@ object DbCodec:
     val cols: IArray[Int] = IArray(Types.SQLXML)
     def readSingle(rs: ResultSet, pos: Int): java.sql.SQLXML = rs.getSQLXML(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.SQLXML] =
-      val res = rs.getSQLXML(pos)
-      if rs.wasNull then None
-      else Some(res)
+      readOptImpl(this, rs, pos)
     def writeSingle(s: java.sql.SQLXML, ps: PreparedStatement, pos: Int): Unit =
       ps.setSQLXML(pos, s)
     def queryRepr: String = "?"
@@ -498,6 +472,15 @@ object DbCodec:
     val queryRepr: String =
       s"(${aCodec.queryRepr}, ${bCodec.queryRepr}, ${cCodec.queryRepr}, ${dCodec.queryRepr})"
   end Tuple4Codec
+
+  private inline def readOptImpl[A](
+      codec: DbCodec[A],
+      resultSet: ResultSet,
+      pos: Int
+  ): Option[A] =
+    val res = codec.readSingle(resultSet, pos)
+    if resultSet.wasNull then None
+    else Some(res)
 
   inline given derived[E: Mirror.Of]: DbCodec[E] =
     ${ dbCodecImpl[E] }
