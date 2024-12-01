@@ -26,7 +26,7 @@ class Returning[E] private[magnum] (
   private def withResultSet[A](f: ResultSet => A)(using con: DbCon): A =
     handleQuery(frag.sqlString, frag.params):
       Manager: use =>
-        if keyColumns.isEmpty then
+        if keyColumsArr.isEmpty then
           val ps = use(con.connection.prepareStatement(frag.sqlString))
           frag.writer.write(ps, 1)
           timed:
