@@ -62,50 +62,59 @@ private def sqlImpl(sc: Expr[StringContext], args: Expr[Seq[Any]])(using
     Quotes
 ): Expr[Frag] =
   import quotes.reflect.*
-  val argsExprs: Seq[Expr[Any]] = args match
+  val allArgsExprs: Seq[Expr[Any]] = args match
     case Varargs(ae) => ae
 //  val stringExprs: Seq[Expr[String]] = sc match
 //    case '{ StringContext(${ Varargs(strings) }: _*) } => strings
 
-  val interpolatedVarargs = Varargs(argsExprs.map {
-    case '{ $arg: SqlLiteral } => '{ $arg.queryRepr }
-    case '{ $arg: Frag }       => '{ $arg.sqlString }
-    case '{ $arg: tp } =>
-      val codecExpr = summonWriter[tp]
-      '{ $codecExpr.queryRepr }
-  })
-
-  val paramExprs = argsExprs.filter {
+  val argsExprs = allArgsExprs.filter {
     case '{ $arg: SqlLiteral } => false
     case _                     => true
   }
 
-  val flattenedParamExprs =
-    flattenParamExprs(paramExprs, '{ Vector.newBuilder[Any] })
-
-  val queryExpr = '{ $sc.s($interpolatedVarargs: _*) }
-  val exprParams = Expr.ofSeq(paramExprs)
-
   '{
-    val argValues = $exprParams
-    val flattenedParams = $flattenedParamExprs
-    val writer: FragWriter = (ps: PreparedStatement, pos: Int) => {
-      ${ sqlWriter('{ ps }, '{ pos }, '{ argValues }, paramExprs, '{ 0 }) }
+    val allArgs = ${ Expr.ofSeq(allArgsExprs) }
+    val sqlQueryReprs = ${
+      queryReprs(allArgsExprs, '{ allArgs }, '{ Vector.newBuilder })
     }
-    Frag($queryExpr, flattenedParams, writer)
+    val queryExpr = $sc.s(sqlQueryReprs: _*)
+    val args = allArgs.filter:
+      case _: SqlLiteral => false
+      case _             => true
+    val flattenedArgs = args.map:
+      case frag: Frag => frag.params
+      case x          => x
+
+    val writer: FragWriter = (ps: PreparedStatement, pos: Int) => {
+      ${ sqlWriter('{ ps }, '{ pos }, '{ args }, argsExprs, '{ 0 }) }
+    }
+    Frag(queryExpr, flattenedArgs, writer)
   }
 end sqlImpl
 
-private def flattenParamExprs(
-    paramExprs: Seq[Expr[Any]],
-    res: Expr[m.Builder[Any, Vector[Any]]]
-)(using q: Quotes): Expr[Seq[Any]] =
-  paramExprs match
+private def queryReprs(
+    argsExprs: Seq[Expr[Any]],
+    allArgs: Expr[Seq[Any]],
+    builder: Expr[m.Builder[String, Vector[String]]],
+    i: Int = 0
+)(using Quotes): Expr[Vector[String]] =
+  argsExprs match
+    case '{ $arg: SqlLiteral } +: tail =>
+      val newBuilder = '{
+        $builder += $allArgs(${ Expr(i) }).asInstanceOf[SqlLiteral].queryRepr
+      }
+      queryReprs(tail, allArgs, newBuilder, i + 1)
     case '{ $arg: Frag } +: tail =>
-      flattenParamExprs(tail, '{ $res ++= $arg.params })
-    case arg +: tail =>
-      flattenParamExprs(tail, '{ $res += $arg })
-    case Seq() => '{ $res.result() }
+      val newBuilder = '{
+        $builder += $allArgs(${ Expr(i) }).asInstanceOf[Frag].sqlString
+      }
+      queryReprs(tail, allArgs, newBuilder, i + 1)
+    case '{ $arg: tp } +: tail =>
+      val codecExpr = summonWriter[tp]
+      val newBuilder = '{ $builder += $codecExpr.queryRepr }
+      queryReprs(tail, allArgs, newBuilder, i + 1)
+    case Seq() =>
+      '{ $builder.result() }
 
 private def sqlWriter(
     psExpr: Expr[PreparedStatement],

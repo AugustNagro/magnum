@@ -1,6 +1,6 @@
 package com.augustnagro.magnum
 
-class Seek(
+class Seek private[magnum] (
     val column: String,
     val seekDirection: SeekDir,
     val value: Any,
