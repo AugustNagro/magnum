@@ -1,11 +1,8 @@
 package com.augustnagro.magnum
 
-trait SortOrder:
-  def sql: String
+trait SortOrder
 
 object SortOrder:
-  object Asc extends SortOrder:
-    def sql: String = "ASC"
-
-  object Desc extends SortOrder:
-    def sql: String = "DESC"
+  case object Default extends SortOrder
+  case object Asc extends SortOrder
+  case object Desc extends SortOrder

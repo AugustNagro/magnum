@@ -96,11 +96,11 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
 
   test("select all MagUser"):
     connect(ds()):
-      assertEquals(userRepo.findAll, allUsers)
+      assert(userRepo.findAll == allUsers)
 
   test("select all MagCar"):
     connect(ds()):
-      assertEquals(carRepo.findAll, allCars)
+      assert(carRepo.findAll == allCars)
 
   test("insert MagUser"):
     connect(ds()):
@@ -124,7 +124,7 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       )
       userRepo.insert(u)
       val dbU = userRepo.findById(3L).get
-      assertEquals(dbU, u)
+      assert(dbU == u)
 
   test("insert MagCar"):
     connect(ds()):
@@ -141,7 +141,7 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       )
       carRepo.insert(c)
       val dbC = carRepo.findById(3L).get
-      assertEquals(dbC, c)
+      assert(dbC == c)
 
   test("update MagUser arrays"):
     connect(ds()):
@@ -158,7 +158,7 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       sql"UPDATE mag_car SET text_color_map = $newTextColorMap WHERE id = 2".update
         .run()
       val newCar = carRepo.findById(2L).get
-      assertEquals(newCar.textColorMap, newTextColorMap)
+      assert(newCar.textColorMap == newTextColorMap)
 
   test("MagCar xml string values"):
     connect(ds()):
@@ -170,7 +170,14 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
           .map(_.elem.toString)
       val expected = allCars.flatMap(_.myXml).map(_.elem.toString)
       println(found)
-      assertEquals(found, expected)
+      assert(found == expected)
+
+  test("where = ANY()"):
+    connect(ds()):
+      val ids = Vector(1L, 2L)
+      val cars =
+        sql"SELECT * FROM mag_car WHERE id = ANY($ids)".query[MagCar].run()
+      assert(cars == allCars)
 
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer

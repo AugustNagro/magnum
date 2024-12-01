@@ -29,29 +29,31 @@ object SqlLogger:
              |${successEvent.sql}
              |
              |With values:
-             |${paramsString(successEvent.params)}""".stripMargin
+             |${paramsString(successEvent.params)}
+             |""".stripMargin
         )
       else if Log.isLoggable(Level.DEBUG) then
         Log.log(
           Level.DEBUG,
           s"""Executed Query in ${successEvent.execTime}:
-             |${successEvent.sql}""".stripMargin
+             |${successEvent.sql}
+             |""".stripMargin
         )
 
     override def exceptionMsg(exceptionEvent: SqlExceptionEvent): String =
       if Log.isLoggable(System.Logger.Level.TRACE) then
         s"""Error executing query:
-             |${exceptionEvent.sql}
-             |With message:
-             |${exceptionEvent.cause.getMessage}
-             |And values:
-             |${paramsString(exceptionEvent.params)}
-             |""".stripMargin
-      else s"""Error executing query:
            |${exceptionEvent.sql}
            |With message:
-           |${exceptionEvent.cause}
+           |${exceptionEvent.cause.getMessage}
+           |And values:
+           |${paramsString(exceptionEvent.params)}
            |""".stripMargin
+      else s"""Error executing query:
+              |${exceptionEvent.sql}
+              |With message:
+              |${exceptionEvent.cause}
+              |""".stripMargin
   end Default
 
   def logSlowQueries(slowerThan: FiniteDuration): SqlLogger = new:
@@ -61,16 +63,18 @@ object SqlLogger:
           Log.log(
             Level.WARNING,
             s"""Executed SLOW Query in ${logEvent.execTime}:
-             |${logEvent.sql}
-             |
-             |With values:
-             |${paramsString(logEvent.params)}""".stripMargin
+               |${logEvent.sql}
+               |
+               |With values:
+               |${paramsString(logEvent.params)}
+               |""".stripMargin
           )
         else if Log.isLoggable(Level.WARNING) then
           Log.log(
             Level.WARNING,
             s"""Executed SLOW Query in ${logEvent.execTime}:
-               |${logEvent.sql}""".stripMargin
+               |${logEvent.sql}
+               |""".stripMargin
           )
         end if
       else Default.log(logEvent)

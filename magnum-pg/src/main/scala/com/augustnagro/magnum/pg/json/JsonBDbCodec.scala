@@ -16,15 +16,17 @@ trait JsonBDbCodec[A] extends DbCodec[A]:
   override val cols: IArray[Int] = IArray(Types.OTHER)
 
   override def readSingle(resultSet: ResultSet, pos: Int): A =
+    decode(resultSet.getString(pos))
+
+  override def readSingleOption(resultSet: ResultSet, pos: Int): Option[A] =
     val rawJson = resultSet.getString(pos)
-    if rawJson eq null then null.asInstanceOf[A]
-    else decode(rawJson)
+    if rawJson == null then None
+    else Some(decode(rawJson))
 
   override def writeSingle(entity: A, ps: PreparedStatement, pos: Int): Unit =
     val jsonObject = PGobject()
     jsonObject.setType("jsonb")
-    val encoded = if entity == null then null else encode(entity)
-    jsonObject.setValue(encoded)
+    jsonObject.setValue(encode(entity))
     ps.setObject(pos, jsonObject)
 
 end JsonBDbCodec

@@ -9,6 +9,31 @@ import scala.util.{Failure, Success, Using}
 
 object MySqlDbType extends DbType:
 
+  private val specImpl = new SpecImpl:
+    override def sortSql(sort: Sort): String =
+      val column = sort.column
+      val nullSort = sort.nullOrder match
+        case NullOrder.Default => ""
+        case NullOrder.First   => s"$column IS NOT NULL, "
+        case NullOrder.Last    => s"$column IS NULL, "
+        case _                 => throw UnsupportedOperationException()
+      val dir = sort.direction match
+        case SortOrder.Default => ""
+        case SortOrder.Asc     => " ASC"
+        case SortOrder.Desc    => " DESC"
+        case _                 => throw UnsupportedOperationException()
+      nullSort + column + dir
+
+    override def offsetLimitSql(
+        offset: Option[Long],
+        limit: Option[Int]
+    ): Option[String] =
+      (offset, limit) match
+        case (Some(o), Some(l)) => Some(s"LIMIT $o, $l")
+        case (Some(o), None)    => Some(s"LIMIT $o, ${Long.MaxValue}")
+        case (None, Some(l))    => Some(s"LIMIT $l")
+        case (None, None)       => None
+
   def buildRepoDefaults[EC, E, ID](
       tableNameSql: String,
       eElemNames: Seq[String],
@@ -43,17 +68,18 @@ object MySqlDbType extends DbType:
       .asInstanceOf[Seq[DbCodec[Any]]]
 
     val countSql = s"SELECT count(*) FROM $tableNameSql"
-    val countQuery = Frag(countSql).query[Long]
+    val countQuery = Frag(countSql, Vector.empty, FragWriter.empty).query[Long]
     val existsByIdSql =
       s"SELECT 1 FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
     val findAllSql = s"SELECT * FROM $tableNameSql"
-    val findAllQuery = Frag(findAllSql).query[E]
+    val findAllQuery = Frag(findAllSql, Vector.empty, FragWriter.empty).query[E]
     val findByIdSql =
       s"SELECT * FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
     val deleteByIdSql =
       s"DELETE FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
     val truncateSql = s"TRUNCATE TABLE $tableNameSql"
-    val truncateUpdate = Frag(truncateSql).update
+    val truncateUpdate =
+      Frag(truncateSql, Vector.empty, FragWriter.empty).update
     val insertSql =
       s"INSERT INTO $tableNameSql $ecInsertKeys VALUES (${ecCodec.queryRepr})"
     val updateSql =
@@ -76,10 +102,7 @@ object MySqlDbType extends DbType:
       def findAll(using DbCon): Vector[E] = findAllQuery.run()
 
       def findAll(spec: Spec[E])(using DbCon): Vector[E] =
-        val f = spec.build
-        Frag(s"SELECT * FROM $tableNameSql ${f.sqlString}", f.params, f.writer)
-          .query[E]
-          .run()
+        specImpl.findAll(spec, tableNameSql)
 
       def findById(id: ID)(using DbCon): Option[E] =
         Frag(findByIdSql, IArray(id), idWriter(id))
@@ -134,35 +157,15 @@ object MySqlDbType extends DbType:
             timed(batchUpdateResult(ps.executeBatch()))
 
       def insertReturning(entityCreator: EC)(using con: DbCon): E =
-        handleQuery(insertAndFindByIdSql, entityCreator):
-          Using.Manager: use =>
-            val ps =
-              use(con.connection.prepareStatement(insertSql, insertGenKeys))
-            ecCodec.writeSingle(entityCreator, ps)
-            timed:
-              ps.executeUpdate()
-              val rs = use(ps.getGeneratedKeys)
-              rs.next()
-              val id = idCodec.readSingle(rs)
-              // unfortunately, mysql only will return auto_incremented keys.
-              // it doesn't return default columns, and adding other columns to
-              // the insertGenKeys array doesn't change this behavior. So we need
-              // to query by ID after every insert.
-              findById(id).get
+        // unfortunately, mysql only will return auto_incremented keys.
+        // it doesn't return default columns, and adding other columns to
+        // the insertGenKeys array doesn't change this behavior.
+        throw UnsupportedOperationException()
 
       def insertAllReturning(
           entityCreators: Iterable[EC]
       )(using con: DbCon): Vector[E] =
-        handleQuery(insertAndFindByIdSql, entityCreators):
-          Using.Manager: use =>
-            val ps =
-              use(con.connection.prepareStatement(insertSql, insertGenKeys))
-            ecCodec.write(entityCreators, ps)
-            timed:
-              batchUpdateResult(ps.executeBatch())
-              val rs = use(ps.getGeneratedKeys)
-              val ids = idCodec.read(rs)
-              ids.map(findById(_).get)
+        throw UnsupportedOperationException()
 
       def update(entity: E)(using con: DbCon): Unit =
         handleQuery(updateSql, entity):
