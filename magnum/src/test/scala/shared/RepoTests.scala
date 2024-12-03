@@ -1,6 +1,20 @@
 package shared
 
 import com.augustnagro.magnum.*
+import com.augustnagro.magnum.batch.BatchUpdateResult
+import com.augustnagro.magnum.builders.Transactor
+import com.augustnagro.magnum.codec.DbCodec
+import com.augustnagro.magnum.dbtype.{
+  ClickhouseDbType,
+  DbType,
+  H2DbType,
+  MySqlDbType,
+  OracleDbType,
+  SqliteDbType
+}
+import com.augustnagro.magnum.errors.SqlException
+import com.augustnagro.magnum.repo.{Repo, SqlNameMapper, Table}
+import com.augustnagro.magnum.tableinfo.{ColumnNames, TableInfo}
 import munit.FunSuite
 
 import java.time.OffsetDateTime

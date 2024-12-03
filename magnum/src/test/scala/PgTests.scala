@@ -1,4 +1,6 @@
 import com.augustnagro.magnum.*
+import com.augustnagro.magnum.builders.Transactor
+import com.augustnagro.magnum.dbtype.PostgresDbType
 import com.dimafeng.testcontainers.PostgreSQLContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import munit.{AnyFixture, FunSuite, Location}

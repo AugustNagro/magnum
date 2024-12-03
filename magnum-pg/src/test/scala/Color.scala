@@ -1,10 +1,6 @@
-import com.augustnagro.magnum.{
-  DbCodec,
-  PostgresDbType,
-  SqlName,
-  SqlNameMapper,
-  Table
-}
+import com.augustnagro.magnum.codec.DbCodec
+import com.augustnagro.magnum.dbtype.PostgresDbType
+import com.augustnagro.magnum.repo.{SqlName, SqlNameMapper, Table}
 
 @SqlName("colour")
 @Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)

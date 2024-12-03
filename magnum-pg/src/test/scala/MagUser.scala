@@ -1,6 +1,8 @@
-import com.augustnagro.magnum.{DbCodec, Id, PostgresDbType, SqlName, Table}
+import com.augustnagro.magnum.codec.DbCodec
+import com.augustnagro.magnum.dbtype.PostgresDbType
 import com.augustnagro.magnum.pg.PgCodec.given
 import com.augustnagro.magnum.pg.enums.PgEnumToScalaEnumSqlArrayCodec
+import com.augustnagro.magnum.repo.{Id, SqlName, Table}
 import org.postgresql.geometric.{
   PGbox,
   PGcircle,

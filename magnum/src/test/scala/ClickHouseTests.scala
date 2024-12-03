@@ -1,4 +1,8 @@
 import com.augustnagro.magnum.*
+import com.augustnagro.magnum.builders.Transactor
+import com.augustnagro.magnum.codec.DbCodec
+import com.augustnagro.magnum.dbtype.ClickhouseDbType
+import com.augustnagro.magnum.repo.{Repo, Table}
 import com.clickhouse.jdbc.ClickHouseDataSource
 import com.dimafeng.testcontainers.ClickHouseContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures

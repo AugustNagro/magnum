@@ -1,6 +1,6 @@
 package com.augustnagro.magnum.pg.json
 
-import com.augustnagro.magnum.DbCodec
+import com.augustnagro.magnum.codec.DbCodec
 import org.postgresql.util.PGobject
 
 import java.sql.{PreparedStatement, ResultSet, Types}

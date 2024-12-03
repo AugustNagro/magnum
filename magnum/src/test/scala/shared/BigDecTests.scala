@@ -1,6 +1,10 @@
 package shared
 
 import com.augustnagro.magnum.*
+import com.augustnagro.magnum.builders.Transactor
+import com.augustnagro.magnum.codec.DbCodec
+import com.augustnagro.magnum.dbtype.DbType
+import com.augustnagro.magnum.repo.{Repo, SqlNameMapper, Table}
 import munit.FunSuite
 
 def bigDecTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using

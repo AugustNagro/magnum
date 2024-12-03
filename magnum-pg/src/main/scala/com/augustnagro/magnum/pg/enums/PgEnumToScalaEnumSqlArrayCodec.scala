@@ -1,6 +1,6 @@
 package com.augustnagro.magnum.pg.enums
 
-import com.augustnagro.magnum.DerivingUtil
+import com.augustnagro.magnum.impl.DerivingUtil
 import com.augustnagro.magnum.pg.SqlArrayCodec
 
 import java.sql.JDBCType

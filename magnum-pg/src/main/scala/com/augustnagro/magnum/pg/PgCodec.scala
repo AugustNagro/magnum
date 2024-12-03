@@ -1,6 +1,6 @@
 package com.augustnagro.magnum.pg
 
-import com.augustnagro.magnum.DbCodec
+import com.augustnagro.magnum.codec.DbCodec
 import org.postgresql.geometric.{
   PGbox,
   PGcircle,

@@ -1,4 +1,5 @@
 import com.augustnagro.magnum.*
+import com.augustnagro.magnum.codec.DbCodec
 import munit.FunSuite
 
 class EffectiveSubsetTests extends FunSuite:

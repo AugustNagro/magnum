@@ -1,6 +1,23 @@
 package shared
 
 import com.augustnagro.magnum.*
+import com.augustnagro.magnum.builders.Transactor
+import com.augustnagro.magnum.codec.DbCodec
+import com.augustnagro.magnum.dbtype.{
+  ClickhouseDbType,
+  DbType,
+  MySqlDbType,
+  OracleDbType,
+  SqliteDbType
+}
+import com.augustnagro.magnum.repo.{
+  Id,
+  ImmutableRepo,
+  SqlName,
+  SqlNameMapper,
+  Table
+}
+import com.augustnagro.magnum.tableinfo.TableInfo
 import munit.FunSuite
 
 import java.sql.Connection

@@ -1,6 +1,18 @@
 package shared
 
 import com.augustnagro.magnum.*
+import com.augustnagro.magnum.builders.Transactor
+import com.augustnagro.magnum.codec.DbCodec
+import com.augustnagro.magnum.dbtype.DbType
+import com.augustnagro.magnum.repo.{
+  Id,
+  ImmutableRepo,
+  SqlName,
+  SqlNameMapper,
+  Table
+}
+import com.augustnagro.magnum.spec.{NullOrder, SeekDir, SortOrder, Spec}
+import com.augustnagro.magnum.tableinfo.TableInfo
 import munit.FunSuite
 
 import java.time.{OffsetDateTime, ZoneOffset}

@@ -1,6 +1,18 @@
 package shared
 
 import com.augustnagro.magnum.*
+import com.augustnagro.magnum.builders.Transactor
+import com.augustnagro.magnum.codec.DbCodec
+import com.augustnagro.magnum.dbtype.{
+  ClickhouseDbType,
+  DbType,
+  H2DbType,
+  MySqlDbType,
+  SqliteDbType
+}
+import com.augustnagro.magnum.errors.SqlException
+import com.augustnagro.magnum.repo.{Repo, SqlNameMapper, Table}
+import com.augustnagro.magnum.tableinfo.TableInfo
 import munit.{FunSuite, Location}
 
 import scala.util.Using

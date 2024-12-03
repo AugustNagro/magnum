@@ -1,4 +1,4 @@
-import com.augustnagro.magnum.DbCodec
+import com.augustnagro.magnum.codec.DbCodec
 import com.augustnagro.magnum.pg.xml.XmlDbCodec
 
 import scala.xml.{Document, XML, Elem}

@@ -1,4 +1,4 @@
-import com.augustnagro.magnum.DbCodec
+import com.augustnagro.magnum.codec.DbCodec
 
 object opaques:
   opaque type Age = Int

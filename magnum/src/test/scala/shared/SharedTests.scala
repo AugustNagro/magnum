@@ -1,6 +1,8 @@
 package shared
 
-import com.augustnagro.magnum.{DbCodec, DbType, Transactor}
+import com.augustnagro.magnum.builders.Transactor
+import com.augustnagro.magnum.dbtype.DbType
+import com.augustnagro.magnum.codec.DbCodec
 import munit.{FunSuite, Location}
 
 import java.time.OffsetDateTime

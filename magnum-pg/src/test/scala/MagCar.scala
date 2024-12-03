@@ -1,12 +1,8 @@
-import com.augustnagro.magnum.{
-  DbCodec,
-  Id,
-  PostgresDbType,
-  SqlNameMapper,
-  Table
-}
+import com.augustnagro.magnum.codec.DbCodec
+import com.augustnagro.magnum.dbtype.PostgresDbType
 import com.augustnagro.magnum.pg.PgCodec.given
 import com.augustnagro.magnum.pg.enums.PgStringToScalaEnumSqlArrayCodec
+import com.augustnagro.magnum.repo.{Id, SqlNameMapper, Table}
 
 @Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
 case class MagCar(

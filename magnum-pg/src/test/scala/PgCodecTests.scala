@@ -7,6 +7,7 @@ import org.postgresql.geometric.*
 import com.augustnagro.magnum.*
 import com.augustnagro.magnum.pg.PgCodec.given
 import com.augustnagro.magnum.pg.enums.PgEnumToScalaEnumSqlArrayCodec
+import com.augustnagro.magnum.repo.Repo
 import org.postgresql.util.PGInterval
 
 import java.nio.file.{Files, Path}

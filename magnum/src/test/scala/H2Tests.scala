@@ -1,4 +1,6 @@
 import com.augustnagro.magnum.*
+import com.augustnagro.magnum.builders.Transactor
+import com.augustnagro.magnum.dbtype.H2DbType
 import munit.FunSuite
 import org.h2.jdbcx.JdbcDataSource
 import shared.*

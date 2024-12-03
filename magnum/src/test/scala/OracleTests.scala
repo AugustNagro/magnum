@@ -1,5 +1,8 @@
 import com.augustnagro.magnum.*
-import com.augustnagro.magnum.UUIDCodec.VarCharUUIDCodec
+import com.augustnagro.magnum.codec.UUIDCodec.VarCharUUIDCodec
+import com.augustnagro.magnum.builders.Transactor
+import com.augustnagro.magnum.codec.DbCodec
+import com.augustnagro.magnum.dbtype.OracleDbType
 import com.dimafeng.testcontainers.OracleContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import munit.{AnyFixture, FunSuite}
