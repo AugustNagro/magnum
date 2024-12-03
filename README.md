@@ -1,5 +1,7 @@
 ## Magnum
 
+[![Latest version](https://index.scala-lang.org/augustnagro/magnum/magnum/latest.svg?color=orange)](https://index.scala-lang.org/augustnagro/magnum/magnum)
+
 Yet another database client for Scala. No dependencies, high productivity.
 
 * [Installing](#installing)
