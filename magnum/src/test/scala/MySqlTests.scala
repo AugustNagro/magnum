@@ -1,7 +1,7 @@
 import com.augustnagro.magnum.*
 import com.augustnagro.magnum.codec.UUIDCodec.VarCharUUIDCodec
-import com.augustnagro.magnum.builders.Transactor
 import com.augustnagro.magnum.dbtype.MySqlDbType
+import com.augustnagro.magnum.shared.builders.Transactor
 import com.dimafeng.testcontainers.MySQLContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import com.mysql.cj.jdbc.MysqlDataSource

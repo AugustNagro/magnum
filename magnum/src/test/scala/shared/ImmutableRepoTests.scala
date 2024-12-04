@@ -1,7 +1,6 @@
 package shared
 
 import com.augustnagro.magnum.*
-import com.augustnagro.magnum.builders.Transactor
 import com.augustnagro.magnum.codec.DbCodec
 import com.augustnagro.magnum.dbtype.{
   ClickhouseDbType,
@@ -17,6 +16,7 @@ import com.augustnagro.magnum.repo.{
   SqlNameMapper,
   Table
 }
+import com.augustnagro.magnum.shared.builders.Transactor
 import com.augustnagro.magnum.tableinfo.TableInfo
 import munit.FunSuite
 

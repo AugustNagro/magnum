@@ -2,7 +2,7 @@ package com.augustnagro.magnum.logging
 
 import com.augustnagro.magnum.{Log, paramsString}
 import com.augustnagro.magnum.errors.SqlException
-import com.augustnagro.magnum.logging.SqlExceptionEvent
+import com.augustnagro.magnum.shared.event.{SqlExceptionEvent, SqlSuccessEvent}
 
 import java.lang.System.Logger.Level
 import scala.concurrent.duration.FiniteDuration

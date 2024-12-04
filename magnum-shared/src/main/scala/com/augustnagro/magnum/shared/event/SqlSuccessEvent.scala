@@ -1,6 +1,4 @@
-package com.augustnagro.magnum.logging
-
-import com.augustnagro.magnum.parseParams
+package com.augustnagro.magnum.shared.event
 
 import scala.concurrent.duration.FiniteDuration
 

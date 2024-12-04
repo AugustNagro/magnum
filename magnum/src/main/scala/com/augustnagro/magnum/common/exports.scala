@@ -1,5 +1,7 @@
 package com.augustnagro.magnum.common
 
+import com.augustnagro.magnum.shared.builders.Transactor
+
 export com.augustnagro.magnum.builders.{DbCon, DbTx, Transactor}
 export com.augustnagro.magnum.codec.DbCodec
 export com.augustnagro.magnum.repo.{

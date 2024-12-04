@@ -1,7 +1,6 @@
 package shared
 
 import com.augustnagro.magnum.*
-import com.augustnagro.magnum.builders.Transactor
 import com.augustnagro.magnum.codec.DbCodec
 import com.augustnagro.magnum.dbtype.DbType
 import com.augustnagro.magnum.repo.{
@@ -11,6 +10,7 @@ import com.augustnagro.magnum.repo.{
   SqlNameMapper,
   Table
 }
+import com.augustnagro.magnum.shared.builders.Transactor
 import com.augustnagro.magnum.spec.{NullOrder, SeekDir, SortOrder, Spec}
 import com.augustnagro.magnum.tableinfo.TableInfo
 import munit.FunSuite

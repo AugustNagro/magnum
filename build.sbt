@@ -45,8 +45,12 @@ lazy val root = project
   .in(file("."))
   .aggregate(magnum, magnumPg)
 
+lazy val magnumShared = project
+  .in(file("magnum-shared"))
+
 lazy val magnum = project
   .in(file("magnum"))
+  .dependsOn(magnumShared)
   .settings(
     Test / fork := true,
     publish / skip := false,
@@ -80,5 +84,16 @@ lazy val magnumPg = project
       "io.circe" %% "circe-core" % circeVersion % Test,
       "io.circe" %% "circe-parser" % circeVersion % Test,
       "org.scala-lang.modules" %% "scala-xml" % "2.3.0" % Test
+    )
+  )
+
+lazy val magnumZio = project
+  .in(file("magnum-zio"))
+  .dependsOn(magnumShared)
+  .settings(
+    Test / fork := true,
+    publish / skip := false,
+    libraryDependencies ++= Seq(
+      "dev.zio" %% "zio" % "2.1.13"
     )
   )

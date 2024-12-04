@@ -1,8 +1,9 @@
 package shared
 
 import com.augustnagro.magnum.*
-import com.augustnagro.magnum.builders.{DbCon, Frag, Transactor}
+import com.augustnagro.magnum.builders.{DbCon, Frag}
 import com.augustnagro.magnum.dbtype.{DbType, OracleDbType}
+import com.augustnagro.magnum.shared.builders.Transactor
 import munit.FunSuite
 
 import java.util.UUID

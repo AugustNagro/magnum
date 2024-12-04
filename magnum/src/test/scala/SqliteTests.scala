@@ -1,8 +1,8 @@
 import com.augustnagro.magnum.*
 import com.augustnagro.magnum.codec.UUIDCodec.VarCharUUIDCodec
-import com.augustnagro.magnum.builders.Transactor
 import com.augustnagro.magnum.codec.DbCodec
 import com.augustnagro.magnum.dbtype.SqliteDbType
+import com.augustnagro.magnum.shared.builders.Transactor
 import munit.FunSuite
 import org.sqlite.SQLiteDataSource
 import shared.*

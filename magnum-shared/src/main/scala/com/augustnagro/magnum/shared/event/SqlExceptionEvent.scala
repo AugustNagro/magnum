@@ -1,6 +1,4 @@
-package com.augustnagro.magnum.logging
-
-import com.augustnagro.magnum.parseParams
+package com.augustnagro.magnum.shared.event
 
 /** Metadata for a exceptional SQL statement. */
 class SqlExceptionEvent private[magnum] (

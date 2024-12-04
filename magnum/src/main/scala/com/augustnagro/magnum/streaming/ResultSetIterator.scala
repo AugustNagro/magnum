@@ -3,7 +3,8 @@ package com.augustnagro.magnum.streaming
 import com.augustnagro.magnum.builders.Frag
 import com.augustnagro.magnum.codec.DbCodec
 import com.augustnagro.magnum.errors.SqlException
-import com.augustnagro.magnum.logging.{SqlExceptionEvent, SqlLogger}
+import com.augustnagro.magnum.logging.SqlLogger
+import com.augustnagro.magnum.shared.event.SqlExceptionEvent
 
 import java.sql.ResultSet
 import scala.util.control.NonFatal

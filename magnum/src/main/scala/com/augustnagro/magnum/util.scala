@@ -7,14 +7,14 @@ import com.augustnagro.magnum.builders.{
   Frag,
   FragWriter,
   SqlLiteral,
-  Transactor,
   Update
 }
 import com.augustnagro.magnum.codec.DbCodec
 import com.augustnagro.magnum.errors.SqlException
 import com.augustnagro.magnum.impl.{DerivingUtil, TableExprs}
-import com.augustnagro.magnum.logging.{SqlExceptionEvent, SqlSuccessEvent}
 import com.augustnagro.magnum.repo.{Id, SqlName, SqlNameMapper, Table}
+import com.augustnagro.magnum.shared.builders.Transactor
+import com.augustnagro.magnum.shared.event.{SqlExceptionEvent, SqlSuccessEvent}
 
 import java.lang.System.Logger.Level
 import java.sql.{Connection, PreparedStatement, ResultSet, Statement}
