@@ -1,11 +1,12 @@
 package com.augustnagro.magnum.magzio
 
-import com.augustnagro.magnum.*
+import com.augustnagro.magnum.PostgresDbType
 import com.dimafeng.testcontainers.PostgreSQLContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import munit.{AnyFixture, FunSuite, Location}
 import org.postgresql.ds.PGSimpleDataSource
 import org.testcontainers.utility.DockerImageName
+import zio.*
 
 import java.nio.file.{Files, Path}
 import scala.util.Using
@@ -13,7 +14,7 @@ import scala.util.Using.Manager
 
 class PgZioTests extends FunSuite, TestContainersFixtures:
 
-  immutableRepoZioTests(this, PostgresDbType, xa)
+  immutableRepoZioTests(this, PostgresDbType, xa())
 
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
@@ -24,7 +25,7 @@ class PgZioTests extends FunSuite, TestContainersFixtures:
   override def munitFixtures: Seq[AnyFixture[_]] =
     super.munitFixtures :+ pgContainer
 
-  def xa(): Transactor =
+  def xa(): UIO[Transactor] =
     val ds = PGSimpleDataSource()
     val pg = pgContainer()
     ds.setUrl(pg.jdbcUrl)

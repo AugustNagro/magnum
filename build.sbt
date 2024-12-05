@@ -41,9 +41,9 @@ addCommandAlias("fmt", "scalafmtAll")
 val testcontainersVersion = "0.41.4"
 val circeVersion = "0.14.10"
 
-lazy val root = project
+lazy val magnumRoot = project
   .in(file("."))
-  .aggregate(magnum, magnumPg, magnumZio)
+  .aggregate(magnum, magnumPg, magnumZio, magnumZioStreams)
 
 lazy val magnum = project
   .in(file("magnum"))
@@ -90,6 +90,17 @@ lazy val magnumZio = project
     Test / fork := true,
     publish / skip := false,
     libraryDependencies ++= Seq(
-      "dev.zio" %% "zio" % "2.1.12" % Provided
+      "dev.zio" %% "zio" % "2.1.13" % Provided
+    )
+  )
+
+lazy val magnumZioStreams = project
+  .in(file("magnum-zio-streams"))
+  .dependsOn(magnum)
+  .settings(
+    Test / fork := true,
+    publish / skip := false,
+    libraryDependencies ++= Seq(
+      "dev.zio" %% "zio-streams" % "2.1.13" % Provided
     )
   )

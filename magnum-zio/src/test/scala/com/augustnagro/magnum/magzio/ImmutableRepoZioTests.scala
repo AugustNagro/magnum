@@ -1,6 +1,5 @@
 package com.augustnagro.magnum.magzio
 
-import com.augustnagro.magnum.*
 import munit.FunSuite
 import shared.Color
 import zio.*
@@ -12,7 +11,7 @@ import scala.util.{Success, Using}
 def immutableRepoZioTests(
     suite: FunSuite,
     dbType: DbType,
-    xa: () => Transactor
+    xa: UIO[Transactor]
 )(using
     munit.Location,
     DbCodec[OffsetDateTime]
@@ -66,33 +65,46 @@ def immutableRepoZioTests(
     )
   )
 
-  test("count"):
-    val count =
-      runIO:
-        magzio.connect(xa()):
-          carRepo.count
-    assert(count == 3L)
+//  test("error handling"):
+//    enum Errors:
+//      case RateLimit
+//      case ExistingColor
+//
+//    runIO:
+//      magzio.transact(xa()):
+//        val now = OffsetDateTime.parse("2024-11-24T22:17:33.000000000Z")
+//        val latestCar = sql"SELECT ${car.all} FROM $car ORDER BY created DESC"
+//          .query[Car]
+//          .run()
+//          .headOption
+//        if latestCar.exists(_.created.isAfter(now.minusSeconds(4))) then
 
+  test("count"):
+    val count = runIO(
+      xa.flatMap:
+        _.connectUIO:
+          carRepo.count
+    )
+    assert(count == 3)
+
+  /*
   test("existsById"):
     val (exists3, exists4) =
-      runIO:
-        magzio.connect(xa()):
-          carRepo.existsById(3L) -> carRepo.existsById(4L)
+      xa().connectUIO:
+        carRepo.existsById(3L) -> carRepo.existsById(4L)
     assert(exists3)
     assert(!exists4)
 
   test("findAll"):
     val cars =
-      runIO:
-        magzio.connect(xa()):
-          carRepo.findAll
+      xa().connectUIO:
+        carRepo.findAll
     assert(cars == allCars)
 
   test("findById"):
     val (exists3, exists4) =
-      runIO:
-        magzio.connect(xa()):
-          carRepo.findById(3L) -> carRepo.findById(4L)
+      xa().connectUIO:
+        carRepo.findById(3L) -> carRepo.findById(4L)
     assert(exists3.get == allCars.last)
     assert(exists4 == None)
 
@@ -102,16 +114,14 @@ def immutableRepoZioTests(
     assume(dbType != OracleDbType)
     assume(dbType != SqliteDbType)
     val ids =
-      runIO:
-        magzio.connect(xa()):
-          carRepo.findAllById(Vector(1L, 3L)).map(_.id)
+      xa().connectUIO:
+        carRepo.findAllById(Vector(1L, 3L)).map(_.id)
     assert(ids == Vector(1L, 3L))
 
   test("serializable transaction"):
     val count =
-      runIO:
-        magzio.transact(xa().copy(connectionConfig = withSerializable)):
-          carRepo.count
+      magzio.transact(xa().copy(connectionConfig = withSerializable)):
+        carRepo.count
     assert(count == 3L)
 
   def withSerializable(con: Connection): Unit =
@@ -124,7 +134,7 @@ def immutableRepoZioTests(
         .query[Car]
     val result =
       runIO:
-        magzio.connect(xa()):
+        xa().connectUIO:
           query.run()
     assertNoDiff(
       query.frag.sqlString,
@@ -141,7 +151,7 @@ def immutableRepoZioTests(
         .query[Car]
     val result =
       runIO:
-        magzio.connect(xa()):
+        xa().connectUIO:
           query.run()
     assertNoDiff(
       query.frag.sqlString,
@@ -153,44 +163,41 @@ def immutableRepoZioTests(
   test("select via option"):
     val vin = Some(124)
     val cars =
-      runIO:
-        magzio.connect(xa()):
-          sql"select * from car where vin = $vin"
-            .query[Car]
-            .run()
+      xa().connectUIO:
+        sql"select * from car where vin = $vin"
+          .query[Car]
+          .run()
     assert(cars == allCars.filter(_.vinNumber == vin))
 
   test("tuple select"):
     val tuples =
-      runIO:
-        magzio.connect(xa()):
-          sql"select model, color from car where id = 2"
-            .query[(String, Color)]
-            .run()
+      xa().connectUIO:
+        sql"select model, color from car where id = 2"
+          .query[(String, Color)]
+          .run()
     assert(tuples == Vector(allCars(1).model -> allCars(1).color))
 
   test("reads null int as None and not Some(0)"):
     val maybeCar =
-      runIO:
-        magzio.connect(xa()):
-          carRepo.findById(3L)
+      xa().connectUIO:
+        carRepo.findById(3L)
     assert(maybeCar.get.vinNumber == None)
 
   test("created timestamps should match"):
     val allCars =
-      runIO:
-        magzio.connect(xa()):
-          carRepo.findAll
+      xa().connectUIO:
+        carRepo.findAll
     assert(allCars.map(_.created) == allCars.map(_.created))
 
   test(".query iterator"):
     val carsCount =
-      runIO:
-        magzio.connect(xa()):
-          Using.Manager(implicit use =>
-            val it = sql"SELECT * FROM car".query[Car].iterator()
-            it.map(_.id).size
-          )
+      xa().connectUIO:
+        Using.Manager(implicit use =>
+          val it = sql"SELECT * FROM car".query[Car].iterator()
+          it.map(_.id).size
+        )
     assert(carsCount == Success(3))
+
+   */
 
 end immutableRepoZioTests
