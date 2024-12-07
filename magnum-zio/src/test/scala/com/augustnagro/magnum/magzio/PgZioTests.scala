@@ -1,11 +1,12 @@
 package com.augustnagro.magnum.magzio
 
-import com.augustnagro.magnum.*
+import com.augustnagro.magnum.magzio.*
 import com.dimafeng.testcontainers.PostgreSQLContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import munit.{AnyFixture, FunSuite, Location}
 import org.postgresql.ds.PGSimpleDataSource
 import org.testcontainers.utility.DockerImageName
+import zio.Unsafe
 
 import java.nio.file.{Files, Path}
 import scala.util.Using
@@ -43,6 +44,9 @@ class PgZioTests extends FunSuite, TestContainersFixtures:
       val stmt = use(con.createStatement)
       for ddl <- tableDDLs do stmt.execute(ddl)
     ).get
-    Transactor(ds)
+    // todo unsafe
+    Unsafe.unsafe { implicit unsafe =>
+      zio.Runtime.default.unsafe.run(Transactor(ds)).getOrThrow()
+    }
   end xa
 end PgZioTests

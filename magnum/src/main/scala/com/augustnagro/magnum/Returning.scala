@@ -10,8 +10,6 @@ class Returning[E] private[magnum] (
     reader: DbCodec[E],
     keyColumns: Iterable[String]
 ):
-  private val keyColumsArr = keyColumns.toArray
-
   def run()(using con: DbCon): Vector[E] =
     withResultSet(reader.read)
 
@@ -26,7 +24,7 @@ class Returning[E] private[magnum] (
   private def withResultSet[A](f: ResultSet => A)(using con: DbCon): A =
     handleQuery(frag.sqlString, frag.params):
       Manager: use =>
-        if keyColumsArr.isEmpty then
+        if keyColumns.isEmpty then
           val ps = use(con.connection.prepareStatement(frag.sqlString))
           frag.writer.write(ps, 1)
           timed:
@@ -40,7 +38,7 @@ class Returning[E] private[magnum] (
               )
         else
           val ps = use(
-            con.connection.prepareStatement(frag.sqlString, keyColumsArr)
+            con.connection.prepareStatement(frag.sqlString, keyColumns.toArray)
           )
           frag.writer.write(ps, 1)
           timed:
