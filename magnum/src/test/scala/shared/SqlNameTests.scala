@@ -1,12 +1,12 @@
 package shared
 
 import com.augustnagro.magnum.*
-import munit.FunSuite
+import munit.{FunSuite, Location}
 
 import java.time.OffsetDateTime
 
 def sqlNameTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
-    munit.Location
+    Location
 ): Unit =
   import suite.*
 

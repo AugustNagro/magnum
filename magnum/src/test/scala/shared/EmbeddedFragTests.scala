@@ -1,12 +1,12 @@
 package shared
 
-import com.augustnagro.magnum.*
-import munit.FunSuite
+import com.augustnagro.magnum.common.*
+import munit.{FunSuite, Location}
 
 import java.util.UUID
 
 def embeddedFragTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
-    using munit.Location
+    using Location
 ): Unit =
   import suite.*
 
@@ -20,7 +20,7 @@ def embeddedFragTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
     val isAdminFrag =
       if dbType == OracleDbType then sql"is_admin = 'Y'"
       else sql"is_admin = true"
-    connect(xa()):
+    xa().connect:
       val johnCnt =
         findPersonCnt(sql"$isAdminFrag AND first_name = 'John'")
       assert(johnCnt == 2)
