@@ -1,4 +1,4 @@
-import com.augustnagro.magnum.*
+import com.augustnagro.magnum.common.*
 import com.clickhouse.jdbc.ClickHouseDataSource
 import com.dimafeng.testcontainers.ClickHouseContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
