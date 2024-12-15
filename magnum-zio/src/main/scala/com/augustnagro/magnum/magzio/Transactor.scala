@@ -32,7 +32,7 @@ class Transactor private (
     )
 
   def connect[A](f: DbCon ?=> A)(using Trace): Task[A] =
-    ZIO.blocking(
+    val zio = ZIO.blocking(
       ZIO.acquireReleaseWith(acquireConnection)(releaseConnection)(cn =>
         ZIO.attempt {
           connectionConfig(cn)
@@ -40,9 +40,10 @@ class Transactor private (
         }.uninterruptible
       )
     )
+    semaphore.fold(zio)(_.withPermit(zio))
 
   def transact[A](f: DbTx ?=> A)(using Trace): Task[A] =
-    ZIO.blocking(
+    val zio = ZIO.blocking(
       ZIO.acquireReleaseWith(acquireConnection)(releaseConnection)(cn =>
         ZIO.attempt {
           connectionConfig(cn)
@@ -58,6 +59,7 @@ class Transactor private (
         }.uninterruptible
       )
     )
+    semaphore.fold(zio)(_.withPermit(zio))
 
   private def acquireConnection(using Trace): Task[Connection] =
     ZIO
