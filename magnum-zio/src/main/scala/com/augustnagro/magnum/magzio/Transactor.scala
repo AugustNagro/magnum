@@ -37,7 +37,7 @@ class Transactor private (
         ZIO.attempt {
           connectionConfig(cn)
           f(using DbCon(cn, sqlLogger))
-        }.uninterruptible
+        }
       )
     )
     semaphore.fold(zio)(_.withPermit(zio))
