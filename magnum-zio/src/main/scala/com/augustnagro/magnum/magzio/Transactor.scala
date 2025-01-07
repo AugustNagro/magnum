@@ -1,12 +1,11 @@
 package com.augustnagro.magnum.magzio
 
 import com.augustnagro.magnum.{DbCon, DbTx, SqlException, SqlLogger}
-import zio.{IO, Semaphore, Task, Trace, UIO, URIO, ZIO}
+import zio.{Semaphore, Task, Trace, UIO, ULayer, Unsafe, ZIO, ZLayer}
 
 import java.sql.Connection
 import javax.sql.DataSource
-import scala.reflect.ClassTag
-import scala.util.control.{ControlThrowable, NonFatal}
+import scala.util.control.NonFatal
 
 class Transactor private (
     dataSource: DataSource,
@@ -66,7 +65,7 @@ class Transactor private (
       .attempt(dataSource.getConnection())
       .mapError(t => SqlException("Unable to acquire DB Connection", t))
 
-  private def releaseConnection[R](con: Connection)(using Trace): URIO[R, Any] =
+  private def releaseConnection(con: Connection)(using Trace): UIO[Unit] =
     ZIO
       .attempt(con.close())
       .orDieWith(t =>
@@ -75,6 +74,7 @@ class Transactor private (
 end Transactor
 
 object Transactor:
+  private val noOpConnectionConfig: Connection => Unit = _ => ()
 
   /** Construct a Transactor
     *
@@ -91,24 +91,22 @@ object Transactor:
     * @return
     *   Transactor UIO
     */
-  def apply(
+  def layer(
       dataSource: DataSource,
       sqlLogger: SqlLogger,
       connectionConfig: Connection => Unit,
       maxBlockingThreads: Option[Int]
-  ): UIO[Transactor] =
-    ZIO
-      .fromOption(maxBlockingThreads)
-      .flatMap(threads => Semaphore.make(threads))
-      .unsome
-      .map(semaphoreOpt =>
-        new Transactor(
-          dataSource,
-          sqlLogger,
-          connectionConfig,
-          semaphoreOpt
+  ): ULayer[Transactor] =
+    ZLayer.succeed {
+      new Transactor(
+        dataSource,
+        sqlLogger,
+        connectionConfig,
+        maxBlockingThreads.map(threads =>
+          Semaphore.unsafe.make(threads)(Unsafe)
         )
       )
+    }
 
   /** Construct a Transactor
     *
@@ -121,12 +119,12 @@ object Transactor:
     * @return
     *   Transactor UIO
     */
-  def apply(
+  def layer(
       dataSource: DataSource,
       sqlLogger: SqlLogger,
       connectionConfig: Connection => Unit
-  ): UIO[Transactor] =
-    apply(
+  ): ULayer[Transactor] =
+    layer(
       dataSource,
       sqlLogger,
       connectionConfig,
@@ -142,8 +140,8 @@ object Transactor:
     * @return
     *   Transactor UIO
     */
-  def apply(dataSource: DataSource, sqlLogger: SqlLogger): UIO[Transactor] =
-    apply(dataSource, sqlLogger, _ => (), None)
+  def layer(dataSource: DataSource, sqlLogger: SqlLogger): ULayer[Transactor] =
+    layer(dataSource, sqlLogger, noOpConnectionConfig, None)
 
   /** Construct a Transactor
     *
@@ -152,8 +150,8 @@ object Transactor:
     * @return
     *   Transactor UIO
     */
-  def apply(dataSource: DataSource): UIO[Transactor] =
-    apply(dataSource, SqlLogger.Default, _ => (), None)
+  def layer(dataSource: DataSource): ULayer[Transactor] =
+    layer(dataSource, SqlLogger.Default, noOpConnectionConfig, None)
 
   /** Construct a Transactor
     *
@@ -164,10 +162,10 @@ object Transactor:
     * @return
     *   Transactor UIO
     */
-  def apply(
+  def layer(
       dataSource: DataSource,
       connectionConfig: Connection => Unit
-  ): UIO[Transactor] =
-    apply(dataSource, SqlLogger.Default, connectionConfig, None)
+  ): ULayer[Transactor] =
+    layer(dataSource, SqlLogger.Default, connectionConfig, None)
 
 end Transactor
