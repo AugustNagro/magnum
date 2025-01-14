@@ -99,3 +99,15 @@ lazy val magnumZio = project
       "org.postgresql" % "postgresql" % postgresDriverVersion % Test
     )
   )
+
+lazy val magnumCats = project
+  .in(file("magnum-cats-effect"))
+  .dependsOn(magnum % "compile->compile;test->test")
+  .settings(
+    Test / fork := true,
+    publish / skip := false,
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-effect" % "3.5.7" % Provided,
+      "org.tpolecat" %% "natchez-core" % "0.3.7" % Provided
+    )
+  )
