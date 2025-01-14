@@ -108,6 +108,5 @@ lazy val magnumCats = project
     publish / skip := false,
     libraryDependencies ++= Seq(
       "org.typelevel" %% "cats-effect" % "3.5.7" % Provided,
-      "org.tpolecat" %% "natchez-core" % "0.3.7" % Provided
     )
   )
