@@ -1,15 +1,12 @@
 package com.augustnagro.magnum.magcats
 
-import javax.sql.DataSource
-import com.augustnagro.magnum.DbCon
-import cats.effect.IO
-import com.augustnagro.magnum.Transactor
-import cats.effect.kernel.Resource
+import cats.effect.Sync
+import cats.effect.Resource
+import com.augustnagro.magnum.{DbCon, DbTx, Transactor}
+
 import java.sql.Connection
-import com.augustnagro.magnum.DbTx
-import cats.effect.unsafe.IORuntime
+import javax.sql.DataSource
 import scala.util.control.NonFatal
-import natchez.Trace
 
 /** Executes a given query on a given DataSource
   *
@@ -23,9 +20,7 @@ import natchez.Trace
   *   connect(datasource) { cn ?=> repo.findById(id) }
   * }}}
   */
-def connect[A](dataSource: DataSource)(q: DbCon ?=> A)(using
-    trace: Trace[IO]
-): IO[A] =
+def connect[F[_]: Sync, A](dataSource: DataSource)(q: DbCon ?=> A): F[A] =
   connect(Transactor(dataSource))(q)
 
 /** Executes a given query on a given Transactor
@@ -40,13 +35,15 @@ def connect[A](dataSource: DataSource)(q: DbCon ?=> A)(using
   *   connect(transactor) { cn ?=> repo.findById(id) }
   * }}}
   */
-def connect[A](
+def connect[F[_]: Sync, A](
     transactor: Transactor
-)(q: DbCon ?=> A)(using trace: Trace[IO]): IO[A] =
+)(q: DbCon ?=> A): F[A] =
   Resource
-    .fromAutoCloseable(IO.interruptible(transactor.dataSource.getConnection()))
+    .fromAutoCloseable(
+      Sync[F].interruptible(transactor.dataSource.getConnection())
+    )
     .use { cn =>
-      IO.interruptible {
+      Sync[F].interruptible {
         transactor.connectionConfig(cn)
         q(using DbCon(cn, transactor.sqlLogger))
       }
@@ -64,9 +61,7 @@ def connect[A](
   *   transact(dataSource) { tx ?=> repo.insertReturning(creator) }
   * }}}
   */
-def transact[A](dataSource: DataSource)(q: DbTx ?=> A)(using
-    trace: Trace[IO]
-): IO[A] =
+def transact[F[_]: Sync, A](dataSource: DataSource)(q: DbTx ?=> A): F[A] =
   transact(Transactor(dataSource))(q)
 
 /** Executes a given transaction on a given DataSource
@@ -81,9 +76,12 @@ def transact[A](dataSource: DataSource)(q: DbTx ?=> A)(using
   *   transact(dataSource, ...) { tx ?=> repo.insertReturning(creator) }
   * }}}
   */
-def transact[A](dataSource: DataSource, connectionConfig: Connection => Unit)(
+def transact[F[_]: Sync, A](
+    dataSource: DataSource,
+    connectionConfig: Connection => Unit
+)(
     q: DbTx ?=> A
-)(using trace: Trace[IO]): IO[A] =
+): F[A] =
   val transactor =
     Transactor(dataSource = dataSource, connectionConfig = connectionConfig)
   transact(transactor)(q)
@@ -100,13 +98,15 @@ def transact[A](dataSource: DataSource, connectionConfig: Connection => Unit)(
   *   transact(transactor) { tx ?=> repo.insertReturning(creator) }
   * }}}
   */
-def transact[A](
+def transact[F[_]: Sync, A](
     transactor: Transactor
-)(q: DbTx ?=> A)(using trace: Trace[IO]): IO[A] =
+)(q: DbTx ?=> A): F[A] =
   Resource
-    .fromAutoCloseable(IO.interruptible(transactor.dataSource.getConnection()))
+    .fromAutoCloseable(
+      Sync[F].interruptible(transactor.dataSource.getConnection())
+    )
     .use { cn =>
-      IO.blocking {
+      Sync[F].blocking {
         transactor.connectionConfig(cn)
         cn.setAutoCommit(false)
         try {

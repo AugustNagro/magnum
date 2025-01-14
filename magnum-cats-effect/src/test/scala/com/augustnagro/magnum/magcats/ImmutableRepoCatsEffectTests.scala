@@ -23,7 +23,6 @@ def immutableRepoCatsEffectTests(
   import suite.*
 
   given IORuntime = IORuntime.global
-  given natchez.Trace[IO] = natchez.Trace.Implicits.noop
 
   def runIO[A](io: IO[A]): A =
     io.unsafeRunSync()
@@ -96,7 +95,7 @@ def immutableRepoCatsEffectTests(
         magcats.connect(xa()):
           carRepo.findById(3L) -> carRepo.findById(4L)
     assert(exists3.get == allCars.last)
-    assert(exists4 == None)
+    assert(exists4.isEmpty)
 
   test("findAllByIds"):
     assume(dbType != ClickhouseDbType)
@@ -176,7 +175,7 @@ def immutableRepoCatsEffectTests(
       runIO:
         magcats.connect(xa()):
           carRepo.findById(3L)
-    assert(maybeCar.get.vinNumber == None)
+    assert(maybeCar.get.vinNumber.isEmpty)
 
   test("created timestamps should match"):
     val allCars =
