@@ -46,7 +46,9 @@ class PgZioTests extends FunSuite, TestContainersFixtures:
     ).get
     // todo unsafe
     Unsafe.unsafe { implicit unsafe =>
-      zio.Runtime.default.unsafe.run(Transactor.layer(ds).build(Scope.global).map(_.get)).getOrThrow()
+      zio.Runtime.default.unsafe
+        .run(Transactor.layer(ds).build(Scope.global).map(_.get))
+        .getOrThrow()
     }
   end xa
 end PgZioTests
