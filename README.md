@@ -54,36 +54,33 @@ https://javadoc.io/doc/com.augustnagro/magnum_3
 
 ### `connect` creates a database connection.
 
-`connect` takes two parameters; the database Transactor,
-and a context function with a given `DbCon` connection.
-For example:
-
 ```scala
-import com.augustnagro.magnum.*
+import com.augustnagro.magnum.common.*
 
-val dataSource: javax.sql.DataSource = ???
-val xa = Transactor(dataSource)
+val xa = Transactor(dataSource: javax.sql.DataSource)
 
-val users: Vector[User] = connect(xa):
+val users: Vector[User] = xa.connect:
   sql"SELECT * FROM user".query[User].run()
 ```
 
+The `connect` method accepts a context function of type `DbCon ?=> A` (essentially `implicit DbCon => A` in Scala 2).
+
 ### `transact` creates a database transaction.
 
-Like `connect`, `transact` accepts a Transactor and context function.
-The context function provides a `DbTx` instance.
+Like `connect`, `transact` accepts a context function.
+The context function provides a `DbTx` capability.
 If the function throws, the transaction will be rolled back.
 
 ```scala
 // update is rolled back
-transact(xa):
+xa.transact:
   sql"UPDATE user SET first_name = $firstName WHERE id = $id".update.run()
   thisMethodThrows()
 ```
 
 ### Type-safe Transaction & Connection Management
 
-Annotate transactional methods with `using DbTx`, and connections with `using DbCon`.
+Annotate transactional methods with `using DbTx`, and ones that require connections with `using DbCon`.
 
 Since `DbTx <: DbCon`, it's impossible to call a method with the wrong context.
 
@@ -117,7 +114,7 @@ val xa = Transactor(
     con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
 )
 
-transact(xa):
+xa.transact:
   sql"SELECT id from myUser".query[Long].run()
 ```
 
@@ -164,7 +161,7 @@ val updateReturning: Returning =
 All are executed via `run()(using DbCon)`:
 
 ```scala
-transact(xa):
+xa.transact:
   val tuples: Vector[(Long, String)] = query.run()
   val updatedRows: Int = update.run()
   val updatedIds: Vector[Long] = updateReturning.run()
@@ -175,7 +172,7 @@ transact(xa):
 Batch updates are supported via `batchUpdate` method in package `com.augustnagro.magnum`.
 
 ```scala
-connect(xa):
+xa.connect:
   val users: Iterable[User] = ???
   val updateResult: BatchUpdateResult =
     batchUpdate(users): user =>
@@ -210,7 +207,7 @@ case class User(
 
 val userRepo = ImmutableRepo[User, Long]
 
-transact(xa):
+xa.transact:
   val cnt = userRepo.count
   val userOpt = userRepo.findById(2L)
 ```
@@ -219,7 +216,7 @@ Importantly, class User is annotated with `@Table`, which defines the table's da
 
 The optional `@Id` annotation denotes the table's primary key. Not setting `@Id` will default to using the first field. If there is no logical id, then remove the annotation and use Null in the ID type parameter of Repositories (see next).
 
-It is a best practice to extend ImmutableRepo to encapsulate your SQL in repositories. This way, it's easier to maintain since they're grouped together.
+You can choose to use composition or inheritance to encapsulate your SQL in repositories (Scala 3 [exports clauses](https://docs.scala-lang.org/scala3/reference/other-new-features/export.html) are a hidden gem):
 
 ```scala
 object UserRepo extends ImmutableRepo[User, Long]:
@@ -229,19 +226,19 @@ object UserRepo extends ImmutableRepo[User, Long]:
       FROM user
       WHERE last_name = $lastName
       """.query[String].run()
-        
-  // other User-related queries here
-```
+      
+// alternatively
+object UserSql:
+  private val userRepo = ImmutableRepo[User, Long]
 
-If you don't want to expose all the ImmutableRepo methods, use a Scala 3 [exports clause](https://docs.scala-lang.org/scala3/reference/other-new-features/export.html):
+  export userRepo.{findById, count}
 
-```scala
-object UserRepo:
-  private val repo = ImmutableRepo[User, Long]
-  
-  export repo.{count, existsById}
-
-  // other User-related queries here
+  def firstNamesForLast(lastName: String)(using DbCon): Vector[String] =
+    sql"""
+      SELECT DISTINCT first_name
+      FROM user
+      WHERE last_name = $lastName
+      """.query[String].run()
 ```
 
 ### Repositories
@@ -275,15 +272,9 @@ case class User(
 
 val userRepo = Repo[User, User, Long]
 
-val countAfterUpdate = transact(xa):
+val countAfterUpdate = xa.transact:
   userRepo.deleteById(2L)
   userRepo.count
-```
-
-It is a best practice to encapsulate your SQL in repositories.
-
-```scala
-object UserRepo extends Repo[User, User, Long]
 ```
 
 Also note that Repo extends ImmutableRepo. Some databases cannot support every method, and will throw UnsupportedOperationException.
@@ -312,7 +303,7 @@ case class User(
 
 val userRepo = Repo[UserCreator, User, Long]
 
-val newUser: User = transact(xa):
+val newUser: User = xa.transact:
   userRepo.insertReturning(
     UserCreator(Some("Adam"), "Smith")
   )
@@ -378,7 +369,7 @@ object MyId:
   given DbCodec[MyId] =
     DbCodec[Long].biMap(MyId.apply, _.underlying)
 
-transact(xa):
+xa.transact:
   val id = MyId(123L)
   sql"UPDATE my_table SET x = true WHERE id = $id".update.run()
 ```
@@ -412,7 +403,7 @@ To help with this, Magnum offers a `TableInfo` class to enable 'future-proof' qu
 Here's some examples:
 
 ```scala
-import com.augustnagro.magnum.*
+import com.augustnagro.magnum.common.*
 
 case class UserCreator(firstName: String, age: Int) derives DbCodec
 
@@ -531,6 +522,7 @@ The tests are written using TestContainers, which requires Docker be installed.
 ## Talks and Blogs
 
 * Scala Days 2023: [slides](/Magnum-Slides-to-Share.pdf), [talk](https://www.youtube.com/watch?v=iKNRS5b1zAY)
+* Functional Scala 2024: https://www.youtube.com/watch?v=pkBfdHkeTtA
 
 ## Frequently Asked Questions
 
@@ -599,7 +591,7 @@ Some databases directly support the UUID type; these include Postgres, Clickhous
 Other databases like MySql, Oracle, and Sqlite, however, do not natively support UUID columns. Users have to choose an alternate datatype to store the UUID: most commonly `varchar(36)` or `binary(16)`. The JDBC drivers for these databases do not support direct serialization and deserialization of `java.util.UUID`, therefore the default `DbCodec[UUID]` will not be sufficient. Instead, import the appropriate codec from `com.augustnagro.magnum.UUIDCodec`. For example,
 
 ```scala
-import com.augustnagro.magnum.*
+import com.augustnagro.magnum.common.*
 import com.augustnagro.magnum.UUIDCodec.VarCharUUIDCodec
 import java.util.UUID
 
