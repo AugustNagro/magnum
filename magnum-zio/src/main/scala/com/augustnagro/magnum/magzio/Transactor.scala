@@ -66,11 +66,13 @@ class Transactor private (
       .mapError(t => SqlException("Unable to acquire DB Connection", t))
 
   private def releaseConnection(con: Connection)(using Trace): UIO[Unit] =
-    ZIO
-      .attempt(con.close())
-      .orDieWith(t =>
-        SqlException("Unable to close DB Connection, will die", t)
-      )
+    if con eq null then ZIO.unit
+    else
+      ZIO
+        .attempt(con.close())
+        .orDieWith(t =>
+          SqlException("Unable to close DB Connection, will die", t)
+        )
 end Transactor
 
 object Transactor:
