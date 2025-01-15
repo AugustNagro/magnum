@@ -24,35 +24,23 @@ import scala.reflect.ClassTag
 import scala.quoted.*
 
 def connect[T](transactor: Transactor)(f: DbCon ?=> T): T =
-  Using.resource(transactor.dataSource.getConnection): con =>
-    transactor.connectionConfig(con)
-    f(using DbCon(con, transactor.sqlLogger))
+  transactor.connect(f)
 
 def connect[T](dataSource: DataSource)(f: DbCon ?=> T): T =
-  connect(Transactor(dataSource))(f)
+  Transactor(dataSource).connect(f)
 
 def transact[T](transactor: Transactor)(f: DbTx ?=> T): T =
-  Using.resource(transactor.dataSource.getConnection): con =>
-    transactor.connectionConfig(con)
-    con.setAutoCommit(false)
-    try
-      val res = f(using DbTx(con, transactor.sqlLogger))
-      con.commit()
-      res
-    catch
-      case t =>
-        con.rollback()
-        throw t
+  transactor.transact(f)
 
 def transact[T](dataSource: DataSource)(f: DbTx ?=> T): T =
-  transact(Transactor(dataSource))(f)
+  Transactor(dataSource).transact(f)
 
 def transact[T](dataSource: DataSource, connectionConfig: Connection => Unit)(
     f: DbTx ?=> T
 ): T =
   val transactor =
     Transactor(dataSource = dataSource, connectionConfig = connectionConfig)
-  transact(transactor)(f)
+  transactor.transact(f)
 
 extension (inline sc: StringContext)
   inline def sql(inline args: Any*): Frag =

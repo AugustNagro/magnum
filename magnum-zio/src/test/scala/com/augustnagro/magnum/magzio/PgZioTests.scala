@@ -1,18 +1,20 @@
-import com.augustnagro.magnum.common.*
+package com.augustnagro.magnum.magzio
+
+import com.augustnagro.magnum.magzio.*
 import com.dimafeng.testcontainers.PostgreSQLContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import munit.{AnyFixture, FunSuite, Location}
 import org.postgresql.ds.PGSimpleDataSource
 import org.testcontainers.utility.DockerImageName
-import shared.*
+import zio.{Scope, Unsafe}
 
 import java.nio.file.{Files, Path}
 import scala.util.Using
 import scala.util.Using.Manager
 
-class PgTests extends FunSuite, TestContainersFixtures:
+class PgZioTests extends FunSuite, TestContainersFixtures:
 
-  sharedTests(this, PostgresDbType, xa)
+  immutableRepoZioTests(this, PostgresDbType, xa)
 
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
@@ -42,6 +44,11 @@ class PgTests extends FunSuite, TestContainersFixtures:
       val stmt = use(con.createStatement)
       for ddl <- tableDDLs do stmt.execute(ddl)
     ).get
-    Transactor(ds)
+    // todo unsafe
+    Unsafe.unsafe { implicit unsafe =>
+      zio.Runtime.default.unsafe
+        .run(Transactor.layer(ds).build(Scope.global).map(_.get))
+        .getOrThrow()
+    }
   end xa
-end PgTests
+end PgZioTests
