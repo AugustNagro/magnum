@@ -1,7 +1,7 @@
 package com.augustnagro.magnum.magzio
 
 import com.augustnagro.magnum.{DbCon, DbTx, SqlException, SqlLogger}
-import zio.{Semaphore, Task, Trace, UIO, ULayer, Unsafe, ZIO, ZLayer}
+import zio.{Semaphore, Task, Trace, UIO, ULayer, ZIO, ZLayer}
 
 import java.sql.Connection
 import javax.sql.DataSource
@@ -97,15 +97,19 @@ object Transactor:
       connectionConfig: Connection => Unit,
       maxBlockingThreads: Option[Int]
   ): ULayer[Transactor] =
-    ZLayer.succeed {
-      new Transactor(
-        dataSource,
-        sqlLogger,
-        connectionConfig,
-        maxBlockingThreads.map(threads =>
-          Semaphore.unsafe.make(threads)(Unsafe)
+    ZLayer.fromZIO {
+      ZIO
+        .fromOption(maxBlockingThreads)
+        .flatMap(threads => Semaphore.make(threads))
+        .unsome
+        .map(semaphoreOpt =>
+          new Transactor(
+            dataSource,
+            sqlLogger,
+            connectionConfig,
+            semaphoreOpt
+          )
         )
-      )
     }
 
   /** Construct a Transactor
