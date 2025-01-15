@@ -1,7 +1,7 @@
 package shared
 
-import com.augustnagro.magnum.*
-import munit.FunSuite
+import com.augustnagro.magnum.common.*
+import munit.{FunSuite, Location}
 
 import java.sql.Connection
 import java.time.{OffsetDateTime, ZoneOffset}
@@ -9,7 +9,7 @@ import scala.util.Using
 
 def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
     using
-    munit.Location,
+    Location,
     DbCodec[OffsetDateTime]
 ): Unit =
   import suite.*
@@ -55,21 +55,21 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
   )
 
   test("count"):
-    connect(xa()):
+    xa().connect:
       assert(carRepo.count == 3L)
 
   test("existsById"):
-    connect(xa()):
+    xa().connect:
       assert(carRepo.existsById(3L))
       assert(!carRepo.existsById(4L))
 
   test("findAll"):
-    val cars = connect(xa()):
+    val cars = xa().connect:
       carRepo.findAll
     assert(cars == allCars)
 
   test("findById"):
-    connect(xa()):
+    xa().connect:
       assert(carRepo.findById(3L).get == allCars.last)
       assert(carRepo.findById(4L) == None)
 
@@ -78,19 +78,21 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
     assume(dbType != MySqlDbType)
     assume(dbType != OracleDbType)
     assume(dbType != SqliteDbType)
-    connect(xa()):
+    xa().connect:
       val ids = carRepo.findAllById(Vector(1L, 3L)).map(_.id)
       assert(ids == Vector(1L, 3L))
 
   test("serializable transaction"):
-    transact(xa().copy(connectionConfig = withSerializable)):
-      assert(carRepo.count == 3L)
+    xa()
+      .withConnectionConfig(withSerializable)
+      .transact:
+        assert(carRepo.count == 3L)
 
   def withSerializable(con: Connection): Unit =
     con.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE)
 
   test("select query"):
-    connect(xa()):
+    xa().connect:
       val minSpeed: Int = 210
       val query =
         sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
@@ -103,7 +105,7 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
       assert(query.run() == allCars.tail)
 
   test("select query with aliasing"):
-    connect(xa()):
+    xa().connect:
       val minSpeed = 210
       val cAlias = car.alias("c")
       val query =
@@ -117,7 +119,7 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
       assert(query.run() == allCars.tail)
 
   test("select via option"):
-    connect(xa()):
+    xa().connect:
       val vin = Some(124)
       val cars =
         sql"select * from car where vin = $vin"
@@ -126,22 +128,22 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
       assert(cars == allCars.filter(_.vinNumber == vin))
 
   test("tuple select"):
-    connect(xa()):
+    xa().connect:
       val tuples = sql"select model, color from car where id = 2"
         .query[(String, Color)]
         .run()
       assert(tuples == Vector(allCars(1).model -> allCars(1).color))
 
   test("reads null int as None and not Some(0)"):
-    connect(xa()):
+    xa().connect:
       assert(carRepo.findById(3L).get.vinNumber == None)
 
   test("created timestamps should match"):
-    connect(xa()):
+    xa().connect:
       assert(carRepo.findAll.map(_.created) == allCars.map(_.created))
 
   test(".query iterator"):
-    connect(xa()):
+    xa().connect:
       Using.Manager(implicit use =>
         val it = sql"SELECT * FROM car".query[Car].iterator()
         assert(it.map(_.id).size == 3)
