@@ -102,11 +102,15 @@ lazy val magnumZio = project
 
 lazy val magnumCats = project
   .in(file("magnum-cats-effect"))
-  .dependsOn(magnum % "compile->compile;test->test")
+  .dependsOn(magnum)
   .settings(
     Test / fork := true,
     publish / skip := false,
     libraryDependencies ++= Seq(
       "org.typelevel" %% "cats-effect" % "3.5.7" % Provided,
+      "org.scalameta" %% "munit" % munitVersion % Test,
+      "com.dimafeng" %% "testcontainers-scala-munit" % testcontainersVersion % Test,
+      "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion % Test,
+      "org.postgresql" % "postgresql" % postgresDriverVersion % Test
     )
   )

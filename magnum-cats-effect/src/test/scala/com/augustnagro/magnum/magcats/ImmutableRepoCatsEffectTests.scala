@@ -1,21 +1,19 @@
 package com.augustnagro.magnum.magcats
 
-import com.augustnagro.magnum.*
-import shared.Color
 import munit.FunSuite
 import cats.effect.IO
+import cats.syntax.monadError.*
 import cats.effect.std.Dispatcher
 import cats.effect.unsafe.IORuntime
 
 import java.sql.Connection
 import java.time.OffsetDateTime
 import scala.util.{Success, Using}
-import cats.effect.Trace
 
 def immutableRepoCatsEffectTests(
     suite: FunSuite,
     dbType: DbType,
-    xa: () => Transactor
+    xa: () => Transactor[IO]
 )(using
     munit.Location,
     DbCodec[OffsetDateTime]
@@ -26,6 +24,9 @@ def immutableRepoCatsEffectTests(
 
   def runIO[A](io: IO[A]): A =
     io.unsafeRunSync()
+
+  enum Color derives DbCodec:
+    case Red, Green, Blue
 
   @Table(dbType, SqlNameMapper.CamelToSnakeCase)
   case class Car(
@@ -70,14 +71,14 @@ def immutableRepoCatsEffectTests(
   test("count"):
     val count =
       runIO:
-        magcats.connect(xa()):
+        xa().connect:
           carRepo.count
     assert(count == 3L)
 
   test("existsById"):
     val (exists3, exists4) =
       runIO:
-        magcats.connect(xa()):
+        xa().connect:
           carRepo.existsById(3L) -> carRepo.existsById(4L)
     assert(exists3)
     assert(!exists4)
@@ -85,17 +86,17 @@ def immutableRepoCatsEffectTests(
   test("findAll"):
     val cars =
       runIO:
-        magcats.connect(xa()):
+        xa().connect:
           carRepo.findAll
     assert(cars == allCars)
 
   test("findById"):
     val (exists3, exists4) =
       runIO:
-        magcats.connect(xa()):
+        xa().connect:
           carRepo.findById(3L) -> carRepo.findById(4L)
     assert(exists3.get == allCars.last)
-    assert(exists4.isEmpty)
+    assert(exists4 == None)
 
   test("findAllByIds"):
     assume(dbType != ClickhouseDbType)
@@ -104,15 +105,17 @@ def immutableRepoCatsEffectTests(
     assume(dbType != SqliteDbType)
     val ids =
       runIO:
-        magcats.connect(xa()):
+        xa().connect:
           carRepo.findAllById(Vector(1L, 3L)).map(_.id)
     assert(ids == Vector(1L, 3L))
 
   test("serializable transaction"):
     val count =
       runIO:
-        magcats.transact(xa().copy(connectionConfig = withSerializable)):
-          carRepo.count
+        xa()
+          .withConnectionConfig(withSerializable)
+          .transact:
+            carRepo.count
     assert(count == 3L)
 
   def withSerializable(con: Connection): Unit =
@@ -125,7 +128,7 @@ def immutableRepoCatsEffectTests(
         .query[Car]
     val result =
       runIO:
-        magcats.connect(xa()):
+        xa().connect:
           query.run()
     assertNoDiff(
       query.frag.sqlString,
@@ -142,7 +145,7 @@ def immutableRepoCatsEffectTests(
         .query[Car]
     val result =
       runIO:
-        magcats.connect(xa()):
+        xa().connect:
           query.run()
     assertNoDiff(
       query.frag.sqlString,
@@ -155,7 +158,7 @@ def immutableRepoCatsEffectTests(
     val vin = Some(124)
     val cars =
       runIO:
-        magcats.connect(xa()):
+        xa().connect:
           sql"select * from car where vin = $vin"
             .query[Car]
             .run()
@@ -164,7 +167,7 @@ def immutableRepoCatsEffectTests(
   test("tuple select"):
     val tuples =
       runIO:
-        magcats.connect(xa()):
+        xa().connect:
           sql"select model, color from car where id = 2"
             .query[(String, Color)]
             .run()
@@ -173,21 +176,21 @@ def immutableRepoCatsEffectTests(
   test("reads null int as None and not Some(0)"):
     val maybeCar =
       runIO:
-        magcats.connect(xa()):
+        xa().connect:
           carRepo.findById(3L)
-    assert(maybeCar.get.vinNumber.isEmpty)
+    assert(maybeCar.get.vinNumber == None)
 
   test("created timestamps should match"):
     val allCars =
       runIO:
-        magcats.connect(xa()):
+        xa().connect:
           carRepo.findAll
     assert(allCars.map(_.created) == allCars.map(_.created))
 
   test(".query iterator"):
     val carsCount =
       runIO:
-        magcats.connect(xa()):
+        xa().connect:
           Using.Manager(implicit use =>
             val it = sql"SELECT * FROM car".query[Car].iterator()
             it.map(_.id).size
