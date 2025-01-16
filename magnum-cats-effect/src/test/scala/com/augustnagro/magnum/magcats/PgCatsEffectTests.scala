@@ -1,6 +1,5 @@
-package com.augustnagro.magnum.magzio
+package com.augustnagro.magnum.magcats
 
-import com.augustnagro.magnum.*
 import com.dimafeng.testcontainers.PostgreSQLContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import munit.{AnyFixture, FunSuite, Location}
@@ -11,8 +10,15 @@ import java.nio.file.{Files, Path}
 import scala.util.Using
 import scala.util.Using.Manager
 import com.augustnagro.magnum.magcats.immutableRepoCatsEffectTests
+import cats.effect.IO
+import cats.effect.unsafe.IORuntime
+import com.augustnagro.magnum.SqlLogger
+import cats.effect.kernel.Resource
+import cats.syntax.all.*
 
 class PgCatsEffectTests extends FunSuite, TestContainersFixtures:
+
+  given IORuntime = IORuntime.global
 
   immutableRepoCatsEffectTests(this, PostgresDbType, xa)
 
@@ -25,7 +31,7 @@ class PgCatsEffectTests extends FunSuite, TestContainersFixtures:
   override def munitFixtures: Seq[AnyFixture[_]] =
     super.munitFixtures :+ pgContainer
 
-  def xa(): Transactor =
+  def xa(): Transactor[IO] =
     val ds = PGSimpleDataSource()
     val pg = pgContainer()
     ds.setUrl(pg.jdbcUrl)
@@ -39,11 +45,17 @@ class PgCatsEffectTests extends FunSuite, TestContainersFixtures:
       "/pg/big-dec.sql"
     ).map(p => Files.readString(Path.of(getClass.getResource(p).toURI)))
 
-    Manager(use =>
-      val con = use(ds.getConnection)
-      val stmt = use(con.createStatement)
-      for ddl <- tableDDLs do stmt.execute(ddl)
-    ).get
-    Transactor(ds)
+    val setup =
+      Resource
+        .fromAutoCloseable(IO.delay(ds.getConnection))
+        .use: con =>
+          Resource
+            .fromAutoCloseable(IO.delay(con.createStatement))
+            .use: stmt =>
+              tableDDLs.traverse_(ddl => IO.delay(stmt.execute(ddl)))
+                .flatMap: _ =>
+                  Transactor[IO](ds)
+
+    setup.unsafeRunSync()
   end xa
 end PgCatsEffectTests
