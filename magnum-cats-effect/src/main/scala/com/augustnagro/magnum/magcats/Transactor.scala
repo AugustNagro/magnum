@@ -1,18 +1,14 @@
 package com.augustnagro.magnum.magcats
 
-import com.augustnagro.magnum.{DbCon, DbTx, SqlException, SqlLogger}
+import cats.*
+import cats.effect.kernel.*
+import cats.effect.std.*
+import cats.syntax.all.*
+import com.augustnagro.magnum.*
 
 import java.sql.Connection
 import javax.sql.DataSource
 import scala.util.control.NonFatal
-import cats.effect.std.Semaphore
-import cats.effect.kernel.Sync
-import cats.effect.kernel.Resource
-import cats.MonadError
-import cats.Monad
-import cats.syntax.all.*
-import cats.effect.kernel.Concurrent
-import cats.effect.kernel.Async
 
 class Transactor[F[_]: Async] private (
     dataSource: DataSource,
@@ -38,7 +34,7 @@ class Transactor[F[_]: Async] private (
       semaphore
     )
 
-  def connect[A](f: DbCon ?=> A)(using MonadError[F, Throwable]): F[A] =
+  def connect[A](f: DbCon ?=> A): F[A] =
     val io =
       Resource
         .fromAutoCloseable(acquireConnection)
@@ -48,7 +44,7 @@ class Transactor[F[_]: Async] private (
 
     semaphore.fold(io)(sem => sem.permit.use { _ => io })
 
-  def transact[A](f: DbTx ?=> A)(using MonadError[F, Throwable]): F[A] =
+  def transact[A](f: DbTx ?=> A): F[A] =
     val io =
       Resource
         .fromAutoCloseable(acquireConnection)
@@ -68,11 +64,11 @@ class Transactor[F[_]: Async] private (
 
     semaphore.fold(io)(sem => sem.permit.use { _ => io })
 
-  private def acquireConnection(using
-      ME: MonadError[F, Throwable]
-  ): F[Connection] =
+  private def acquireConnection: F[Connection] =
     val fa = Async[F].delay(dataSource.getConnection())
-    ME.adaptError(fa)(t => SqlException("Unable to acquire DB Connection", t))
+    MonadError[F, Throwable].adaptError(fa)(t =>
+      SqlException("Unable to acquire DB Connection", t)
+    )
 end Transactor
 
 object Transactor:
@@ -94,7 +90,6 @@ object Transactor:
     * @return
     *   F[Transactor[F]]
     */
-  // TODO: Figure out if the maxBlockingThreads description is actually true
   def apply[F[_]: Async](
       dataSource: DataSource,
       sqlLogger: SqlLogger,
@@ -113,8 +108,9 @@ object Transactor:
             None
           )
       } { semaphore =>
-        semaphore.map: sem =>
+        semaphore.map(sem =>
           new Transactor(dataSource, sqlLogger, connectionConfig, Some(sem))
+        )
       }
 
   /** Construct a Transactor
