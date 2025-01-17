@@ -20,7 +20,8 @@ class PgCatsEffectTests extends FunSuite, TestContainersFixtures:
 
   given IORuntime = IORuntime.global
 
-  immutableRepoCatsEffectTests(this, PostgresDbType, xa)
+  immutableRepoCatsEffectTests(this, PostgresDbType, xaNoSemaphore)
+  immutableRepoCatsEffectTests(this, PostgresDbType, xaSemaphore)
 
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
@@ -31,7 +32,7 @@ class PgCatsEffectTests extends FunSuite, TestContainersFixtures:
   override def munitFixtures: Seq[AnyFixture[_]] =
     super.munitFixtures :+ pgContainer
 
-  def xa(): Transactor[IO] =
+  def xaNoSemaphore(): Transactor[IO] =
     val ds = PGSimpleDataSource()
     val pg = pgContainer()
     ds.setUrl(pg.jdbcUrl)
@@ -57,5 +58,33 @@ class PgCatsEffectTests extends FunSuite, TestContainersFixtures:
                   Transactor[IO](ds)
 
     setup.unsafeRunSync()
-  end xa
+  end xaNoSemaphore
+
+  def xaSemaphore(): Transactor[IO] =
+    val ds = PGSimpleDataSource()
+    val pg = pgContainer()
+    ds.setUrl(pg.jdbcUrl)
+    ds.setUser(pg.username)
+    ds.setPassword(pg.password)
+    val tableDDLs = Vector(
+      "/pg/car.sql",
+      "/pg/person.sql",
+      "/pg/my-user.sql",
+      "/pg/no-id.sql",
+      "/pg/big-dec.sql"
+    ).map(p => Files.readString(Path.of(getClass.getResource(p).toURI)))
+
+    val setup =
+      Resource
+        .fromAutoCloseable(IO.delay(ds.getConnection))
+        .use: con =>
+          Resource
+            .fromAutoCloseable(IO.delay(con.createStatement))
+            .use: stmt =>
+              tableDDLs.traverse_(ddl => IO.delay(stmt.execute(ddl)))
+                .flatMap: _ =>
+                  Transactor[IO](ds, SqlLogger.Default, _ => (), 4)
+
+    setup.unsafeRunSync()
+  end xaSemaphore
 end PgCatsEffectTests

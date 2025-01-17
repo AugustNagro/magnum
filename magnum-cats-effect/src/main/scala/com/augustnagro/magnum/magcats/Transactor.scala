@@ -2,7 +2,9 @@ package com.augustnagro.magnum.magcats
 
 import cats.*
 import cats.effect.kernel.*
+import cats.effect.kernel.Outcome.*
 import cats.effect.std.*
+import cats.effect.syntax.all.*
 import cats.syntax.all.*
 import com.augustnagro.magnum.*
 
@@ -10,7 +12,7 @@ import java.sql.Connection
 import javax.sql.DataSource
 import scala.util.control.NonFatal
 
-class Transactor[F[_]: Async] private (
+class Transactor[F[_]: Sync] private (
     dataSource: DataSource,
     sqlLogger: SqlLogger,
     connectionConfig: Connection => Unit,
@@ -37,7 +39,7 @@ class Transactor[F[_]: Async] private (
   def connect[A](f: DbCon ?=> A): F[A] =
     val io =
       Resource
-        .fromAutoCloseable(acquireConnection)
+        .make(acquireConnection)(releaseConnection)
         .use: cn =>
           Sync[F].delay(connectionConfig(cn)) >>
             Sync[F].interruptible(f(using DbCon(cn, sqlLogger)))
@@ -47,28 +49,31 @@ class Transactor[F[_]: Async] private (
   def transact[A](f: DbTx ?=> A): F[A] =
     val io =
       Resource
-        .fromAutoCloseable(acquireConnection)
+        .make(acquireConnection)(releaseConnection)
         .use: cn =>
           Sync[F].delay(connectionConfig(cn)) >>
             Sync[F].delay(cn.setAutoCommit(false)) >>
-            Sync[F].blocking(
-              try
-                val res = f(using DbTx(cn, sqlLogger))
-                cn.commit()
-                res
-              catch
-                case NonFatal(t) =>
-                  cn.rollback()
-                  throw t
-            )
+            Sync[F]
+              .interruptible(f(using DbTx(cn, sqlLogger)))
+              .guaranteeCase {
+                case Succeeded(_) => Sync[F].blocking(cn.commit())
+                case Errored(_) | Canceled() =>
+                  Sync[F].blocking(cn.rollback())
+              }
 
     semaphore.fold(io)(sem => sem.permit.use { _ => io })
 
   private def acquireConnection: F[Connection] =
-    val fa = Async[F].delay(dataSource.getConnection())
-    MonadError[F, Throwable].adaptError(fa)(t =>
-      SqlException("Unable to acquire DB Connection", t)
-    )
+    Sync[F]
+      .delay(dataSource.getConnection())
+      .adaptError(t => SqlException("Unable to acquire DB Connection", t))
+
+  private def releaseConnection(conn: Connection): F[Unit] =
+    if conn eq null then Sync[F].unit
+    else
+      Sync[F]
+        .delay(conn.close())
+        .adaptError(t => SqlException("Unable to close DB connection", t))
 end Transactor
 
 object Transactor:
@@ -94,24 +99,15 @@ object Transactor:
       dataSource: DataSource,
       sqlLogger: SqlLogger,
       connectionConfig: Connection => Unit,
-      maxBlockingThreads: Option[Int]
+      maxBlockingThreads: Int
   ): F[Transactor[F]] =
-    // Figure out what to throw here
-    maxBlockingThreads
-      .map(threads => Semaphore(threads))
-      .fold {
-        Async[F].delay:
-          new Transactor[F](
-            dataSource,
-            sqlLogger,
-            connectionConfig,
-            None
-          )
-      } { semaphore =>
-        semaphore.map(sem =>
-          new Transactor(dataSource, sqlLogger, connectionConfig, Some(sem))
-        )
-      }
+    Semaphore[F](maxBlockingThreads).map: semaphore =>
+      new Transactor(
+        dataSource,
+        sqlLogger,
+        connectionConfig,
+        Some(semaphore)
+      )
 
   /** Construct a Transactor
     *
@@ -124,12 +120,12 @@ object Transactor:
     * @return
     *   F[Transactor[F]]
     */
-  def apply[F[_]: Async](
+  def apply[F[_]: Sync](
       dataSource: DataSource,
       sqlLogger: SqlLogger,
       connectionConfig: Connection => Unit
   ): F[Transactor[F]] =
-    apply(dataSource, sqlLogger, connectionConfig, None)
+    Sync[F].delay(new Transactor(dataSource, sqlLogger, connectionConfig, None))
 
   /** Construct a Transactor
     *
@@ -140,11 +136,11 @@ object Transactor:
     * @return
     *   F[Transactor[F]]
     */
-  def apply[F[_]: Async](
+  def apply[F[_]: Sync](
       dataSource: DataSource,
       sqlLogger: SqlLogger
   ): F[Transactor[F]] =
-    apply(dataSource, sqlLogger, noOpConnectionConfig, None)
+    apply(dataSource, sqlLogger, noOpConnectionConfig)
 
   /** Construct a Transactor
     *
@@ -155,8 +151,8 @@ object Transactor:
     * @return
     *   F[Transactor[F]]
     */
-  def apply[F[_]: Async](
+  def apply[F[_]: Sync](
       dataSource: DataSource
   ): F[Transactor[F]] =
-    apply(dataSource, SqlLogger.Default, noOpConnectionConfig, None)
+    apply(dataSource, SqlLogger.Default, noOpConnectionConfig)
 end Transactor
