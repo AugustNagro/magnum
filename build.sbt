@@ -91,11 +91,13 @@ lazy val magnumZio = project
   .settings(
     Test / fork := true,
     publish / skip := false,
+    testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework"),
     libraryDependencies ++= Seq(
-      "dev.zio" %% "zio" % "2.1.12" % Provided,
-      "org.scalameta" %% "munit" % munitVersion % Test,
-      "com.dimafeng" %% "testcontainers-scala-munit" % testcontainersVersion % Test,
-      "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion % Test,
+      "dev.zio" %% "zio" % "2.1.14" % Provided,
+      "dev.zio" %% "zio-test" % "2.1.14" % Test,
+      "dev.zio" %% "zio-test-sbt" % "2.1.14" % Test,
+      "dev.zio" %% "zio-test-magnolia" % "2.1.14" % Test,
+      "org.testcontainers" % "postgresql" % "1.20.4" % Test,
       "org.postgresql" % "postgresql" % postgresDriverVersion % Test
     )
   )
