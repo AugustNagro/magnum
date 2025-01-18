@@ -13,28 +13,18 @@ import java.sql.Connection
 import javax.sql.DataSource
 import scala.util.control.NonFatal
 
-final class Transactor private (
-    dataSource: DataSource,
-    sqlLogger: SqlLogger,
-    connectionConfig: Connection => Unit,
-    semaphore: Option[Semaphore]
+final case class Transactor(
+    private val dataSource: DataSource,
+    private val sqlLogger: SqlLogger,
+    private val connectionConfig: Connection => Unit,
+    private val semaphore: Option[Semaphore]
 ) extends TransactorOps[Task]:
 
   def withSqlLogger(sqlLogger: SqlLogger): Transactor =
-    new Transactor(
-      dataSource,
-      sqlLogger,
-      connectionConfig,
-      semaphore
-    )
+    copy(sqlLogger = sqlLogger)
 
-  def withConnectionConfig(connectionConfig: Connection => Unit): Transactor =
-    new Transactor(
-      dataSource,
-      sqlLogger,
-      connectionConfig,
-      semaphore
-    )
+  def withConnectionConfig(connectionConfig: Connection => Unit) =
+    copy(connectionConfig = connectionConfig)
 
   def connect[A](f: DbCon ?=> A): Task[A] =
     val zio = ZIO.blocking(
@@ -83,18 +73,11 @@ end Transactor
 
 object Transactor:
   private val noOpConnectionConfig: Connection => Unit = _ => ()
-
-  def layer = ZLayer.fromFunction(
-    (
-        ds: DataSource,
-        sqlLogger: SqlLogger,
-        connectionConfig: Connection => Unit,
-        semaphore: Option[Semaphore]
-    ) => Transactor(ds, sqlLogger, connectionConfig, semaphore)
-  )
   private val defaultLogger = ZLayer.succeed(SqlLogger.Default)
   private val defaultConnectionConfig = ZLayer.succeed(noOpConnectionConfig)
   private val defaultSemaphore = ZLayer.succeed(None)
+
+  def layer = ZLayer.derive[Transactor]
 
   /** Configures a transactor layer with the given parameters.
     *
