@@ -1,18 +1,24 @@
 package com.augustnagro.magnum.magzio
 
-import com.augustnagro.magnum.{DbCon, DbTx, SqlException, SqlLogger}
+import com.augustnagro.magnum.{
+  DbCon,
+  DbTx,
+  SqlException,
+  SqlLogger,
+  TransactorOps
+}
 import zio.{Semaphore, Task, Trace, UIO, ULayer, ZIO, ZLayer}
 
 import java.sql.Connection
 import javax.sql.DataSource
 import scala.util.control.NonFatal
 
-class Transactor private (
+final class Transactor private (
     dataSource: DataSource,
     sqlLogger: SqlLogger,
     connectionConfig: Connection => Unit,
     semaphore: Option[Semaphore]
-):
+) extends TransactorOps[Task]:
 
   def withSqlLogger(sqlLogger: SqlLogger): Transactor =
     new Transactor(
@@ -30,7 +36,7 @@ class Transactor private (
       semaphore
     )
 
-  def connect[A](f: DbCon ?=> A)(using Trace): Task[A] =
+  def connect[A](f: DbCon ?=> A): Task[A] =
     val zio = ZIO.blocking(
       ZIO.acquireReleaseWith(acquireConnection)(releaseConnection)(cn =>
         ZIO.attempt {
@@ -41,7 +47,7 @@ class Transactor private (
     )
     semaphore.fold(zio)(_.withPermit(zio))
 
-  def transact[A](f: DbTx ?=> A)(using Trace): Task[A] =
+  def transact[A](f: DbTx ?=> A): Task[A] =
     val zio = ZIO.blocking(
       ZIO.acquireReleaseWith(acquireConnection)(releaseConnection)(cn =>
         ZIO.attempt {
@@ -78,100 +84,41 @@ end Transactor
 object Transactor:
   private val noOpConnectionConfig: Connection => Unit = _ => ()
 
-  /** Construct a Transactor
+  def layer = ZLayer.fromFunction(
+    (
+        ds: DataSource,
+        sqlLogger: SqlLogger,
+        connectionConfig: Connection => Unit,
+        semaphore: Option[Semaphore]
+    ) => Transactor(ds, sqlLogger, connectionConfig, semaphore)
+  )
+  private val defaultLogger = ZLayer.succeed(SqlLogger.Default)
+  private val defaultConnectionConfig = ZLayer.succeed(noOpConnectionConfig)
+  private val defaultSemaphore = ZLayer.succeed(None)
+
+  /** Configures a transactor layer with the given parameters.
     *
-    * @param dataSource
-    *   Datasource to be used
     * @param sqlLogger
-    *   Logging configuration
     * @param connectionConfig
-    *   Customize the underlying JDBC Connections
     * @param maxBlockingThreads
-    *   Number of threads in your connection pool. This helps magzio be more
-    *   memory efficient by limiting the number of blocking pool threads used.
-    *   Not needed if using the ZIO virtual-thread based blocking executor
     * @return
-    *   Transactor UIO
+    *   The transactor layer
     */
-  def layer(
-      dataSource: DataSource,
-      sqlLogger: SqlLogger,
-      connectionConfig: Connection => Unit,
-      maxBlockingThreads: Option[Int]
-  ): ULayer[Transactor] =
-    ZLayer.fromZIO {
-      ZIO
-        .fromOption(maxBlockingThreads)
-        .flatMap(threads => Semaphore.make(threads))
-        .unsome
-        .map(semaphoreOpt =>
-          new Transactor(
-            dataSource,
-            sqlLogger,
-            connectionConfig,
-            semaphoreOpt
-          )
-        )
+  def configured(
+      sqlLogger: SqlLogger = SqlLogger.Default,
+      connectionConfig: Connection => Unit = noOpConnectionConfig,
+      maxBlockingThreads: Int = -1
+  ) =
+    val semaphore = ZLayer {
+      if maxBlockingThreads < 0 then ZIO.succeed(None)
+      else Semaphore.make(maxBlockingThreads).map(Some(_))
     }
+    defaultLogger ++ defaultConnectionConfig ++ semaphore >>> layer
 
-  /** Construct a Transactor
-    *
-    * @param dataSource
-    *   Datasource to be used
-    * @param sqlLogger
-    *   Logging configuration
-    * @param connectionConfig
-    *   Customize the underlying JDBC Connections
-    * @return
-    *   Transactor UIO
+  /** The default transactor layer with all dependencies satisfied except for
+    * the DataSource.
     */
-  def layer(
-      dataSource: DataSource,
-      sqlLogger: SqlLogger,
-      connectionConfig: Connection => Unit
-  ): ULayer[Transactor] =
-    layer(
-      dataSource,
-      sqlLogger,
-      connectionConfig,
-      None
-    )
-
-  /** Construct a Transactor
-    *
-    * @param dataSource
-    *   Datasource to be used
-    * @param sqlLogger
-    *   Logging configuration
-    * @return
-    *   Transactor UIO
-    */
-  def layer(dataSource: DataSource, sqlLogger: SqlLogger): ULayer[Transactor] =
-    layer(dataSource, sqlLogger, noOpConnectionConfig, None)
-
-  /** Construct a Transactor
-    *
-    * @param dataSource
-    *   Datasource to be used
-    * @return
-    *   Transactor UIO
-    */
-  def layer(dataSource: DataSource): ULayer[Transactor] =
-    layer(dataSource, SqlLogger.Default, noOpConnectionConfig, None)
-
-  /** Construct a Transactor
-    *
-    * @param dataSource
-    *   Datasource to be used
-    * @param connectionConfig
-    *   Customize the underlying JDBC Connections
-    * @return
-    *   Transactor UIO
-    */
-  def layer(
-      dataSource: DataSource,
-      connectionConfig: Connection => Unit
-  ): ULayer[Transactor] =
-    layer(dataSource, SqlLogger.Default, connectionConfig, None)
+  val default: ZLayer[DataSource, Nothing, Transactor] =
+    defaultLogger ++ defaultConnectionConfig ++ defaultSemaphore >>> layer
 
 end Transactor

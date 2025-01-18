@@ -4,16 +4,24 @@ import java.sql.Connection
 import javax.sql.DataSource
 import scala.util.Using
 
-class Transactor private (
-    dataSource: DataSource,
-    sqlLogger: SqlLogger = SqlLogger.Default,
-    connectionConfig: Connection => Unit = con => ()
-):
-  def withSqlLogger(sqlLogger: SqlLogger): Transactor =
-    new Transactor(dataSource, sqlLogger, connectionConfig)
+trait TransactorOps[T[_]]:
+  def connect[A](f: DbCon ?=> A): T[A]
+  def transact[A](f: DbTx ?=> A): T[A]
 
-  def withConnectionConfig(connectionConfig: Connection => Unit): Transactor =
-    new Transactor(dataSource, sqlLogger, connectionConfig)
+type Plain[A] = A
+object Plain:
+  given makePlain[A]: Conversion[A, Plain[A]] = a => a: Plain[A]
+
+final case class Transactor(
+    private val dataSource: DataSource,
+    private val sqlLogger: SqlLogger = SqlLogger.Default,
+    private val connectionConfig: Connection => Unit = con => ()
+) extends TransactorOps[Plain]:
+
+  def withSqlLogger(sqlLogger: SqlLogger) = copy(sqlLogger = sqlLogger)
+
+  def withConnectionConfig(connectionConfig: Connection => Unit) =
+    copy(connectionConfig = connectionConfig)
 
   def connect[T](f: DbCon ?=> T): T =
     Using.resource(dataSource.getConnection): con =>
@@ -32,27 +40,4 @@ class Transactor private (
         case t =>
           con.rollback()
           throw t
-end Transactor
-
-object Transactor:
-
-  def apply(
-      dataSource: DataSource,
-      sqlLogger: SqlLogger,
-      connectionConfig: Connection => Unit
-  ): Transactor =
-    new Transactor(dataSource, sqlLogger, connectionConfig)
-
-  def apply(dataSource: DataSource, sqlLogger: SqlLogger): Transactor =
-    new Transactor(dataSource, sqlLogger, _ => ())
-
-  def apply(
-      dataSource: DataSource,
-      connectionConfig: Connection => Unit
-  ): Transactor =
-    new Transactor(dataSource, SqlLogger.Default, connectionConfig)
-
-  def apply(dataSource: DataSource): Transactor =
-    new Transactor(dataSource, SqlLogger.Default, _ => ())
-
 end Transactor
