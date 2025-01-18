@@ -191,5 +191,5 @@ object ImmutableRepoSpecs extends ZIOSpecDefault:
   def spec =
     suiteAll("all specs"):
       specs(PostgresDbType).provideShared(defaultPostgresTransactor)
-      // repeat for other db types
+      // repeat for other db types providing the appropriate transactor layer
 end ImmutableRepoSpecs
