@@ -11,8 +11,7 @@ import com.augustnagro.magnum.magzio.Transactor
 case class ContainerConfig(
     initScriptPath: String = "pg/init.sql",
     imageName: String = s"${PostgreSQLContainer.IMAGE}:latest"
-):
-  println(this)
+)
 object ContainerConfig:
   val default = ZLayer.succeed(ContainerConfig())
 
