@@ -57,4 +57,4 @@ object DataSourceProvider:
   val transactor: ZLayer[Postgres, Nothing, Transactor] =
     DataSourceProvider.datasource.flatMap: ds =>
       com.augustnagro.magnum.magzio.Transactor.layer(ds.get)
-  val defaultTransactor = Postgres.default >>> transactor
+  val defaultPostgresTransactor = Postgres.default >>> transactor
