@@ -4,11 +4,12 @@ import munit.FunSuite
 import cats.effect.IO
 import cats.syntax.monadError.*
 import cats.effect.std.Dispatcher
-import cats.effect.unsafe.IORuntime
+import munit.CatsEffectAssertions.*
 
 import java.sql.Connection
 import java.time.OffsetDateTime
 import scala.util.{Success, Using}
+import munit.catseffect.IOFixture
 
 def immutableRepoCatsEffectTests(
     suite: FunSuite,
@@ -19,11 +20,6 @@ def immutableRepoCatsEffectTests(
     DbCodec[OffsetDateTime]
 ): Unit =
   import suite.*
-
-  given IORuntime = IORuntime.global
-
-  def runIO[A](io: IO[A]): A =
-    io.unsafeRunSync()
 
   enum Color derives DbCodec:
     case Red, Green, Blue
@@ -70,33 +66,27 @@ def immutableRepoCatsEffectTests(
 
   test("count"):
     val count =
-      runIO:
-        xa().connect:
-          carRepo.count
-    assert(count == 3L)
+      xa().connect:
+        carRepo.count
+    assertIO(count, 3L)
 
   test("existsById"):
-    val (exists3, exists4) =
-      runIO:
-        xa().connect:
-          carRepo.existsById(3L) -> carRepo.existsById(4L)
-    assert(exists3)
-    assert(!exists4)
+    val exists3And4 =
+      xa().connect:
+        carRepo.existsById(3L) -> carRepo.existsById(4L)
+    assertIO(exists3And4, true -> false)
 
   test("findAll"):
     val cars =
-      runIO:
-        xa().connect:
-          carRepo.findAll
-    assert(cars == allCars)
+      xa().connect:
+        carRepo.findAll
+    assertIO(cars, allCars)
 
   test("findById"):
-    val (exists3, exists4) =
-      runIO:
-        xa().connect:
-          carRepo.findById(3L) -> carRepo.findById(4L)
-    assert(exists3.get == allCars.last)
-    assert(exists4 == None)
+    val exists3And4 =
+      xa().connect:
+        carRepo.findById(3L) -> carRepo.findById(4L)
+    assertIO(exists3And4, Some(allCars.last) -> None)
 
   test("findAllByIds"):
     assume(dbType != ClickhouseDbType)
@@ -104,19 +94,17 @@ def immutableRepoCatsEffectTests(
     assume(dbType != OracleDbType)
     assume(dbType != SqliteDbType)
     val ids =
-      runIO:
-        xa().connect:
-          carRepo.findAllById(Vector(1L, 3L)).map(_.id)
-    assert(ids == Vector(1L, 3L))
+      xa().connect:
+        carRepo.findAllById(Vector(1L, 3L)).map(_.id)
+    assertIO(ids, Vector(1L, 3L))
 
   test("serializable transaction"):
     val count =
-      runIO:
-        xa()
-          .withConnectionConfig(withSerializable)
-          .transact:
-            carRepo.count
-    assert(count == 3L)
+      xa()
+        .withConnectionConfig(withSerializable)
+        .transact:
+          carRepo.count
+    assertIO(count, 3L)
 
   def withSerializable(con: Connection): Unit =
     con.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE)
@@ -127,15 +115,14 @@ def immutableRepoCatsEffectTests(
       sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
         .query[Car]
     val result =
-      runIO:
-        xa().connect:
-          query.run()
+      xa().connect:
+        query.run()
     assertNoDiff(
       query.frag.sqlString,
       "select model, id, top_speed, vin, color, created from car where top_speed > ?"
     )
     assert(query.frag.params == Vector(minSpeed))
-    assert(result == allCars.tail)
+    assertIO(result, allCars.tail)
 
   test("select query with aliasing"):
     val minSpeed = 210
@@ -144,57 +131,51 @@ def immutableRepoCatsEffectTests(
       sql"select ${cAlias.all} from $cAlias where ${cAlias.topSpeed} > $minSpeed"
         .query[Car]
     val result =
-      runIO:
-        xa().connect:
-          query.run()
+      xa().connect:
+        query.run()
     assertNoDiff(
       query.frag.sqlString,
       "select c.model, c.id, c.top_speed, c.vin, c.color, c.created from car c where c.top_speed > ?"
     )
     assert(query.frag.params == Vector(minSpeed))
-    assert(result == allCars.tail)
+    assertIO(result, allCars.tail)
 
   test("select via option"):
     val vin = Some(124)
     val cars =
-      runIO:
-        xa().connect:
-          sql"select * from car where vin = $vin"
-            .query[Car]
-            .run()
-    assert(cars == allCars.filter(_.vinNumber == vin))
+      xa().connect:
+        sql"select * from car where vin = $vin"
+          .query[Car]
+          .run()
+    assertIO(cars, allCars.filter(_.vinNumber == vin))
 
   test("tuple select"):
     val tuples =
-      runIO:
-        xa().connect:
-          sql"select model, color from car where id = 2"
-            .query[(String, Color)]
-            .run()
-    assert(tuples == Vector(allCars(1).model -> allCars(1).color))
+      xa().connect:
+        sql"select model, color from car where id = 2"
+          .query[(String, Color)]
+          .run()
+    assertIO(tuples, Vector(allCars(1).model -> allCars(1).color))
 
   test("reads null int as None and not Some(0)"):
     val maybeCar =
-      runIO:
-        xa().connect:
-          carRepo.findById(3L)
-    assert(maybeCar.get.vinNumber == None)
+      xa().connect:
+        carRepo.findById(3L)
+    assertIO(maybeCar.map(_.get.vinNumber), None)
 
   test("created timestamps should match"):
-    val allCars =
-      runIO:
-        xa().connect:
-          carRepo.findAll
-    assert(allCars.map(_.created) == allCars.map(_.created))
+    val allCarsIO =
+      xa().connect:
+        carRepo.findAll
+    assertIO(allCarsIO.map(_.map(_.created)), allCars.map(_.created))
 
   test(".query iterator"):
     val carsCount =
-      runIO:
-        xa().connect:
-          Using.Manager(implicit use =>
-            val it = sql"SELECT * FROM car".query[Car].iterator()
-            it.map(_.id).size
-          )
-    assert(carsCount == Success(3))
+      xa().connect:
+        Using.Manager(implicit use =>
+          val it = sql"SELECT * FROM car".query[Car].iterator()
+          it.map(_.id).size
+        )
+    assertIO(carsCount, Success(3))
 
 end immutableRepoCatsEffectTests
