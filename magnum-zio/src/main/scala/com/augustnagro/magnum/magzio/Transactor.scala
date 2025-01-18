@@ -93,7 +93,7 @@ object Transactor:
       maxBlockingThreads: Int = -1
   ) =
     val semaphore = ZLayer {
-      if maxBlockingThreads < 0 then ZIO.succeed(None)
+      if maxBlockingThreads < 1 then ZIO.succeed(None)
       else Semaphore.make(maxBlockingThreads).map(Some(_))
     }
     defaultLogger ++ defaultConnectionConfig ++ semaphore >>> layer
