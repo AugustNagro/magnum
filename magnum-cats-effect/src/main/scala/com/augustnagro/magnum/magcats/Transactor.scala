@@ -16,14 +16,16 @@ class Transactor[F[_]: Sync] private (
     dataSource: DataSource,
     sqlLogger: SqlLogger,
     connectionConfig: Connection => Unit,
-    semaphore: Option[Semaphore[F]]
+    rateLimiter: Option[Resource[F, Unit]]
 ):
+  private val makeConn = Resource.make(acquireConnection)(releaseConnection)
+
   def withSqlLogger(sqlLogger: SqlLogger): Transactor[F] =
     new Transactor(
       dataSource,
       sqlLogger,
       connectionConfig,
-      semaphore
+      rateLimiter
     )
 
   def withConnectionConfig(
@@ -33,35 +35,29 @@ class Transactor[F[_]: Sync] private (
       dataSource,
       sqlLogger,
       connectionConfig,
-      semaphore
+      rateLimiter
     )
 
   def connect[A](f: DbCon ?=> A): F[A] =
-    val io =
-      Resource
-        .make(acquireConnection)(releaseConnection)
-        .use: cn =>
-          Sync[F].delay(connectionConfig(cn)) >>
-            Sync[F].interruptible(f(using DbCon(cn, sqlLogger)))
-
-    semaphore.fold(io)(sem => sem.permit.use { _ => io })
+    useRateLimitedConnection: cn =>
+      Sync[F].delay(connectionConfig(cn)) >>
+        Sync[F].interruptible(f(using DbCon(cn, sqlLogger)))
 
   def transact[A](f: DbTx ?=> A): F[A] =
-    val io =
-      Resource
-        .make(acquireConnection)(releaseConnection)
-        .use: cn =>
-          Sync[F].delay(connectionConfig(cn)) >>
-            Sync[F].delay(cn.setAutoCommit(false)) >>
-            Sync[F]
-              .interruptible(f(using DbTx(cn, sqlLogger)))
-              .guaranteeCase {
-                case Succeeded(_) => Sync[F].blocking(cn.commit())
-                case Errored(_) | Canceled() =>
-                  Sync[F].blocking(cn.rollback())
-              }
+    useRateLimitedConnection: cn =>
+      Sync[F].delay(connectionConfig(cn)) >>
+        Sync[F].delay(cn.setAutoCommit(false)) >>
+        Sync[F]
+          .interruptible(f(using DbTx(cn, sqlLogger)))
+          .guaranteeCase {
+            case Succeeded(_) => Sync[F].blocking(cn.commit())
+            case Errored(_) | Canceled() =>
+              Sync[F].blocking(cn.rollback())
+          }
 
-    semaphore.fold(io)(sem => sem.permit.use { _ => io })
+  private def useRateLimitedConnection[A](program: Connection => F[A]): F[A] =
+    val io = makeConn.use(program)
+    rateLimiter.fold(io)(_.surround(io))
 
   private def acquireConnection: F[Connection] =
     Sync[F]
@@ -101,12 +97,18 @@ object Transactor:
       connectionConfig: Connection => Unit,
       maxBlockingThreads: Int
   ): F[Transactor[F]] =
-    Semaphore[F](maxBlockingThreads).map: semaphore =>
+    assert(maxBlockingThreads > 0)
+
+    val rateLimiter =
+      if maxBlockingThreads == 1 then Mutex[F].map(_.lock)
+      else Semaphore[F](maxBlockingThreads).map(_.permit)
+
+    rateLimiter.map: rl =>
       new Transactor(
         dataSource,
         sqlLogger,
         connectionConfig,
-        Some(semaphore)
+        Some(rl)
       )
 
   /** Construct a Transactor
@@ -169,7 +171,7 @@ object Transactor:
       sqlLogger: SqlLogger,
       connectionConfig: Connection => Unit
   ): F[Transactor[F]] =
-    Sync[F].delay(new Transactor(dataSource, sqlLogger, connectionConfig, None))
+    Sync[F].pure(new Transactor(dataSource, sqlLogger, connectionConfig, None))
 
   /** Construct a Transactor
     *

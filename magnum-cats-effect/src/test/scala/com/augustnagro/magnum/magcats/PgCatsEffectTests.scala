@@ -53,9 +53,8 @@ class PgCatsEffectTests extends CatsEffectSuite, TestContainersFixtures:
             .fromAutoCloseable(IO.delay(con.createStatement))
             .use: stmt =>
               tableDDLs
-                .traverse_(ddl => IO.delay(stmt.execute(ddl)))
-                .flatMap: _ =>
-                  Transactor[IO](ds)
+                .traverse_(ddl => IO.delay(stmt.execute(ddl))) >>
+                Transactor[IO](ds)
 
     setup.unsafeRunSync()
   end xa
