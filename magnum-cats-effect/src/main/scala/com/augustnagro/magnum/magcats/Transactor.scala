@@ -115,6 +115,50 @@ object Transactor:
     *   Datasource to be used
     * @param sqlLogger
     *   Logging configuration
+    * @param maxBlockingThreads
+    *   Number of threads in your connection pool. This helps magcats be more
+    *   memory efficient by limiting the number of blocking pool threads used.
+    *   Not needed if using a virtual-thread based blocking executor (e.g. via
+    *   evalOn)
+    * @return
+    *   F[Transactor[F]]
+    */
+  def apply[F[_]: Async](
+      dataSource: DataSource,
+      sqlLogger: SqlLogger,
+      maxBlockingThreads: Int
+  ): F[Transactor[F]] =
+    apply(dataSource, sqlLogger, noOpConnectionConfig, maxBlockingThreads)
+
+  /** Construct a Transactor
+    *
+    * @param dataSource
+    *   Datasource to be used
+    * @param maxBlockingThreads
+    *   Number of threads in your connection pool. This helps magcats be more
+    *   memory efficient by limiting the number of blocking pool threads used.
+    *   Not needed if using a virtual-thread based blocking executor (e.g. via
+    *   evalOn)
+    * @return
+    *   F[Transactor[F]]
+    */
+  def apply[F[_]: Async](
+      dataSource: DataSource,
+      maxBlockingThreads: Int
+  ): F[Transactor[F]] =
+    apply(
+      dataSource,
+      SqlLogger.Default,
+      noOpConnectionConfig,
+      maxBlockingThreads
+    )
+
+  /** Construct a Transactor
+    *
+    * @param dataSource
+    *   Datasource to be used
+    * @param sqlLogger
+    *   Logging configuration
     * @param connectionConfig
     *   Customize the underlying JDBC Connections
     * @return
@@ -146,8 +190,6 @@ object Transactor:
     *
     * @param dataSource
     *   Datasource to be used
-    * @param sqlLogger
-    *   Logging configuration
     * @return
     *   F[Transactor[F]]
     */
