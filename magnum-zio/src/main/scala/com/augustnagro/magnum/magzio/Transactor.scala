@@ -96,12 +96,14 @@ object Transactor:
       if maxBlockingThreads < 1 then ZIO.succeed(None)
       else Semaphore.make(maxBlockingThreads).map(Some(_))
     }
-    defaultLogger ++ defaultConnectionConfig ++ semaphore >>> layer
+    ZLayer.succeed(sqlLogger) ++ ZLayer.succeed(
+      defaultConnectionConfig
+    ) ++ semaphore >>> layer
 
   /** The default transactor layer with all dependencies satisfied except for
     * the DataSource.
     */
-  val default: ZLayer[DataSource, Nothing, TransactorOps[Task]] =
+  val default =
     defaultLogger ++ defaultConnectionConfig ++ defaultSemaphore >>> layer
 
 end Transactor
