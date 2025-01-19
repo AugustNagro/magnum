@@ -101,7 +101,7 @@ object Transactor:
   /** The default transactor layer with all dependencies satisfied except for
     * the DataSource.
     */
-  val default: ZLayer[DataSource, Nothing, Transactor] =
+  val default: ZLayer[DataSource, Nothing, TransactorOps[Task]] =
     defaultLogger ++ defaultConnectionConfig ++ defaultSemaphore >>> layer
 
 end Transactor

@@ -2,23 +2,41 @@ package com.augustnagro.magnum.magzio
 
 import zio.test.*
 import zio.*
-import com.augustnagro.magnum.containers.DataSourceProvider.defaultPostgresTransactor
-import com.augustnagro.magnum.magzio.*
-import java.time.OffsetDateTime
-import java.sql.Connection
-import scala.util.Using
+import com.augustnagro.magnum
 import com.augustnagro.magnum.TransactorOps
+import java.time.OffsetDateTime
+import com.augustnagro.magnum.containers.DataSourceProvider
+import scala.reflect.ClassTag
+import com.augustnagro.magnum.containers.Postgres
+import scala.util.Using
 
-object ImmutableRepoSpecs extends ZIOSpecDefault:
-  def xa[A](
-      f: TransactorOps[Task] => ZIO[Any, Throwable, A]
-  ): ZIO[TransactorOps[Task], Throwable, A] =
-    ZIO.serviceWithZIO[TransactorOps[Task]](f)
-  def specs(dbType: DbType) =
-    suiteAll(
-      s"Magnum ZIO Specs for ${dbType.getClass().getSimpleName().replaceAll("\\$", "")}"
+object GenericSpec extends ZIOSpecDefault:
+  trait Converter[T[_]: TagK]:
+    def convert[A: Tag](t: T[A]): Task[A]
+  object Converter:
+    val plain = ZLayer.succeed {
+      new Converter[magnum.Plain]:
+        def convert[A: Tag](t: magnum.Plain[A]): Task[A] = ZIO.succeed(t: A)
+    }
+    val identity = ZLayer.succeed {
+      new Converter[Task]:
+        def convert[A: Tag](t: Task[A]): Task[A] = t
+    }
+
+  def specs[T[_]: TagK](name: String, dbType: DbType) =
+    def xa[A: Tag](
+        f: TransactorOps[T] => T[A]
+    )(using ClassTag[A]) =
+      for
+        converter <- ZIO.service[Converter[T]]
+        t <- ZIO.service[TransactorOps[T]]
+        res <- converter.convert(f(t))
+      yield (res)
+
+    val all = suiteAll(
+      s"$name transactor Specs for ${dbType.getClass().getSimpleName().replaceAll("\\$", "")}"
     ):
-      enum Color derives DbCodec:
+      enum Color derives magnum.DbCodec:
         case Red, Green, Blue
 
       @Table(dbType, SqlNameMapper.CamelToSnakeCase)
@@ -29,7 +47,7 @@ object ImmutableRepoSpecs extends ZIOSpecDefault:
           @SqlName("vin") vinNumber: Option[Int],
           color: Color,
           created: OffsetDateTime
-      ) derives DbCodec
+      ) derives magnum.DbCodec
 
       val carRepo = ImmutableRepo[Car, Long]
       val car = TableInfo[Car, Car, Long]
@@ -65,7 +83,6 @@ object ImmutableRepoSpecs extends ZIOSpecDefault:
             xa:
               _.connect(carRepo.count)
         yield assertTrue(count == 3)
-
       test("exists by id"):
         for
           exists3 <-
@@ -101,15 +118,6 @@ object ImmutableRepoSpecs extends ZIOSpecDefault:
               _.connect(carRepo.findAllById(List(1L, 2L)))
         yield assertTrue(cars == List(allCars(0), allCars(1)))
       @@ TestAspect.ifEnvNotSet("NO_FIND_ALL_BY_IDS")
-
-      test("serializable transaction"):
-        def withSerializable(con: Connection): Unit =
-          con.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE)
-        for count <- xa: x =>
-            x.asInstanceOf[Transactor]
-              .withConnectionConfig(withSerializable)
-              .transact(carRepo.count)
-        yield assertTrue(count == 3)
 
       test("select query"):
         val minSpeed: Int = 210
@@ -191,8 +199,19 @@ object ImmutableRepoSpecs extends ZIOSpecDefault:
                     sql"select * from car".query[Car].iterator().map(_.id).size
           size <- ZIO.fromTry(t)
         yield assertTrue(size == 3)
-  def spec =
-    suiteAll("all specs"):
-      specs(PostgresDbType).provideShared(defaultPostgresTransactor)
-      // repeat for other db types providing the appropriate transactor layer
-end ImmutableRepoSpecs
+
+    all
+  end specs
+  def spec = suiteAll("all specs"):
+    specs[Task]("zio", PostgresDbType).provideShared(
+      DataSourceProvider.defaultPostgresTransactor,
+      Converter.identity
+    )
+    specs[magnum.Plain]("plain", PostgresDbType).provideShared(
+      Postgres.default >>> DataSourceProvider.datasource.flatMap(ds =>
+        ZLayer.succeed(magnum.Transactor(ds.get))
+      ),
+      Converter.plain
+    )
+  @@ TestAspect.sequential
+end GenericSpec

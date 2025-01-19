@@ -7,6 +7,7 @@ import javax.sql.DataSource
 import zio.*
 import org.postgresql.ds.PGSimpleDataSource
 import com.augustnagro.magnum.magzio.Transactor
+import com.augustnagro.magnum.TransactorOps
 
 case class ContainerConfig(
     initScriptPath: String = "pg/init.sql",
@@ -54,6 +55,6 @@ object DataSourceProvider:
   private val base = ZLayer.derive[DataSourceProvider]
   val datasource: URLayer[Postgres, DataSource] =
     base.flatMap(l => ZLayer.succeed(l.get.dataSource))
-  val transactor: ZLayer[Postgres, Nothing, Transactor] =
+  val transactor: ZLayer[Postgres, Nothing, TransactorOps[Task]] =
     DataSourceProvider.datasource >>> Transactor.default
   val defaultPostgresTransactor = Postgres.default >>> transactor
