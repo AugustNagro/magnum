@@ -26,7 +26,7 @@ object GenericSpec extends ZIOSpecDefault:
   def specs[T[_]: TagK](name: String, dbType: DbType) =
     def xa[A: Tag](
         f: TransactorOps[T] => T[A]
-    )(using ClassTag[A]) =
+    ) =
       for
         converter <- ZIO.service[Converter[T]]
         t <- ZIO.service[TransactorOps[T]]
