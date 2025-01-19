@@ -45,8 +45,11 @@ class Transactor[F[_]: Sync] private (
 
   def transact[A](f: DbTx ?=> A): F[A] =
     useRateLimitedConnection: cn =>
-      Sync[F].delay(connectionConfig(cn)) >>
-        Sync[F].delay(cn.setAutoCommit(false)) >>
+      Sync[F]
+        .delay {
+          connectionConfig(cn)
+          cn.setAutoCommit(false)
+        } >>
         Sync[F]
           .interruptible(f(using DbTx(cn, sqlLogger)))
           .guaranteeCase {
@@ -61,14 +64,14 @@ class Transactor[F[_]: Sync] private (
 
   private def acquireConnection: F[Connection] =
     Sync[F]
-      .delay(dataSource.getConnection())
+      .blocking(dataSource.getConnection())
       .adaptError(t => SqlException("Unable to acquire DB Connection", t))
 
   private def releaseConnection(conn: Connection): F[Unit] =
     if conn eq null then Sync[F].unit
     else
       Sync[F]
-        .delay(conn.close())
+        .blocking(conn.close())
         .adaptError(t => SqlException("Unable to close DB connection", t))
 end Transactor
 
