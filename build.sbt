@@ -91,7 +91,6 @@ lazy val magnumZio = project
   .settings(
     Test / fork := true,
     publish / skip := false,
-    testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework"),
     libraryDependencies ++= Seq(
       "dev.zio" %% "zio" % "2.1.14" % Provided,
       "dev.zio" %% "zio-test" % "2.1.14" % Test,
