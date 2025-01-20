@@ -13,10 +13,10 @@ import javax.sql.DataSource
 import scala.util.control.NonFatal
 
 class Transactor[F[_]: Sync] private (
-    dataSource: DataSource,
-    sqlLogger: SqlLogger,
-    connectionConfig: Connection => Unit,
-    rateLimiter: Option[Resource[F, Unit]]
+    private val dataSource: DataSource,
+    private val sqlLogger: SqlLogger,
+    private val connectionConfig: Connection => Unit,
+    private val rateLimiter: Option[Resource[F, Unit]]
 ):
   private val makeConn = Resource.make(acquireConnection)(releaseConnection)
 
