@@ -1,56 +1,37 @@
 package com.augustnagro.magnum.magzio.example
 
 import com.augustnagro.magnum.magzio.*
-import com.dimafeng.testcontainers.PostgreSQLContainer
-import org.postgresql.ds.PGSimpleDataSource
-import org.testcontainers.utility.DockerImageName
+import com.zaxxer.hikari.HikariDataSource
 import zio.*
+import zio.logging.backend.SLF4J
 
 import javax.sql.DataSource
 
 object ExampleZioApp extends ZIOAppDefault:
 
-  val postgresContainer: TaskLayer[PostgreSQLContainer] =
+  private val dataSource: TaskLayer[HikariDataSource] =
     ZLayer.scoped:
       ZIO.fromAutoCloseable:
-        ZIO.attemptBlocking:
-          val p = PostgreSQLContainer
-            .Def(dockerImageName = DockerImageName.parse("postgres:17.0"))
-            .createContainer()
-          p.start()
-          p
+        ZIO.attempt:
+          val ds = new HikariDataSource()
+          ds.setJdbcUrl("jdbc:postgresql://localhost:5432/magnum_db")
+          ds.setUsername("magnum")
+          ds.setPassword("magnum_password")
+          ds
 
-  val dataSource: URLayer[PostgreSQLContainer, DataSource] =
-    ZLayer:
-      ZIO.serviceWith(p =>
-        val ds = PGSimpleDataSource()
-        ds.setUrl(p.jdbcUrl)
-        ds.setUser(p.username)
-        ds.setPassword(p.password)
-        ds
-      )
-
-  val transactor: URLayer[DataSource, Transactor] = Transactor.layer
-
-  val layers: TaskLayer[Transactor] =
+  private val layers: TaskLayer[Transactor] =
     ZLayer.make[Transactor](
-      postgresContainer,
       dataSource,
-      transactor
+      Transactor.layer
     )
+
+  override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] =
+    Runtime.removeDefaultLoggers >>> SLF4J.slf4j
 
   override def run: ZIO[ZIOAppArgs with Scope, Any, Any] =
     ZIO
       .serviceWithZIO[Transactor] { tx =>
         tx.transact:
-          sql"create table if not exists car (id serial primary key, model text, top_speed int, vin int, color text, created timestamp)"
-            .update
-            .run()
-
-          sql"create table if not exists owner (id serial primary key, name text, car_id int references car(id))"
-            .update
-            .run()
-
           val newOwner = ownerRepo.insertReturning:
             OwnerCreator(
               name = "Alice"
@@ -74,7 +55,7 @@ object ExampleZioApp extends ZIOAppDefault:
               .run()
           else throw new NoSuchElementException("Owner not updated.")
       }
-      .tap(res => Console.printLine(res.toString))
+      .tap(res => ZIO.log(res.toString))
       .provideLayer(layers)
 
 end ExampleZioApp

@@ -103,13 +103,15 @@ lazy val magnumZio = project
 
 lazy val magnumZioExample = project
   .in(file("magnum-zio-example"))
-  .dependsOn(magnumZio)
+  .dependsOn(magnumZio, magnumPg)
   .settings(
     run / fork := true,
     publish / skip := true,
     libraryDependencies ++= Seq(
       "dev.zio" %% "zio" % zioVersion,
-      "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion,
+      "dev.zio" %% "zio-logging-slf4j" % "2.4.0",
+      "ch.qos.logback" % "logback-classic" % "1.5.16",
       "org.postgresql" % "postgresql" % postgresDriverVersion,
-    ),
+      "com.zaxxer" % "HikariCP" % "6.2.1"
+    )
   )

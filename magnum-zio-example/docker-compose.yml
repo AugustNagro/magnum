@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:latest
+    container_name: magnum_postgres
+    shm_size: 128mb
+    environment:
+      POSTGRES_USER: magnum
+      POSTGRES_PASSWORD: magnum_password
+      POSTGRES_DB: magnum_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  flyway:
+    image: flyway/flyway:latest
+    container_name: magnum_flyway
+    depends_on:
+      - postgres
+    command: >
+      -url=jdbc:postgresql://postgres:5432/magnum_db
+      -user=magnum
+      -password=magnum_password
+      -locations=filesystem:/flyway/sql
+      migrate
+    volumes:
+      - ./sql/migrations:/flyway/sql
+
+volumes:
+  postgres_data:

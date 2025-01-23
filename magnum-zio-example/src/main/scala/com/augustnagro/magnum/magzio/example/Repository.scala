@@ -1,6 +1,7 @@
 package com.augustnagro.magnum.magzio.example
 
 import com.augustnagro.magnum.magzio.*
+//import com.augustnagro.magnum.pg.PgCodec.given
 
 import java.time.OffsetDateTime
 
@@ -21,7 +22,8 @@ case class Car(
     model: String,
     topSpeed: Int,
     @SqlName("vin") vinNumber: Option[Int],
-    color: Color,
+//    color: Color,
+    color: String,
     created: OffsetDateTime
 ) derives DbCodec
 
