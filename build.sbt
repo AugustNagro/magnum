@@ -42,6 +42,7 @@ val testcontainersVersion = "0.41.4"
 val circeVersion = "0.14.10"
 val munitVersion = "1.1.0"
 val postgresDriverVersion = "42.7.4"
+val zioVersion = "2.1.14"
 
 lazy val root = project
   .in(file("."))
@@ -92,10 +93,23 @@ lazy val magnumZio = project
     Test / fork := true,
     publish / skip := false,
     libraryDependencies ++= Seq(
-      "dev.zio" %% "zio" % "2.1.12" % Provided,
+      "dev.zio" %% "zio" % zioVersion % Provided,
       "org.scalameta" %% "munit" % munitVersion % Test,
       "com.dimafeng" %% "testcontainers-scala-munit" % testcontainersVersion % Test,
       "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion % Test,
       "org.postgresql" % "postgresql" % postgresDriverVersion % Test
     )
+  )
+
+lazy val magnumZioExample = project
+  .in(file("magnum-zio-example"))
+  .dependsOn(magnumZio)
+  .settings(
+    run / fork := true,
+    publish / skip := true,
+    libraryDependencies ++= Seq(
+      "dev.zio" %% "zio" % zioVersion,
+      "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion,
+      "org.postgresql" % "postgresql" % postgresDriverVersion,
+    ),
   )
