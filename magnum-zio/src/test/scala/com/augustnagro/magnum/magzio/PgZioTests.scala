@@ -6,7 +6,7 @@ import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import munit.{AnyFixture, FunSuite, Location}
 import org.postgresql.ds.PGSimpleDataSource
 import org.testcontainers.utility.DockerImageName
-import zio.{Scope, Unsafe}
+import zio.{Scope, Unsafe, ZLayer}
 
 import java.nio.file.{Files, Path}
 import scala.util.Using
@@ -47,7 +47,12 @@ class PgZioTests extends FunSuite, TestContainersFixtures:
     // todo unsafe
     Unsafe.unsafe { implicit unsafe =>
       zio.Runtime.default.unsafe
-        .run(Transactor.layer(ds).build(Scope.global).map(_.get))
+        .run(
+          Transactor.layer
+            .build(Scope.global)
+            .map(_.get)
+            .provide(ZLayer.succeed(ds))
+        )
         .getOrThrow()
     }
   end xa

@@ -1,7 +1,7 @@
 package com.augustnagro.magnum.magzio
 
 import com.augustnagro.magnum.{DbCon, DbTx, SqlException, SqlLogger}
-import zio.{Semaphore, Task, Trace, UIO, ULayer, ZIO, ZLayer}
+import zio.{Semaphore, Task, Trace, UIO, URLayer, ZIO, ZLayer}
 
 import java.sql.Connection
 import javax.sql.DataSource
@@ -80,8 +80,6 @@ object Transactor:
 
   /** Construct a Transactor
     *
-    * @param dataSource
-    *   Datasource to be used
     * @param sqlLogger
     *   Logging configuration
     * @param connectionConfig
@@ -94,30 +92,30 @@ object Transactor:
     *   Transactor UIO
     */
   def layer(
-      dataSource: DataSource,
       sqlLogger: SqlLogger,
       connectionConfig: Connection => Unit,
       maxBlockingThreads: Option[Int]
-  ): ULayer[Transactor] =
+  ): URLayer[DataSource, Transactor] =
     ZLayer.fromZIO {
-      ZIO
-        .fromOption(maxBlockingThreads)
-        .flatMap(threads => Semaphore.make(threads))
-        .unsome
-        .map(semaphoreOpt =>
-          new Transactor(
-            dataSource,
-            sqlLogger,
-            connectionConfig,
-            semaphoreOpt
+      for {
+        dataSource <- ZIO.service[DataSource]
+        transactor <- ZIO
+          .fromOption(maxBlockingThreads)
+          .flatMap(threads => Semaphore.make(threads))
+          .unsome
+          .map(semaphoreOpt =>
+            new Transactor(
+              dataSource = dataSource,
+              sqlLogger = sqlLogger,
+              connectionConfig = connectionConfig,
+              semaphore = semaphoreOpt
+            )
           )
-        )
+      } yield transactor
     }
 
   /** Construct a Transactor
     *
-    * @param dataSource
-    *   Datasource to be used
     * @param sqlLogger
     *   Logging configuration
     * @param connectionConfig
@@ -126,15 +124,13 @@ object Transactor:
     *   Transactor UIO
     */
   def layer(
-      dataSource: DataSource,
       sqlLogger: SqlLogger,
       connectionConfig: Connection => Unit
-  ): ULayer[Transactor] =
+  ): URLayer[DataSource, Transactor] =
     layer(
-      dataSource,
-      sqlLogger,
-      connectionConfig,
-      None
+      sqlLogger = sqlLogger,
+      connectionConfig = connectionConfig,
+      maxBlockingThreads = None
     )
 
   /** Construct a Transactor
@@ -146,32 +142,52 @@ object Transactor:
     * @return
     *   Transactor UIO
     */
-  def layer(dataSource: DataSource, sqlLogger: SqlLogger): ULayer[Transactor] =
-    layer(dataSource, sqlLogger, noOpConnectionConfig, None)
+  def layer(sqlLogger: SqlLogger): URLayer[DataSource, Transactor] =
+    layer(
+      sqlLogger = sqlLogger,
+      connectionConfig = noOpConnectionConfig,
+      maxBlockingThreads = None
+    )
 
   /** Construct a Transactor
     *
-    * @param dataSource
-    *   Datasource to be used
     * @return
     *   Transactor UIO
     */
-  def layer(dataSource: DataSource): ULayer[Transactor] =
-    layer(dataSource, SqlLogger.Default, noOpConnectionConfig, None)
+  def layer: URLayer[DataSource, Transactor] =
+    layer(
+      sqlLogger = SqlLogger.Default,
+      connectionConfig = noOpConnectionConfig,
+      maxBlockingThreads = None
+    )
 
   /** Construct a Transactor
     *
-    * @param dataSource
-    *   Datasource to be used
     * @param connectionConfig
     *   Customize the underlying JDBC Connections
     * @return
     *   Transactor UIO
     */
   def layer(
-      dataSource: DataSource,
       connectionConfig: Connection => Unit
-  ): ULayer[Transactor] =
-    layer(dataSource, SqlLogger.Default, connectionConfig, None)
+  ): URLayer[DataSource, Transactor] =
+    layer(
+      sqlLogger = SqlLogger.Default,
+      connectionConfig = connectionConfig,
+      maxBlockingThreads = None
+    )
+
+  /** @param maxBlockingThreads
+    *   Number of threads in your connection pool. This helps magzio be more
+    *   memory efficient by limiting the number of blocking pool threads used.
+    *   Not needed if using the ZIO virtual-thread based blocking executor
+    * @return
+    */
+  def layer(maxBlockingThreads: Int): URLayer[DataSource, Transactor] =
+    layer(
+      sqlLogger = SqlLogger.Default,
+      connectionConfig = noOpConnectionConfig,
+      maxBlockingThreads = Some(maxBlockingThreads)
+    )
 
 end Transactor
