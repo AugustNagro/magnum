@@ -42,7 +42,8 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       colorMap = List(
         Vector(Color.RedOrange, Color.RedOrange),
         Vector(Color.Green, Color.Green)
-      )
+      ),
+      color = Color.Blue
     ),
     MagUser(
       id = 2L,
@@ -63,7 +64,8 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       colorMap = List(
         Vector(Color.RedOrange, Color.Green),
         Vector(Color.Green, Color.Blue)
-      )
+      ),
+      color = Color.Blue
     )
   )
 
@@ -120,7 +122,8 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
         pnt = PGpoint(3, 4),
         poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, 1), PGpoint(1, 1))),
         colors = List(Color.Blue),
-        colorMap = List(Vector(Color.Blue), Vector(Color.Green))
+        colorMap = List(Vector(Color.Blue), Vector(Color.Green)),
+        color = Color.Green
       )
       userRepo.insert(u)
       val dbU = userRepo.findById(3L).get
