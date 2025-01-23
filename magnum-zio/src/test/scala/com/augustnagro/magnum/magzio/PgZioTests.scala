@@ -1,5 +1,6 @@
 package com.augustnagro.magnum.magzio
 
+import com.augustnagro.magnum.{Transactor as _, *}
 import com.augustnagro.magnum.magzio.*
 import com.dimafeng.testcontainers.PostgreSQLContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures

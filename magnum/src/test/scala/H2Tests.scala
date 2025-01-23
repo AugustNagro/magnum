@@ -1,4 +1,4 @@
-import com.augustnagro.magnum.common.*
+import com.augustnagro.magnum.*
 import munit.FunSuite
 import org.h2.jdbcx.JdbcDataSource
 import shared.*

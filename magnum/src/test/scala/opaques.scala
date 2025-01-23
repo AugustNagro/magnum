@@ -1,4 +1,4 @@
-import com.augustnagro.magnum.common.*
+import com.augustnagro.magnum.*
 
 object opaques:
   opaque type Age = Int

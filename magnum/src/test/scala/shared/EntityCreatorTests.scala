@@ -1,6 +1,6 @@
 package shared
 
-import com.augustnagro.magnum.common.*
+import com.augustnagro.magnum.*
 import com.augustnagro.magnum.SqlException
 import munit.{FunSuite, Location}
 
