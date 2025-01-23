@@ -551,7 +551,7 @@ The `magnum-zio` module provides an implementation of the `connect` and `transac
 
 To use the ZIO integration, add the following dependency:
 ```scala
-"com.augustnagro" %% "magnum-zio" % "x.x.x"
+"com.augustnagro" %% "magnumzio" % "x.x.x"
 ```
 
 and import these utils in your code with:
