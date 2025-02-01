@@ -1,7 +1,6 @@
 package com.augustnagro.magnum.magzio
 
-import com.augustnagro.magnum.{Transactor as _, *}
-import com.augustnagro.magnum.magzio.*
+import com.augustnagro.magnum.*
 import munit.{FunSuite, Location}
 import zio.*
 
