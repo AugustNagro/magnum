@@ -26,7 +26,7 @@ class PgZioTests extends FunSuite, TestContainersFixtures:
   override def munitFixtures: Seq[AnyFixture[_]] =
     super.munitFixtures :+ pgContainer
 
-  def xa(): Transactor =
+  def xa(): TransactorZIO =
     val ds = PGSimpleDataSource()
     val pg = pgContainer()
     ds.setUrl(pg.jdbcUrl)
@@ -49,7 +49,7 @@ class PgZioTests extends FunSuite, TestContainersFixtures:
     Unsafe.unsafe { implicit unsafe =>
       zio.Runtime.default.unsafe
         .run(
-          Transactor.layer
+          TransactorZIO.layer
             .build(Scope.global)
             .map(_.get)
             .provide(ZLayer.succeed(ds))

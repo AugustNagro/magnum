@@ -12,7 +12,7 @@ import scala.util.{Success, Using}
 def immutableRepoZioTests(
     suite: FunSuite,
     dbType: DbType,
-    xa: () => Transactor
+    xa: () => TransactorZIO
 )(using
     Location,
     DbCodec[OffsetDateTime]
