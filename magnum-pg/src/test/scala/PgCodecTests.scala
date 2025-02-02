@@ -182,6 +182,20 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
         sql"SELECT * FROM mag_car WHERE id = ANY($ids)".query[MagCar].run()
       assert(cars == allCars)
 
+  test("insert MagServiceList interpolated"):
+    connect(ds()):
+      val service = LastService("James", LocalDate.of(1970, 4, 22))
+      val frag = sql"INSERT INTO mag_service_list (service) VALUES ($service)"
+      assertEquals(
+        frag.sqlString,
+        "INSERT INTO mag_service_list (service) VALUES (?)"
+      )
+      frag.update.run()
+      assertEquals(
+        sql"SELECT service FROM mag_service_list".query[LastService].run().head,
+        service
+      )
+
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
       .Def(dockerImageName = DockerImageName.parse("postgres:17.0"))
@@ -201,11 +215,17 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       Files.readString(Path.of(getClass.getResource("/pg-user.sql").toURI))
     val carSql =
       Files.readString(Path.of(getClass.getResource("/pg-car.sql").toURI))
+    val serviceListSql =
+      Files.readString(
+        Path.of(getClass.getResource("/pg-service-list.sql").toURI)
+      )
     Manager { use =>
       val con = use(ds.getConnection)
       val stmt = use(con.createStatement)
       stmt.execute(userSql)
       stmt.execute(carSql)
+      stmt.execute(serviceListSql)
     }.get
     ds
+  end ds
 end PgCodecTests
