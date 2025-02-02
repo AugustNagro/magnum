@@ -70,7 +70,6 @@ object SqliteDbType extends DbType:
       s"INSERT INTO $tableNameSql $ecInsertKeys VALUES (${ecCodec.queryRepr})"
     val updateSql =
       s"UPDATE $tableNameSql SET $updateKeys WHERE $idName = ${idCodec.queryRepr}"
-    val insertAndFindByIdSql = insertSql + "\n" + findByIdSql
 
     def idWriter(id: ID): FragWriter = (ps, pos) =>
       idCodec.writeSingle(id, ps, pos)
@@ -143,52 +142,15 @@ object SqliteDbType extends DbType:
             ecCodec.write(entityCreators, ps)
             timed(batchUpdateResult(ps.executeBatch()))
 
+      // https://github.com/AugustNagro/magnum/issues/87#issuecomment-2591823574
       def insertReturning(entityCreator: EC)(using con: DbCon): E =
-        handleQuery(insertAndFindByIdSql, entityCreator):
-          Using.Manager: use =>
-            val ps =
-              use(
-                con.connection
-                  .prepareStatement(
-                    insertSql,
-                    Statement.RETURN_GENERATED_KEYS
-                  )
-              )
-            ecCodec.writeSingle(entityCreator, ps)
-            timed:
-              ps.executeUpdate()
-              val rs = use(ps.getGeneratedKeys)
-              rs.next()
-              val id = idCodec.readSingle(rs)
-              // unfortunately, sqlite only will return the primary key.
-              // it doesn't return default columns, and adding other columns to
-              // the insertGenKeys array doesn't change this behavior. So we need
-              // to query by ID after inserting.
-              findById(id).get
+        throw UnsupportedOperationException()
 
-      // todo
+      // https://github.com/AugustNagro/magnum/issues/87#issuecomment-2591823574
       def insertAllReturning(
           entityCreators: Iterable[EC]
       )(using con: DbCon): Vector[E] =
         throw UnsupportedOperationException()
-//        logSql(insertSql, entityCreators)
-//        Using.Manager(use =>
-//          val ps =
-//            use(
-//              con.connection
-//                .prepareStatement(
-//                  insertSql,
-//                  Statement.RETURN_GENERATED_KEYS
-//                )
-//            )
-//          ecCodec.write(entityCreators, ps)
-//          batchUpdateResult(ps.executeBatch())
-//          val rs = use(ps.getGeneratedKeys)
-//          idCodec.read(rs).map(findById(_).get)
-//        ) match
-//          case Success(res) => res
-//          case Failure(t) =>
-//            throw SqlException(insertSql, entityCreators, t)
 
       def update(entity: E)(using con: DbCon): Unit =
         handleQuery(updateSql, entity):

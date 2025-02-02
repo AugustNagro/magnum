@@ -101,6 +101,7 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
 
   test("insertReturning"):
     assume(dbType != MySqlDbType)
+    assume(dbType != SqliteDbType)
     xa().connect:
       val person = personRepo.insertReturning(
         Person(
