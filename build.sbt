@@ -40,7 +40,7 @@ addCommandAlias("fmt", "scalafmtAll")
 
 val testcontainersVersion = "0.41.4"
 val circeVersion = "0.14.10"
-val munitVersion = "1.0.2"
+val munitVersion = "1.1.0"
 val postgresDriverVersion = "42.7.4"
 
 lazy val root = project
