@@ -20,5 +20,6 @@ def sharedTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
   sqlNameTests(suite, dbType, xa)
   noIdTests(suite, dbType, xa)
   embeddedFragTests(suite, dbType, xa)
+  multilineFragTests(suite, dbType, xa)
   bigDecTests(suite, dbType, xa)
   optionalProductTests(suite, dbType, xa)
