@@ -353,6 +353,8 @@ case class User(
 ) derives DbCodec
 ```
 
+For Postgres Enum types, see the [Postgres Module Docs](/PG-MODULE.md)
+
 NewTypes and Opaque Type Alias can cause issues with derivation since given DbCodecs are not available. A simple way to provide them is using DbCodec.bimap:
 
 ```scala
@@ -390,7 +392,7 @@ DbCodec[Int].writeSingle(22, ps)
 
 ### Defining your own DbCodecs
 
-To modify the JDBC mappings, implement a given DbCodec instance as you would for any Typeclass.
+To modify the JDBC mappings, implement a given DbCodec instance as you would for any Typeclass. You can also use DbCodec.biMap on an existing codec.
 
 ### Future-Proof Queries
 

@@ -1,9 +1,9 @@
 ## Postgres Module
 
-The Postgres Module adds support for [Geometric Types](https://www.postgresql.org/docs/current/datatype-geometric.html), [Arrays](https://www.postgresql.org/docs/current/arrays.html), [Json/JsonB](https://www.postgresql.org/docs/current/datatype-json.html), and [xml](https://www.postgresql.org/docs/current/datatype-xml.html). Postgres Arrays can be decoded into Scala List/Vector/IArray, etc; multi-dimensionality is also supported.
+The Postgres Module adds support for [PG Enums](https://www.postgresql.org/docs/current/datatype-enum.html), [Geometric Types](https://www.postgresql.org/docs/current/datatype-geometric.html), [Arrays](https://www.postgresql.org/docs/current/arrays.html), [Json/JsonB](https://www.postgresql.org/docs/current/datatype-json.html), and [xml](https://www.postgresql.org/docs/current/datatype-xml.html). Postgres Arrays can be decoded into Scala List/Vector/IArray, etc; multi-dimensionality is also supported.
 
 ```
-"com.augustnagro" %% "magnumpg" % "1.3.0"
+"com.augustnagro" %% "magnumpg" % "2.0.0"
 ```
 
 Example: Insert into a table with a `point[]` type column.
@@ -25,16 +25,27 @@ import com.augustnagro.magnum.pg.PgCodec.given
 @Table(PostgresDbType)
 case class MyGeo(@Id id: Long, pnts: IArray[PGpoint]) derives DbCodec
 
-val dataSource: javax.sql.DataSource = ???
-val xa = Transactor(dataSource)
+val xa = Transactor(dataSource: javax.sql.DataSource)
 
 val myGeoRepo = Repo[MyGeo, MyGeo, Long]
 
-transact(xa):
+xa.transact:
   myGeoRepo.insert(MyGeo(1L, IArray(PGpoint(1, 1), PGPoint(2, 2))))
 ```
 
 The import of `PgCodec.given` is required to bring Geo/Array DbCodecs into scope.
+
+#### Enums
+
+When mapping from Scala Enum <-> PG Enum, import given `PgEnumDbCodec`:
+
+```scala
+import com.augustnagro.magnum.pg.enums.PgEnumDbCodec
+
+// in postgres: `create type Color as enum ('Red', 'Green', 'Blue');`
+enum Color derives DbCodec:
+  case Red, Green, Blue
+```
 
 #### Arrays of Enums
 
@@ -43,7 +54,6 @@ The `pg` module supports arrays of simple (non-ADT) enums.
 If you want to map an array of [Postgres enums](https://www.postgresql.org/docs/current/datatype-enum.html) to a sequence of Scala enums, use the following import when deriving the DbCodec:
 
 ```scala
-import com.augustnagro.magnum.pg.PgCodec.given
 import com.augustnagro.magnum.pg.enums.PgEnumToScalaEnumSqlArrayCodec
 
 // in postgres: `create type Color as enum ('Red', 'Green', 'Blue');`
