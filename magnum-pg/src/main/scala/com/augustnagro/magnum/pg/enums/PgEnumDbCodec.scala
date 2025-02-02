@@ -22,7 +22,7 @@ private def pgEnumDbCodecImpl[A: Type](using Quotes): Expr[DbCodec[A]] =
   import quotes.reflect.*
   val mirror = Expr.summon[Mirror.SumOf[A]].getOrElse {
     report.errorAndAbort(
-      "Can only derive SqlArrayCodec for simple (non ADT) Enums"
+      "Can only derive PgEnumDbCodec for simple (non ADT) Enums"
     )
   }
   mirror match
