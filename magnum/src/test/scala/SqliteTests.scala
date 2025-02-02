@@ -1,4 +1,4 @@
-import com.augustnagro.magnum.common.*
+import com.augustnagro.magnum.*
 import com.augustnagro.magnum.UUIDCodec.VarCharUUIDCodec
 import munit.FunSuite
 import org.sqlite.SQLiteDataSource

@@ -1,6 +1,6 @@
 package shared
 
-import com.augustnagro.magnum.common.*
+import com.augustnagro.magnum.*
 import munit.{FunSuite, Location}
 
 def bigDecTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using

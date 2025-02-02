@@ -1,4 +1,4 @@
-import com.augustnagro.magnum.common.*
+import com.augustnagro.magnum.*
 import com.dimafeng.testcontainers.PostgreSQLContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import munit.{AnyFixture, FunSuite, Location}

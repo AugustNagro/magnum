@@ -7,23 +7,25 @@ import java.sql.Connection
 import javax.sql.DataSource
 import scala.util.control.NonFatal
 
-class Transactor private (
+class TransactorZIO private (
     dataSource: DataSource,
     sqlLogger: SqlLogger,
     connectionConfig: Connection => Unit,
     semaphore: Option[Semaphore]
 ):
 
-  def withSqlLogger(sqlLogger: SqlLogger): Transactor =
-    new Transactor(
+  def withSqlLogger(sqlLogger: SqlLogger): TransactorZIO =
+    new TransactorZIO(
       dataSource,
       sqlLogger,
       connectionConfig,
       semaphore
     )
 
-  def withConnectionConfig(connectionConfig: Connection => Unit): Transactor =
-    new Transactor(
+  def withConnectionConfig(
+      connectionConfig: Connection => Unit
+  ): TransactorZIO =
+    new TransactorZIO(
       dataSource,
       sqlLogger,
       connectionConfig,
@@ -73,12 +75,12 @@ class Transactor private (
         .orDieWith(t =>
           SqlException("Unable to close DB Connection, will die", t)
         )
-end Transactor
+end TransactorZIO
 
-object Transactor:
+object TransactorZIO:
   private val noOpConnectionConfig: Connection => Unit = _ => ()
 
-  /** Construct a Transactor
+  /** Construct a TransactorZIO
     *
     * @param sqlLogger
     *   Logging configuration
@@ -88,14 +90,12 @@ object Transactor:
     *   Number of threads in your connection pool. This helps magzio be more
     *   memory efficient by limiting the number of blocking pool threads used.
     *   Not needed if using the ZIO virtual-thread based blocking executor
-    * @return
-    *   Transactor UIO
     */
   def layer(
       sqlLogger: SqlLogger,
       connectionConfig: Connection => Unit,
       maxBlockingThreads: Option[Int]
-  ): URLayer[DataSource, Transactor] =
+  ): URLayer[DataSource, TransactorZIO] =
     ZLayer.fromZIO {
       for {
         dataSource <- ZIO.service[DataSource]
@@ -104,7 +104,7 @@ object Transactor:
           .flatMap(threads => Semaphore.make(threads))
           .unsome
           .map(semaphoreOpt =>
-            new Transactor(
+            new TransactorZIO(
               dataSource = dataSource,
               sqlLogger = sqlLogger,
               connectionConfig = connectionConfig,
@@ -114,63 +114,53 @@ object Transactor:
       } yield transactor
     }
 
-  /** Construct a Transactor
+  /** Construct a TransactorZIO
     *
     * @param sqlLogger
     *   Logging configuration
     * @param connectionConfig
     *   Customize the underlying JDBC Connections
-    * @return
-    *   Transactor UIO
     */
   def layer(
       sqlLogger: SqlLogger,
       connectionConfig: Connection => Unit
-  ): URLayer[DataSource, Transactor] =
+  ): URLayer[DataSource, TransactorZIO] =
     layer(
       sqlLogger = sqlLogger,
       connectionConfig = connectionConfig,
       maxBlockingThreads = None
     )
 
-  /** Construct a Transactor
+  /** Construct a TransactorZIO
     *
     * @param dataSource
     *   Datasource to be used
     * @param sqlLogger
     *   Logging configuration
-    * @return
-    *   Transactor UIO
     */
-  def layer(sqlLogger: SqlLogger): URLayer[DataSource, Transactor] =
+  def layer(sqlLogger: SqlLogger): URLayer[DataSource, TransactorZIO] =
     layer(
       sqlLogger = sqlLogger,
       connectionConfig = noOpConnectionConfig,
       maxBlockingThreads = None
     )
 
-  /** Construct a Transactor
-    *
-    * @return
-    *   Transactor UIO
-    */
-  def layer: URLayer[DataSource, Transactor] =
+  /** Construct a TransactorZIO */
+  def layer: URLayer[DataSource, TransactorZIO] =
     layer(
       sqlLogger = SqlLogger.Default,
       connectionConfig = noOpConnectionConfig,
       maxBlockingThreads = None
     )
 
-  /** Construct a Transactor
+  /** Construct a TransactorZIO
     *
     * @param connectionConfig
     *   Customize the underlying JDBC Connections
-    * @return
-    *   Transactor UIO
     */
   def layer(
       connectionConfig: Connection => Unit
-  ): URLayer[DataSource, Transactor] =
+  ): URLayer[DataSource, TransactorZIO] =
     layer(
       sqlLogger = SqlLogger.Default,
       connectionConfig = connectionConfig,
@@ -181,13 +171,12 @@ object Transactor:
     *   Number of threads in your connection pool. This helps magzio be more
     *   memory efficient by limiting the number of blocking pool threads used.
     *   Not needed if using the ZIO virtual-thread based blocking executor
-    * @return
     */
-  def layer(maxBlockingThreads: Int): URLayer[DataSource, Transactor] =
+  def layer(maxBlockingThreads: Int): URLayer[DataSource, TransactorZIO] =
     layer(
       sqlLogger = SqlLogger.Default,
       connectionConfig = noOpConnectionConfig,
       maxBlockingThreads = Some(maxBlockingThreads)
     )
 
-end Transactor
+end TransactorZIO

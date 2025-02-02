@@ -1,4 +1,4 @@
-import com.augustnagro.magnum.common.*
+import com.augustnagro.magnum.*
 import munit.FunSuite
 
 class EffectiveSubsetTests extends FunSuite:
