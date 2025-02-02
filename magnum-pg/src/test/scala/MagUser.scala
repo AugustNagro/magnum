@@ -1,6 +1,7 @@
 import com.augustnagro.magnum.{DbCodec, Id, PostgresDbType, SqlName, Table}
 import com.augustnagro.magnum.pg.PgCodec.given
 import com.augustnagro.magnum.pg.enums.PgEnumToScalaEnumSqlArrayCodec
+import com.augustnagro.magnum.pg.enums.PgEnumDbCodec
 import org.postgresql.geometric.{
   PGbox,
   PGcircle,
@@ -33,7 +34,8 @@ case class MagUser(
     pnt: PGpoint,
     poly: PGpolygon,
     colors: List[Color],
-    colorMap: List[Vector[Color]]
+    colorMap: List[Vector[Color]],
+    color: Color
 ) derives DbCodec:
   override def equals(obj: Any): Boolean =
     obj match
@@ -44,6 +46,6 @@ case class MagUser(
         Objects.deepEquals(dates, u.dates) &&
         bx == u.bx && c == u.c && iv == u.iv && l == u.l && lSeg == u.lSeg &&
         p == u.p && pnt == u.pnt && poly == u.poly &&
-        colors == u.colors && colorMap == u.colorMap
+        colors == u.colors && colorMap == u.colorMap && color == u.color
       case _ => false
 end MagUser
