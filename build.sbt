@@ -103,7 +103,7 @@ lazy val magnumZio = project
 
 lazy val magnumCats = project
   .in(file("magnum-cats-effect"))
-  .dependsOn(magnum)
+  .dependsOn(magnum, magnumPg)
   .settings(
     name := "magnum-ce",
     Test / fork := true,

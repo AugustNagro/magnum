@@ -1,11 +1,14 @@
 DROP TABLE IF EXISTS car;
+DROP TYPE IF EXISTS Color;
+
+CREATE TYPE Color as enum ('Red', 'Green', 'Blue');
 
 CREATE TABLE car (
     model VARCHAR(50) NOT NULL,
     id bigint PRIMARY KEY,
     top_speed INT NOT NULL,
     vin INT,
-    color TEXT NOT NULL CHECK (color IN ('Red', 'Green', 'Blue')),
+    color Color NOT NULL,
     created TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
