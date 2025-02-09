@@ -11,7 +11,9 @@ import java.time.OffsetDateTime
 import scala.util.{Success, Using}
 import munit.catseffect.IOFixture
 
-def immutableRepoCatsEffectTests(
+import com.augustnagro.magnum.pg.enums.PgEnumDbCodec
+
+def repoCatsEffectTests(
     suite: FunSuite,
     dbType: DbType,
     xa: () => Transactor[IO]
@@ -34,7 +36,7 @@ def immutableRepoCatsEffectTests(
       created: OffsetDateTime
   ) derives DbCodec
 
-  val carRepo = ImmutableRepo[Car, Long]
+  val carRepo = Repo[Car, Car, Long]
   val car = TableInfo[Car, Car, Long]
 
   val allCars = Vector(
@@ -62,6 +64,15 @@ def immutableRepoCatsEffectTests(
       color = Color.Blue,
       created = OffsetDateTime.parse("2024-11-24T22:17:32.000000000Z")
     )
+  )
+
+  val carToInsert = Car(
+    model = "Lamborghini Huracán",
+    id = 7L,
+    topSpeed = 202,
+    vinNumber = Some(9876),
+    color = Color.Red,
+    created = OffsetDateTime.parse("2023-08-15T14:45:22.000000000Z")
   )
 
   test("count"):
@@ -178,4 +189,10 @@ def immutableRepoCatsEffectTests(
         )
     assertIO(carsCount, Success(3))
 
-end immutableRepoCatsEffectTests
+  test("insert with enum"):
+    val count =
+      xa().connect:
+        carRepo.insert(carToInsert)
+        carRepo.count
+
+    assertIO(count, 4L)

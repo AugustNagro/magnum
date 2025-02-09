@@ -20,7 +20,7 @@ class PgCatsEffectTests extends CatsEffectSuite, TestContainersFixtures:
 
   given IORuntime = IORuntime.global
 
-  immutableRepoCatsEffectTests(this, PostgresDbType, xa)
+  repoCatsEffectTests(this, PostgresDbType, xa)
 
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
