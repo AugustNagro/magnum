@@ -4,6 +4,7 @@ import munit.FunSuite
 import cats.effect.IO
 import cats.syntax.monadError.*
 import cats.effect.std.Dispatcher
+import cats.effect.kernel.Outcome.*
 import munit.CatsEffectAssertions.*
 
 import java.sql.Connection
@@ -12,6 +13,10 @@ import scala.util.{Success, Using}
 import munit.catseffect.IOFixture
 
 import com.augustnagro.magnum.pg.enums.PgEnumDbCodec
+import java.time.Duration
+import cats.effect.kernel.Outcome
+import scala.concurrent.duration.*
+import java.util.concurrent.TimeUnit
 
 def repoCatsEffectTests(
     suite: FunSuite,
@@ -190,9 +195,37 @@ def repoCatsEffectTests(
     assertIO(carsCount, Success(3))
 
   test("insert with enum"):
+    val transactor = xa()
     val count =
-      xa().connect:
+      transactor.connect:
         carRepo.insert(carToInsert)
         carRepo.count
 
     assertIO(count, 4L)
+
+  test("long running query"):
+    val transactor = xa()
+    val firstIo =
+      transactor.transact:
+        carRepo.insert(carToInsert)
+
+    val countIO =
+      transactor.connect(carRepo.count)
+
+    for {
+      startTime <- IO.realTimeInstant
+      fiber <- firstIo.start
+      _ <- fiber.cancel
+      result <- fiber.join
+      count <- countIO
+      endTime <- IO.realTimeInstant
+      elapsed = Duration.between(startTime, endTime).toMillis
+    } yield {
+      assert(result.isCanceled, s"Expected operation to be cancelled, got ${result.getClass().getName()}")
+      assertEquals(count, 3L)
+      assert(
+        elapsed < 5000,
+        s"Query should be cancelled quickly, but took $elapsed ms"
+      )
+    }
+end repoCatsEffectTests
