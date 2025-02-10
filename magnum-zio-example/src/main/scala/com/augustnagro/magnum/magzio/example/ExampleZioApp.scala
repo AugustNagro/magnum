@@ -1,7 +1,9 @@
 package com.augustnagro.magnum.magzio.example
 
 import com.augustnagro.magnum.magzio.*
+import com.augustnagro.magnum.*
 import com.zaxxer.hikari.HikariDataSource
+import org.flywaydb.core.Flyway
 import zio.*
 import zio.logging.backend.SLF4J
 
@@ -18,11 +20,20 @@ object ExampleZioApp extends ZIOAppDefault:
           ds.setUsername("magnum")
           ds.setPassword("magnum_password")
           ds
+      .tap { ds =>
+        val config = Flyway.configure
+          .loggers("slf4j")
+          .dataSource(ds)
+          .locations("classpath:migration")
 
-  private val layers: TaskLayer[Transactor] =
-    ZLayer.make[Transactor](
+        ZIO.attemptBlocking:
+          config.load().migrate()
+      }
+
+  private val layers: TaskLayer[TransactorZIO] =
+    ZLayer.make[TransactorZIO](
       dataSource,
-      Transactor.layer
+      TransactorZIO.layer
     )
 
   override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] =
@@ -30,7 +41,7 @@ object ExampleZioApp extends ZIOAppDefault:
 
   override def run: ZIO[ZIOAppArgs with Scope, Any, Any] =
     ZIO
-      .serviceWithZIO[Transactor] { tx =>
+      .serviceWithZIO[TransactorZIO] { tx =>
         tx.transact:
           val newOwner = ownerRepo.insertReturning:
             OwnerCreator(

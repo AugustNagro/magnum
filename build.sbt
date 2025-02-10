@@ -112,6 +112,8 @@ lazy val magnumZioExample = project
       "dev.zio" %% "zio-logging-slf4j" % "2.4.0",
       "ch.qos.logback" % "logback-classic" % "1.5.16",
       "org.postgresql" % "postgresql" % postgresDriverVersion,
-      "com.zaxxer" % "HikariCP" % "6.2.1"
+      "com.zaxxer" % "HikariCP" % "6.2.1",
+      "org.flywaydb" % "flyway-core" % "11.3.1",
+      "org.flywaydb" % "flyway-database-postgresql" % "11.3.1"
     )
   )

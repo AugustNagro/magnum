@@ -1,10 +1,12 @@
 package com.augustnagro.magnum.magzio.example
 
-import com.augustnagro.magnum.magzio.*
-//import com.augustnagro.magnum.pg.PgCodec.given
+import com.augustnagro.magnum.*
+import com.augustnagro.magnum.pg.PgCodec.given
+import com.augustnagro.magnum.pg.enums.PgEnumDbCodec
 
 import java.time.OffsetDateTime
 
+@SqlName("color_enum")
 enum Color derives DbCodec:
   case Red, Green, Blue
 
@@ -22,8 +24,7 @@ case class Car(
     model: String,
     topSpeed: Int,
     @SqlName("vin") vinNumber: Option[Int],
-//    color: Color,
-    color: String,
+    color: Color,
     created: OffsetDateTime
 ) derives DbCodec
 

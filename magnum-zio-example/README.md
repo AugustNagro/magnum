@@ -11,7 +11,7 @@ This is a simple example of how to use ZIO with Magnum.
 
 ```sh
 cd magnum-zio-example     # Go to the example project folder
-docker compose up -d      # Start the PostgreSQL database container and apply the sql/migrations in the background
+docker compose up -d      # Start the PostgreSQL database container
 ```
 
 ### Running the Application

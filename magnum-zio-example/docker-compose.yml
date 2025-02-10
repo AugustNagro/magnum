@@ -12,19 +12,5 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  flyway:
-    image: flyway/flyway:latest
-    container_name: magnum_flyway
-    depends_on:
-      - postgres
-    command: >
-      -url=jdbc:postgresql://postgres:5432/magnum_db
-      -user=magnum
-      -password=magnum_password
-      -locations=filesystem:/flyway/sql
-      migrate
-    volumes:
-      - ./sql/migrations:/flyway/sql
-
 volumes:
   postgres_data:
