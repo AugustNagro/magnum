@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:latest
+    container_name: magnum_postgres
+    shm_size: 128mb
+    environment:
+      POSTGRES_USER: magnum
+      POSTGRES_PASSWORD: magnum_password
+      POSTGRES_DB: magnum_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
