@@ -1,14 +1,8 @@
 package com.augustnagro.magnum
 
-trait NullOrder:
-  def sql: String
+trait NullOrder
 
 object NullOrder:
-  object First extends NullOrder:
-    def sql: String = "NULLS FIRST"
-
-  object Last extends NullOrder:
-    def sql: String = "NULLS LAST"
-
-  object Empty extends NullOrder:
-    def sql: String = ""
+  case object Default extends NullOrder
+  case object First extends NullOrder
+  case object Last extends NullOrder

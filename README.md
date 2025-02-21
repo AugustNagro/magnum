@@ -23,6 +23,8 @@ Yet another database client for Scala. No dependencies, high productivity.
   * [Splicing Literal Values into Frags](#splicing-literal-values-into-frags)
   * [Postgres Module](#postgres-module)
   * [Logging](#logging-sql-queries)
+* [Integrations](#integrations)
+  * [ZIO](#zio) 
 * [Motivation](#motivation)
 * [Feature List And Database Support](#feature-list)
 * [Talks and Blogs](#talks-and-blogs)
@@ -539,6 +541,23 @@ Setting to TRACE will log SQL queries and their parameters.
 #### Logging Slow Queries
 
 You can log slow queries by using the `Transactor` class in conjunction with `SqlLogger.logSlowQueries(FiniteDuration)`. See [Customizing Transactions](#customizing-transactions) for an example. You can also implement your own SqlLogger subclass as desired.
+
+## Integrations
+
+### ZIO
+
+Magnum provides a fine layer of integration with ZIO.    
+The `magnum-zio` module provides an implementation of the `connect` and `transact` utils that return a ZIO effect.
+
+To use the ZIO integration, add the following dependency:
+```scala
+"com.augustnagro" %% "magnumzio" % "x.x.x"
+```
+
+and import these utils in your code with:
+```scala
+import com.augustnagro.magnum.magzio.*
+```
 
 ## Motivation
 

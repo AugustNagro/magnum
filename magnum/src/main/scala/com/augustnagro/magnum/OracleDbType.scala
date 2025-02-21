@@ -8,6 +8,19 @@ import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Using}
 
 object OracleDbType extends DbType:
+
+  private val specImpl = new SpecImpl:
+    override def offsetLimitSql(
+        offset: Option[Long],
+        limit: Option[Int]
+    ): Option[String] =
+      (offset, limit) match
+        case (Some(o), Some(l)) =>
+          Some(s"OFFSET $o ROWS FETCH NEXT $l ROWS ONLY")
+        case (Some(o), None) => Some(s"OFFSET $o ROWS")
+        case (None, Some(l)) => Some(s"FETCH NEXT $l ROWS ONLY")
+        case (None, None)    => None
+
   def buildRepoDefaults[EC, E, ID](
       tableNameSql: String,
       eElemNames: Seq[String],
@@ -42,17 +55,18 @@ object OracleDbType extends DbType:
     val insertGenKeys = Array.from(eElemNamesSql)
 
     val countSql = s"SELECT count(*) FROM $tableNameSql"
-    val countQuery = Frag(countSql).query[Long]
+    val countQuery = Frag(countSql, Vector.empty, FragWriter.empty).query[Long]
     val existsByIdSql =
       s"SELECT 1 FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
     val findAllSql = s"SELECT * FROM $tableNameSql"
-    val findAllQuery = Frag(findAllSql).query[E]
+    val findAllQuery = Frag(findAllSql, Vector.empty, FragWriter.empty).query[E]
     val findByIdSql =
       s"SELECT * FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
     val deleteByIdSql =
       s"DELETE FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
     val truncateSql = s"TRUNCATE TABLE $tableNameSql"
-    val truncateUpdate = Frag(truncateSql).update
+    val truncateUpdate =
+      Frag(truncateSql, Vector.empty, FragWriter.empty).update
     val insertSql =
       s"INSERT INTO $tableNameSql $ecInsertKeys VALUES (${ecCodec.queryRepr})"
     val updateSql =
@@ -74,10 +88,7 @@ object OracleDbType extends DbType:
       def findAll(using DbCon): Vector[E] = findAllQuery.run()
 
       def findAll(spec: Spec[E])(using DbCon): Vector[E] =
-        val f = spec.build
-        Frag(s"SELECT * FROM $tableNameSql ${f.sqlString}", f.params, f.writer)
-          .query[E]
-          .run()
+        specImpl.findAll(spec, tableNameSql)
 
       def findById(id: ID)(using DbCon): Option[E] =
         Frag(findByIdSql, IArray(id), idWriter(id))

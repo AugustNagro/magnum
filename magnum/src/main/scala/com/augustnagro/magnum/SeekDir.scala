@@ -1,11 +1,7 @@
 package com.augustnagro.magnum
 
-trait SeekDir:
-  def sql: String
+trait SeekDir
 
 object SeekDir:
-  object Gt extends SeekDir:
-    def sql: String = ">"
-
-  object Lt extends SeekDir:
-    def sql: String = "<"
+  case object Gt extends SeekDir
+  case object Lt extends SeekDir

@@ -4,9 +4,10 @@ import com.augustnagro.magnum.SqlException
 
 import java.lang.System.Logger.Level
 import java.sql.{Connection, PreparedStatement, ResultSet, Statement}
+import java.util.StringJoiner
 import java.util.concurrent.TimeUnit
 import javax.sql.DataSource
-import scala.collection.mutable.ReusableBuilder
+import scala.collection.mutable as m
 import scala.util.{Failure, Success, Try, Using, boundary}
 import scala.deriving.Mirror
 import scala.compiletime.{
@@ -23,35 +24,23 @@ import scala.reflect.ClassTag
 import scala.quoted.*
 
 def connect[T](transactor: Transactor)(f: DbCon ?=> T): T =
-  Using.resource(transactor.dataSource.getConnection): con =>
-    transactor.connectionConfig(con)
-    f(using DbCon(con, transactor.sqlLogger))
+  transactor.connect(f)
 
 def connect[T](dataSource: DataSource)(f: DbCon ?=> T): T =
-  connect(Transactor(dataSource))(f)
+  Transactor(dataSource).connect(f)
 
 def transact[T](transactor: Transactor)(f: DbTx ?=> T): T =
-  Using.resource(transactor.dataSource.getConnection): con =>
-    transactor.connectionConfig(con)
-    con.setAutoCommit(false)
-    try
-      val res = f(using DbTx(con, transactor.sqlLogger))
-      con.commit()
-      res
-    catch
-      case t =>
-        con.rollback()
-        throw t
+  transactor.transact(f)
 
 def transact[T](dataSource: DataSource)(f: DbTx ?=> T): T =
-  transact(Transactor(dataSource))(f)
+  Transactor(dataSource).transact(f)
 
 def transact[T](dataSource: DataSource, connectionConfig: Connection => Unit)(
     f: DbTx ?=> T
 ): T =
   val transactor =
     Transactor(dataSource = dataSource, connectionConfig = connectionConfig)
-  transact(transactor)(f)
+  transactor.transact(f)
 
 extension (inline sc: StringContext)
   inline def sql(inline args: Any*): Frag =
@@ -61,70 +50,102 @@ private def sqlImpl(sc: Expr[StringContext], args: Expr[Seq[Any]])(using
     Quotes
 ): Expr[Frag] =
   import quotes.reflect.*
-  val argsExprs: Seq[Expr[Any]] = args match
+  val allArgsExprs: Seq[Expr[Any]] = args match
     case Varargs(ae) => ae
 //  val stringExprs: Seq[Expr[String]] = sc match
 //    case '{ StringContext(${ Varargs(strings) }: _*) } => strings
 
-  val interpolatedVarargs = Varargs(argsExprs.map {
-    case '{ $arg: SqlLiteral } => '{ $arg.queryRepr }
-    case '{ $arg: Frag }       => '{ $arg.sqlString }
-    case '{ $arg: tp } =>
-      val codecExpr = summonWriter[tp]
-      '{ $codecExpr.queryRepr }
-  })
-
-  val paramExprs = argsExprs.filter {
-    case '{ $arg: SqlLiteral } => false
-    case _                     => true
-  }
-
-  val queryExpr = '{ $sc.s($interpolatedVarargs: _*) }
-  val exprParams = Expr.ofSeq(paramExprs)
-
   '{
-    val argValues = $exprParams
-    val writer: FragWriter = (ps: PreparedStatement, pos: Int) => {
-      ${ sqlWriter('{ ps }, '{ pos }, '{ argValues }, paramExprs, '{ 0 }) }
+    val args: Seq[Any] = ${ Expr.ofSeq(allArgsExprs) }
+
+    val sqlQueryReprs: Vector[String] = ${
+      queryReprs(allArgsExprs, '{ args }, '{ Vector.newBuilder })
     }
-    Frag($queryExpr, argValues, writer)
+    val queryExpr: String = $sc.s(sqlQueryReprs: _*)
+
+    val flattenedArgs: Vector[Any] = ${
+      flattenedArgsExpr(allArgsExprs, '{ args }, '{ Vector.newBuilder })
+    }
+
+    val writer: FragWriter = (ps: PreparedStatement, pos: Int) => {
+      ${ sqlWriter('{ ps }, '{ pos }, '{ args }, allArgsExprs) }
+    }
+    Frag(queryExpr, flattenedArgs, writer)
   }
 end sqlImpl
+
+private def flattenedArgsExpr(
+    argsExprs: Seq[Expr[Any]],
+    allArgs: Expr[Seq[Any]],
+    builder: Expr[m.Builder[Any, Vector[Any]]],
+    i: Int = 0
+)(using Quotes): Expr[Vector[Any]] =
+  argsExprs match
+    case '{ $arg: SqlLiteral } +: tail =>
+      flattenedArgsExpr(tail, allArgs, builder, i + 1)
+    case '{ $arg: Frag } +: tail =>
+      val newBuilder = '{
+        $builder ++= $allArgs(${ Expr(i) }).asInstanceOf[Frag].params
+      }
+      flattenedArgsExpr(tail, allArgs, newBuilder, i + 1)
+    case '{ $arg: tp } +: tail =>
+      val newBuilder = '{ $builder += $allArgs(${ Expr(i) }) }
+      flattenedArgsExpr(tail, allArgs, newBuilder, i + 1)
+    case Seq() =>
+      '{ $builder.result() }
+
+private def queryReprs(
+    argsExprs: Seq[Expr[Any]],
+    allArgs: Expr[Seq[Any]],
+    builder: Expr[m.Builder[String, Vector[String]]],
+    i: Int = 0
+)(using Quotes): Expr[Vector[String]] =
+  argsExprs match
+    case '{ $arg: SqlLiteral } +: tail =>
+      val newBuilder = '{
+        $builder += $allArgs(${ Expr(i) }).asInstanceOf[SqlLiteral].queryRepr
+      }
+      queryReprs(tail, allArgs, newBuilder, i + 1)
+    case '{ $arg: Frag } +: tail =>
+      val newBuilder = '{
+        $builder += $allArgs(${ Expr(i) }).asInstanceOf[Frag].sqlString
+      }
+      queryReprs(tail, allArgs, newBuilder, i + 1)
+    case '{ $arg: tp } +: tail =>
+      val codecExpr = summonWriter[tp]
+      val newBuilder = '{ $builder += $codecExpr.queryRepr }
+      queryReprs(tail, allArgs, newBuilder, i + 1)
+    case Seq() =>
+      '{ $builder.result() }
 
 private def sqlWriter(
     psExpr: Expr[PreparedStatement],
     posExpr: Expr[Int],
     args: Expr[Seq[Any]],
     argsExprs: Seq[Expr[Any]],
-    iExpr: Expr[Int]
+    i: Int = 0
 )(using Quotes): Expr[Int] =
   import quotes.reflect.*
   argsExprs match
-    case head +: tail =>
-      head match
-        case '{ $arg: Frag } =>
-          '{
-            val i = $iExpr
-            val frag = $args(i).asInstanceOf[Frag]
-            val pos = $posExpr
-            val newPos = frag.writer.write($psExpr, pos)
-            val newI = i + 1
-            ${ sqlWriter(psExpr, '{ newPos }, args, tail, '{ newI }) }
-          }
-        case '{ $arg: tp } =>
-          val codecExpr = summonWriter[tp]
-          '{
-            val i = $iExpr
-            val argValue = $args(i).asInstanceOf[tp]
-            val pos = $posExpr
-            val codec = $codecExpr
-            codec.writeSingle(argValue, $psExpr, pos)
-            val newPos = pos + codec.cols.length
-            val newI = i + 1
-            ${ sqlWriter(psExpr, '{ newPos }, args, tail, '{ newI }) }
-          }
-        case _ =>
-          report.errorAndAbort("Args must be explicit", head)
+    case '{ $arg: SqlLiteral } +: tail =>
+      sqlWriter(psExpr, posExpr, args, tail, i + 1)
+    case '{ $arg: Frag } +: tail =>
+      '{
+        val frag = $args(${ Expr(i) }).asInstanceOf[Frag]
+        val pos = $posExpr
+        val newPos = frag.writer.write($psExpr, pos)
+        ${ sqlWriter(psExpr, '{ newPos }, args, tail, i + 1) }
+      }
+    case '{ $arg: tp } +: tail =>
+      val codecExpr = summonWriter[tp]
+      '{
+        val argValue = $args(${ Expr(i) }).asInstanceOf[tp]
+        val pos = $posExpr
+        val codec = $codecExpr
+        codec.writeSingle(argValue, $psExpr, pos)
+        val newPos = pos + codec.cols.length
+        ${ sqlWriter(psExpr, '{ newPos }, args, tail, i + 1) }
+      }
     case Seq() => posExpr
   end match
 end sqlWriter
