@@ -54,7 +54,8 @@ trait DbCodec[E]:
     * after reading `cols` number of columns. Make sure the ResultSet is in a
     * valid state (ie, ResultSet::next has been called).
     */
-  def readSingleOption(resultSet: ResultSet, pos: Int): Option[E]
+  def readSingleOption(resultSet: ResultSet, pos: Int): Option[E] =
+    Option(readSingle(resultSet, pos))
 
   /** Build every row in the ResultSet into a sequence of E. The ResultSet
     * should be in its initial position before calling (ie, ResultSet::next not
