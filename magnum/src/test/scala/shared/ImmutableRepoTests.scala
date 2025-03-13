@@ -54,6 +54,22 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
     )
   )
 
+  test("futures"):
+    import scala.concurrent.{ExecutionContext, Await}
+    import scala.concurrent.duration.*
+    import scala.concurrent.Future
+
+    given ExecutionContext = ExecutionContext.global
+
+    val future: Future[Vector[Car]] = Future {
+      xa().connect {
+        sql"SELECT * FROM car".query[Car].run()
+      }
+    }
+
+    val res = Await.result(future, 2.seconds)
+    assertEquals(res, allCars)
+
   test("count"):
     xa().connect:
       assert(carRepo.count == 3L)
