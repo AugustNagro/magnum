@@ -8,12 +8,16 @@ import org.testcontainers.utility.DockerImageName
 import shared.*
 
 import java.sql.Statement
+import java.time.LocalTime
 import scala.util.Using
 
 class OracleTests extends FunSuite, TestContainersFixtures:
 
   given DbCodec[Boolean] =
     DbCodec[String].biMap(_ == "Y", b => if b then "Y" else "N")
+
+  given DbCodec[LocalTime] =
+    DbCodec[String].biMap(LocalTime.parse, _.toString)
 
   sharedTests(this, OracleDbType, xa)
 
@@ -157,6 +161,23 @@ class OracleTests extends FunSuite, TestContainersFixtures:
         )
         stmt.execute("insert into big_dec (id, my_big_dec) values (1, 123)")
         stmt.execute("insert into big_dec (id, my_big_dec) values (2, null)")
+        try stmt.execute("drop table my_time")
+        catch case _ => ()
+        stmt.execute(
+          """create table my_time (
+            |  a timestamp with local time zone not null,
+            |  b date not null,
+            |  c VARCHAR2(100) not null,
+            |  d timestamp not null
+            |)
+            |""".stripMargin
+        )
+        stmt.execute(
+          "insert into my_time values (timestamp '2025-03-30 21:19:23 -00:00', date '2025-03-30', '05:20:04', timestamp '2025-04-02 20:16:38')"
+        )
+        stmt.execute(
+          "insert into my_time values (timestamp '2025-03-31 21:19:23 -00:00', date '2025-03-31', '05:30:04', timestamp '2025-04-02 20:17:38')"
+        )
       )
       .get
     Transactor(ds)
