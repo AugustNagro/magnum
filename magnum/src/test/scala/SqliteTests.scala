@@ -29,7 +29,7 @@ class SqliteTests extends FunSuite:
 
   given DbCodec[LocalTime] =
     DbCodec[String].biMap(LocalTime.parse, _.toString)
-    
+
   given DbCodec[LocalDateTime] =
     DbCodec[String].biMap(LocalDateTime.parse, _.toString)
 
