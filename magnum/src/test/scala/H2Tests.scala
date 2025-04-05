@@ -23,7 +23,8 @@ class H2Tests extends FunSuite:
       "/h2/person.sql",
       "/h2/my-user.sql",
       "/h2/no-id.sql",
-      "/h2/big-dec.sql"
+      "/h2/big-dec.sql",
+      "/h2/my-time.sql"
     ).map(p => Files.readString(Path.of(getClass.getResource(p).toURI)))
     Manager(use =>
       val con = use(ds.getConnection)

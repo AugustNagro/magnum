@@ -37,7 +37,8 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
       "/mysql/person.sql",
       "/mysql/my-user.sql",
       "/mysql/no-id.sql",
-      "/mysql/big-dec.sql"
+      "/mysql/big-dec.sql",
+      "/mysql/my-time.sql"
     ).map(p => Files.readString(Path.of(getClass.getResource(p).toURI)))
     Manager(use =>
       val con = use(ds.getConnection)

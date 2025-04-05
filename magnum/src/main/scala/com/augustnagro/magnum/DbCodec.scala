@@ -2,7 +2,15 @@ package com.augustnagro.magnum
 
 import java.net.URL
 import java.sql.{JDBCType, PreparedStatement, ResultSet, Types}
-import java.time.{LocalDate, LocalDateTime, LocalTime, OffsetDateTime}
+import java.time.{
+  Instant,
+  LocalDate,
+  LocalDateTime,
+  LocalTime,
+  OffsetDateTime,
+  ZoneId,
+  ZoneOffset
+}
 import java.util.UUID
 import scala.annotation.implicitNotFound
 import scala.deriving.Mirror
@@ -247,6 +255,42 @@ object DbCodec:
     def writeSingle(dt: OffsetDateTime, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, dt)
     def queryRepr: String = "?"
+
+  given InstantCodec: DbCodec[Instant] =
+    OffsetDateTimeCodec.biMap(_.toInstant, _.atOffset(ZoneOffset.UTC))
+
+  given LocalDateCodec: DbCodec[LocalDate] with
+    val cols: IArray[Int] = IArray(Types.DATE)
+    def readSingle(rs: ResultSet, pos: Int): LocalDate =
+      rs.getObject(pos, classOf[LocalDate])
+    def readSingleOption(rs: ResultSet, pos: Int): Option[LocalDate] =
+      readOptImpl(this, rs, pos)
+    def writeSingle(ld: LocalDate, ps: PreparedStatement, pos: Int): Unit =
+      ps.setObject(pos, ld)
+    def queryRepr: String = "?"
+
+  given LocalTimeCodec: DbCodec[LocalTime] with
+    val cols: IArray[Int] = IArray(Types.TIME)
+    def readSingle(rs: ResultSet, pos: Int): LocalTime =
+      rs.getObject(pos, classOf[LocalTime])
+    def readSingleOption(rs: ResultSet, pos: Int): Option[LocalTime] =
+      readOptImpl(this, rs, pos)
+    def writeSingle(lt: LocalTime, ps: PreparedStatement, pos: Int): Unit =
+      ps.setObject(pos, lt)
+    def queryRepr: String = "?"
+
+  given LocalDateTimeCodec: DbCodec[LocalDateTime] with
+    val cols: IArray[Int] = IArray(Types.TIMESTAMP)
+    def readSingle(rs: ResultSet, pos: Int): LocalDateTime =
+      rs.getObject(pos, classOf[LocalDateTime])
+    def readSingleOption(rs: ResultSet, pos: Int): Option[LocalDateTime] =
+      readOptImpl(this, rs, pos)
+    def writeSingle(ldt: LocalDateTime, ps: PreparedStatement, pos: Int): Unit =
+      ps.setObject(pos, ldt)
+    def queryRepr: String = "?"
+
+  given ZoneIdCodec: DbCodec[ZoneId] =
+    StringCodec.biMap(ZoneId.of, _.toString)
 
   given SqlRefCodec: DbCodec[java.sql.Ref] with
     val cols: IArray[Int] = IArray(Types.REF)
