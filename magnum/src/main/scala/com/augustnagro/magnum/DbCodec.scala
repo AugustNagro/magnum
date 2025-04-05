@@ -8,6 +8,7 @@ import java.time.{
   LocalDateTime,
   LocalTime,
   OffsetDateTime,
+  ZoneId,
   ZoneOffset
 }
 import java.util.UUID
@@ -287,6 +288,9 @@ object DbCodec:
     def writeSingle(ldt: LocalDateTime, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, ldt)
     def queryRepr: String = "?"
+
+  given ZoneIdCodec: DbCodec[ZoneId] =
+    StringCodec.biMap(ZoneId.of, _.toString)
 
   given SqlRefCodec: DbCodec[java.sql.Ref] with
     val cols: IArray[Int] = IArray(Types.REF)
