@@ -155,7 +155,7 @@ def immutableRepoZioTests(
     assert(result == allCars.tail)
 
   test("select via option"):
-    val vin = Some(124)
+    val vin = Option(124)
     val cars =
       runIO:
         xa().connect:

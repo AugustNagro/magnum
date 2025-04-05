@@ -526,7 +526,7 @@ object DbCodec:
     if resultSet.wasNull then None
     else Some(res)
 
-  inline given derived[E: Mirror.Of]: DbCodec[E] =
+  inline def derived[E: Mirror.Of]: DbCodec[E] =
     ${ dbCodecImpl[E] }
 
   private def dbCodecImpl[E: Type](using Quotes): Expr[DbCodec[E]] =
