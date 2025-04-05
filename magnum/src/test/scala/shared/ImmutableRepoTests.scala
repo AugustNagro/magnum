@@ -149,7 +149,7 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
         assert(it.map(_.id).size == 3)
       )
 
-  test("sql interpolator selects right DbCodec".only):
+  test("sql interpolator selects right DbCodec"):
     case class Coord(x: Double, y: Double)
 
     given DbCodec[Coord] with
