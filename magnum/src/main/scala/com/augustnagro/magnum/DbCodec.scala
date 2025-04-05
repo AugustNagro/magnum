@@ -2,7 +2,14 @@ package com.augustnagro.magnum
 
 import java.net.URL
 import java.sql.{JDBCType, PreparedStatement, ResultSet, Types}
-import java.time.{LocalDate, LocalDateTime, LocalTime, OffsetDateTime}
+import java.time.{
+  Instant,
+  LocalDate,
+  LocalDateTime,
+  LocalTime,
+  OffsetDateTime,
+  ZoneOffset
+}
 import java.util.UUID
 import scala.annotation.implicitNotFound
 import scala.deriving.Mirror
@@ -247,6 +254,9 @@ object DbCodec:
     def writeSingle(dt: OffsetDateTime, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, dt)
     def queryRepr: String = "?"
+
+  given InstantCodec: DbCodec[Instant] =
+    OffsetDateTimeCodec.biMap(_.toInstant, _.atOffset(ZoneOffset.UTC))
 
   given LocalDateCodec: DbCodec[LocalDate] with
     val cols: IArray[Int] = IArray(Types.DATE)
