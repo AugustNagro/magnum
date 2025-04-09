@@ -180,7 +180,6 @@ def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
 
     while (it.hasNext)
       fragsBuilder += f(it.next()).frag
-    end while
 
     val frags = fragsBuilder.result()
     val firstFrag = frags.head
@@ -209,7 +208,6 @@ def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
           ),
           t
         )
-    end match
   end if
 end batchUpdate
 
