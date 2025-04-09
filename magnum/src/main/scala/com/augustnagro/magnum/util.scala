@@ -174,14 +174,7 @@ def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
   if values.isEmpty
   then BatchUpdateResult.Success(0)
   else
-    val it = values.iterator
-    val fragsBuilder = Vector.newBuilder[Frag]
-    fragsBuilder.sizeHint(values.size)
-
-    while (it.hasNext)
-      fragsBuilder += f(it.next()).frag
-
-    val frags = fragsBuilder.result()
+    val frags = values.map(f(_).frag)
     val firstFrag = frags.head
 
     assert(
