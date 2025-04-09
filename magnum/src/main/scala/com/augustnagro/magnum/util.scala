@@ -171,35 +171,46 @@ private def summonWriter[T: Type](using Quotes): Expr[DbCodec[T]] =
 def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
     con: DbCon
 ): BatchUpdateResult =
-  val it = values.iterator
-  if !it.hasNext then return BatchUpdateResult.Success(0)
-  val firstUpdate = f(it.next())
-  val firstFrag = firstUpdate.frag
+  if values.isEmpty
+  then BatchUpdateResult.Success(0)
+  else
+    val it = values.iterator
+    val fragsBuilder = Vector.newBuilder[Frag]
+    fragsBuilder.sizeHint(values.size)
 
-  Using.Manager(use =>
-    val ps = use(con.connection.prepareStatement(firstFrag.sqlString))
-    firstFrag.writer.write(ps, 1)
-    ps.addBatch()
+    while (it.hasNext)
+      fragsBuilder += f(it.next()).frag
+    end while
 
-    while it.hasNext do
-      val frag = f(it.next()).frag
-      assert(
-        frag.sqlString == firstFrag.sqlString,
-        "all queries must be the same for batch PreparedStatement"
-      )
-      frag.writer.write(ps, 1)
-      ps.addBatch()
-    batchUpdateResult(ps.executeBatch())
-  ) match
-    case Success(res) => res
-    case Failure(t) =>
-      throw SqlException(
-        con.sqlLogger.exceptionMsg(
-          SqlExceptionEvent(firstFrag.sqlString, firstFrag.params, t)
-        ),
-        t
-      )
-  end match
+    val frags = fragsBuilder.result()
+    val firstFrag = frags.head
+
+    assert(
+      frags.forall(_.sqlString == firstFrag.sqlString),
+      "all queries must be the same for batch PreparedStatement"
+    )
+
+    val result =
+      Using.Manager: use =>
+        val ps = use(con.connection.prepareStatement(firstFrag.sqlString))
+
+        frags.foreach: frag =>
+          frag.writer.write(ps, 1)
+          ps.addBatch()
+
+        batchUpdateResult(ps.executeBatch())
+
+    result match
+      case Success(res) => res
+      case Failure(t) =>
+        throw SqlException(
+          con.sqlLogger.exceptionMsg(
+            SqlExceptionEvent(firstFrag.sqlString, firstFrag.params, t)
+          ),
+          t
+        )
+    end match
+  end if
 end batchUpdate
 
 private val Log = System.getLogger("com.augustnagro.magnum")
@@ -233,7 +244,7 @@ private def batchUpdateResult(updateCounts: Array[Int]): BatchUpdateResult =
   boundary:
     val updatedRows = updateCounts.foldLeft(0L)((res, c) =>
       c match
-        case rowCount if rowCount >= 0 =>
+        case rowCount if rowCount > 0 =>
           res + rowCount
         case Statement.SUCCESS_NO_INFO =>
           boundary.break(BatchUpdateResult.SuccessNoInfo)
