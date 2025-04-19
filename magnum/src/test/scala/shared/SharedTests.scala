@@ -3,7 +3,7 @@ package shared
 import com.augustnagro.magnum.*
 import munit.{FunSuite, Location}
 
-import java.time.OffsetDateTime
+import java.time.{LocalTime, OffsetDateTime}
 import java.util.UUID
 
 def sharedTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
@@ -11,7 +11,8 @@ def sharedTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
     DbCodec[UUID],
     DbCodec[Boolean],
     DbCodec[OffsetDateTime],
-    DbCodec[BigDecimal]
+    DbCodec[BigDecimal],
+    DbCodec[LocalTime]
 ): Unit =
   immutableRepoTests(suite, dbType, xa)
   repoTests(suite, dbType, xa)
@@ -23,3 +24,4 @@ def sharedTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
   multilineFragTests(suite, dbType, xa)
   bigDecTests(suite, dbType, xa)
   optionalProductTests(suite, dbType, xa)
+  dateTimeTests(suite, dbType, xa)

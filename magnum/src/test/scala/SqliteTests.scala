@@ -5,7 +5,7 @@ import org.sqlite.SQLiteDataSource
 import shared.*
 
 import java.nio.file.Files
-import java.time.OffsetDateTime
+import java.time.{LocalDate, LocalDateTime, LocalTime, OffsetDateTime}
 import java.util.UUID
 import scala.util.Using
 import scala.util.Using.Manager
@@ -15,6 +15,9 @@ class SqliteTests extends FunSuite:
   given DbCodec[OffsetDateTime] =
     DbCodec[String].biMap(OffsetDateTime.parse, _.toString)
 
+  given DbCodec[LocalDate] =
+    DbCodec[String].biMap(LocalDate.parse, _.toString)
+
   given DbCodec[UUID] =
     DbCodec[String].biMap(UUID.fromString, _.toString)
 
@@ -23,6 +26,12 @@ class SqliteTests extends FunSuite:
 
   given DbCodec[BigDecimal] =
     DbCodec[String].biMap(BigDecimal.apply, _.toString())
+
+  given DbCodec[LocalTime] =
+    DbCodec[String].biMap(LocalTime.parse, _.toString)
+
+  given DbCodec[LocalDateTime] =
+    DbCodec[String].biMap(LocalDateTime.parse, _.toString)
 
   sharedTests(this, SqliteDbType, xa)
 
@@ -111,6 +120,20 @@ class SqliteTests extends FunSuite:
         """insert into big_dec values
           |(1, '123'),
           |(2, null)""".stripMargin
+      )
+      stmt.execute("drop table if exists my_time")
+      stmt.execute(
+        """create table my_time (
+          |  a text not null,
+          |  b text not null,
+          |  c text not null,
+          |  d text not null
+          |)""".stripMargin
+      )
+      stmt.execute(
+        """insert into my_time values
+          |('2025-03-30T21:19:23Z', '2025-03-30', '05:20:04', '2025-04-02T20:16:38'),
+          |('2025-03-31T21:19:23Z', '2025-03-31', '05:30:04', '2025-04-02T20:17:38')""".stripMargin
       )
     ).get
     Transactor(ds)
