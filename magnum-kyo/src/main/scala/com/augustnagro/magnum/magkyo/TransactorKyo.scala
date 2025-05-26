@@ -31,17 +31,19 @@ class TransactorKyo private (
       semaphore
     )
 
-  def connect[A](f: DbCon ?=> A): A < (Abort[Throwable] & Async) =
-    val res =
+  def connect[A, S](f: DbCon ?=> (A < S))(using
+      Frame
+  ): A < (Abort[Throwable] & Async & S) =
+    val res: A < (Resource & Abort[SqlException] & IO & S) =
       Resource
         .acquireRelease(acquireConnection)(releaseConnection)
         .map { lo =>
-          IO {
+          IO[A, S] {
             connectionConfig(lo)
             f(using DbCon(lo, sqlLogger))
           }
         }
-    val effect = Resource.run(res)
+    val effect: A < (Async & Abort[SqlException] & S) = Resource.run(res)
     semaphore.fold(effect)(_.run(effect))
 
   def transact[A](f: DbTx ?=> A): A < (Abort[Throwable] & Async) =
@@ -49,7 +51,7 @@ class TransactorKyo private (
       Resource
         .acquireRelease(acquireConnection)(releaseConnection)
         .map { lo =>
-          Async.mask {
+          Async.mask[Throwable, A, Any] {
             connectionConfig(lo)
             lo.setAutoCommit(false)
             Abort
@@ -110,13 +112,13 @@ object TransactorKyo:
     *   more memory efficient by limiting the number of blocking pool threads
     *   used.
     */
-  def layer(
+  def make(
+      dataSource: DataSource,
       sqlLogger: SqlLogger,
       connectionConfig: Connection => Unit,
       maxBlockingThreads: Maybe[Int]
-  ): Layer[TransactorKyo, Env[DataSource] & IO] = Layer {
+  ): TransactorKyo < IO =
     for
-      dataSource <- Env.get[DataSource]
       semaphore <- maxBlockingThreads.fold(IO(Maybe.empty[Meter]))(max =>
         Meter.initSemaphore(max).map(Maybe(_))
       )
@@ -129,7 +131,29 @@ object TransactorKyo:
         )
       )
     yield transactor
-  }
+
+  /** Construct a TransactorKyo Layer
+    *
+    * @param sqlLogger
+    *   Logging configuration
+    * @param connectionConfig
+    *   Customize the underlying JDBC Connections
+    * @param maxBlockingThreads
+    *   Number of threads in your connection pool. This helps the library be
+    *   more memory efficient by limiting the number of blocking pool threads
+    *   used.
+    */
+  def layer(
+      sqlLogger: SqlLogger,
+      connectionConfig: Connection => Unit,
+      maxBlockingThreads: Maybe[Int]
+  ): Layer[TransactorKyo, Env[DataSource] & IO] = Layer(
+    Env
+      .get[DataSource]
+      .map(
+        make(_, sqlLogger, connectionConfig, maxBlockingThreads)
+      )
+  )
 
   /** Construct a TransactorKyo
     *
