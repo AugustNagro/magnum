@@ -15,7 +15,7 @@ import javax.sql.DataSource
 
 class PgZioTests extends FunSuite, TestContainersFixtures:
 
-  immutableRepoKyoTests(this, PostgresDbType, xa)
+  immutableRepoKyoTests(this, PostgresDbType, transactorKyo)
 
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
@@ -26,39 +26,32 @@ class PgZioTests extends FunSuite, TestContainersFixtures:
   override def munitFixtures: Seq[AnyFixture[?]] =
     super.munitFixtures :+ pgContainer
 
-  def xa(): TransactorKyo =
-    val ds = PGSimpleDataSource()
-    val pg = pgContainer()
-    ds.setUrl(pg.jdbcUrl)
-    ds.setUser(pg.username)
-    ds.setPassword(pg.password)
-    val tableDDLs = Vector(
-      "/pg/car.sql",
-      "/pg/person.sql",
-      "/pg/my-user.sql",
-      "/pg/no-id.sql",
-      "/pg/big-dec.sql"
-    ).map(p => Files.readString(Path.of(getClass.getResource(p).toURI)))
-
-    Manager(use =>
-      val con = use(ds.getConnection)
-      val stmt = use(con.createStatement)
-      for ddl <- tableDDLs do stmt.execute(ddl)
-    ).get
-    val dsLayer: Layer[DataSource, Any] = Layer(ds)
-    val xaLayer = Layer.init[TransactorKyo](TransactorKyo.layer, dsLayer)
-
-    val getXa: TransactorKyo < Env[TransactorKyo] = Env.get[TransactorKyo]
-
-    import AllowUnsafe.embrace.danger
-    KyoApp.Unsafe
-      .runAndBlock(10.minutes)(
-        Memo.run(
-          Env.runLayer(xaLayer)(
-            getXa
-          )
+  def transactorKyo: TransactorKyo < (Resource & IO) =
+    for
+      pg <- IO(pgContainer())
+      ds <- IO {
+        val init = PGSimpleDataSource()
+        init.setUrl(pg.jdbcUrl)
+        init.setUser(pg.username)
+        init.setPassword(pg.password)
+        init
+      }
+      tableDDLs <- Kyo.foreach(
+        List(
+          "/pg/car.sql",
+          "/pg/person.sql",
+          "/pg/my-user.sql",
+          "/pg/no-id.sql",
+          "/pg/big-dec.sql"
         )
+      )(p => IO(Files.readString(Path.of(getClass.getResource(p).toURI))))
+      conn <- Resource.acquireRelease(IO(ds.getConnection()))(con =>
+        IO(con.close())
       )
-      .getOrThrow
-  end xa
+      stmt <- Resource.acquireRelease(conn.createStatement())(stmt =>
+        IO(stmt.close())
+      )
+      _ <- Kyo.foreach(tableDDLs)(ddl => IO(stmt.execute(ddl)))
+      xa <- TransactorKyo.make(ds, SqlLogger.Default, _ => (), Maybe.Absent)
+    yield xa
 end PgZioTests

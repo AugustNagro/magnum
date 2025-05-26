@@ -11,14 +11,14 @@ import scala.util.{Success, Using}
 def immutableRepoKyoTests(
     suite: FunSuite,
     dbType: DbType,
-    xa: () => TransactorKyo
+    xa: TransactorKyo < (Resource & IO)
 )(using
     Location,
     DbCodec[OffsetDateTime]
 ): Unit =
   import suite.*
 
-  def runEffect[A](io: A < (Abort[Throwable] & Async)): A =
+  def runEffect[A](io: A < (Abort[Throwable] & Async & Resource)): A =
     import AllowUnsafe.embrace.danger
     KyoApp.Unsafe.runAndBlock(10.minutes)(io).getOrThrow
 
@@ -68,30 +68,38 @@ def immutableRepoKyoTests(
   test("count"):
     val count =
       runEffect:
-        xa().connect:
-          carRepo.count
+        xa.map {
+          _.connect:
+            carRepo.count
+        }
     assert(count == 3L)
 
   test("existsById"):
     val (exists3, exists4) =
       runEffect:
-        xa().connect:
-          carRepo.existsById(3L) -> carRepo.existsById(4L)
+        xa.map {
+          _.connect:
+            carRepo.existsById(3L) -> carRepo.existsById(4L)
+        }
     assert(exists3)
     assert(!exists4)
 
   test("findAll"):
     val cars =
       runEffect:
-        xa().connect:
-          carRepo.findAll
+        xa.map {
+          _.connect:
+            carRepo.findAll
+        }
     assert(cars == allCars)
 
   test("findById"):
     val (exists3, exists4) =
       runEffect:
-        xa().connect:
-          carRepo.findById(3L) -> carRepo.findById(4L)
+        xa.map {
+          _.connect:
+            carRepo.findById(3L) -> carRepo.findById(4L)
+        }
     assert(exists3.get == allCars.last)
     assert(exists4 == None)
 
@@ -102,17 +110,20 @@ def immutableRepoKyoTests(
     assume(dbType != SqliteDbType)
     val ids =
       runEffect:
-        xa().connect:
-          carRepo.findAllById(Vector(1L, 3L)).map(_.id)
+        xa.map {
+          _.connect:
+            carRepo.findAllById(Vector(1L, 3L)).map(_.id)
+        }
     assert(ids == Vector(1L, 3L))
 
   test("serializable transaction"):
     val count =
       runEffect:
-        xa()
-          .withConnectionConfig(withSerializable)
-          .transact:
-            carRepo.count
+        xa.map {
+          _.withConnectionConfig(withSerializable)
+            .transact:
+              carRepo.count
+        }
     assert(count == 3L)
 
   def withSerializable(con: Connection): Unit =
@@ -125,14 +136,30 @@ def immutableRepoKyoTests(
         .query[Car]
     val result =
       runEffect:
-        xa().connect:
-          query.run()
+        xa.map {
+          _.connect:
+            query.run()
+        }
     assertNoDiff(
       query.frag.sqlString,
       "select model, id, top_speed, vin, color, created from car where top_speed > ?"
     )
     assert(query.frag.params == Vector(minSpeed))
     assert(result == allCars.tail)
+
+  test("select query with streaming"):
+    val query = sql"select ${car.all} from $car".query[Car]
+    val result =
+      runEffect {
+        xa.map {
+          _.connect {
+            query
+              .stream()
+              .into(Sink.collect[Car])
+          }
+        }
+      }
+    assert(result == Chunk.from(allCars))
 
   test("select query with aliasing"):
     val minSpeed = 210
@@ -142,8 +169,10 @@ def immutableRepoKyoTests(
         .query[Car]
     val result =
       runEffect:
-        xa().connect:
-          query.run()
+        xa.map {
+          _.connect:
+            query.run()
+        }
     assertNoDiff(
       query.frag.sqlString,
       "select c.model, c.id, c.top_speed, c.vin, c.color, c.created from car c where c.top_speed > ?"
@@ -155,43 +184,53 @@ def immutableRepoKyoTests(
     val vin = Option(124)
     val cars =
       runEffect:
-        xa().connect:
-          sql"select * from car where vin = $vin"
-            .query[Car]
-            .run()
+        xa.map {
+          _.connect:
+            sql"select * from car where vin = $vin"
+              .query[Car]
+              .run()
+        }
     assert(cars == allCars.filter(_.vinNumber == vin))
 
   test("tuple select"):
     val tuples =
       runEffect:
-        xa().connect:
-          sql"select model, color from car where id = 2"
-            .query[(String, Color)]
-            .run()
+        xa.map {
+          _.connect:
+            sql"select model, color from car where id = 2"
+              .query[(String, Color)]
+              .run()
+        }
     assert(tuples == Vector(allCars(1).model -> allCars(1).color))
 
   test("reads null int as None and not Some(0)"):
     val maybeCar =
       runEffect:
-        xa().connect:
-          carRepo.findById(3L)
+        xa.map {
+          _.connect:
+            carRepo.findById(3L)
+        }
     assert(maybeCar.get.vinNumber == None)
 
   test("created timestamps should match"):
     val allCars =
       runEffect:
-        xa().connect:
-          carRepo.findAll
+        xa.map {
+          _.connect:
+            carRepo.findAll
+        }
     assert(allCars.map(_.created) == allCars.map(_.created))
 
   test(".query iterator"):
     val carsCount =
       runEffect:
-        xa().connect:
-          Using.Manager(implicit use =>
-            val it = sql"SELECT * FROM car".query[Car].iterator()
-            it.map(_.id).size
-          )
+        xa.map {
+          _.connect:
+            Using.Manager(implicit use =>
+              val it = sql"SELECT * FROM car".query[Car].iterator()
+              it.map(_.id).size
+            )
+        }
     assert(carsCount == Success(3))
 
 end immutableRepoKyoTests
