@@ -199,7 +199,7 @@ object PgCodec:
 
     def queryRepr: String = "?"
 
-    val cols: IArray[Int] = aCodec.cols
+    val cols: IArray[Int] = IArray(Types.OTHER)
 
     def readSingle(resultSet: ResultSet, pos: Int): IArray[A] =
       val jdbcArray = resultSet.getArray(pos)
@@ -229,7 +229,7 @@ object PgCodec:
 
     def queryRepr: String = "?"
 
-    val cols: IArray[Int] = aCodec.cols
+    val cols: IArray[Int] = IArray(Types.OTHER)
 
     def readSingle(resultSet: ResultSet, pos: Int): IArray[A] =
       val jdbcArray = resultSet.getArray(pos)
