@@ -7,7 +7,7 @@ import java.sql.Connection
 import javax.sql.DataSource
 import scala.util.control.NonFatal
 
-class TransactorKyo private (
+final class TransactorKyo private (
     dataSource: DataSource,
     sqlLogger: SqlLogger,
     connectionConfig: Connection => Unit,
@@ -86,16 +86,7 @@ class TransactorKyo private (
     )
 
   private def releaseConnection(con: Connection) =
-    if con eq null then ()
-    else
-      IO(
-        Abort
-          .catching[Throwable](con.close())
-          .mapAbort[SqlException, Any](t =>
-            SqlException("Unable to close DB Connection", t)
-          )
-          .orPanic
-      )
+    if con eq null then () else IO(con.close())
 end TransactorKyo
 
 object TransactorKyo:
@@ -183,15 +174,15 @@ object TransactorKyo:
     layer(
       sqlLogger = sqlLogger,
       connectionConfig = noOpConnectionConfig,
-      maxBlockingThreads = Maybe.Absent
+      maxBlockingThreads = Maybe.empty
     )
 
   /** Construct a TransactorKyo */
-  def layer: Layer[TransactorKyo, Env[DataSource] & IO] =
+  val layer: Layer[TransactorKyo, Env[DataSource] & IO] =
     layer(
       sqlLogger = SqlLogger.Default,
       connectionConfig = noOpConnectionConfig,
-      maxBlockingThreads = Maybe.Absent
+      maxBlockingThreads = Maybe.empty
     )
 
   /** Construct a TransactorZIO
@@ -205,7 +196,7 @@ object TransactorKyo:
     layer(
       sqlLogger = SqlLogger.Default,
       connectionConfig = connectionConfig,
-      maxBlockingThreads = Maybe.Absent
+      maxBlockingThreads = Maybe.empty
     )
 
   /** @param maxBlockingThreads
