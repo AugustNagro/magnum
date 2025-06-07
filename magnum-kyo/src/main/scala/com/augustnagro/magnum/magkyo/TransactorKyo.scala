@@ -34,45 +34,39 @@ final class TransactorKyo private (
   def connect[A, S](f: DbCon ?=> (A < S))(using
       Frame
   ): A < (Abort[Throwable] & Async & S) =
-    val res: A < (Resource & Abort[SqlException] & IO & S) =
-      Resource
-        .acquireRelease(acquireConnection)(releaseConnection)
-        .map { lo =>
-          IO[A, S] {
-            connectionConfig(lo)
-            f(using DbCon(lo, sqlLogger))
-          }
+    val effect: A < (Abort[SqlException] & IO & S) =
+      acquireReleaseWith(acquireConnection)(releaseConnection) { lo =>
+        IO[A, S] {
+          connectionConfig(lo)
+          f(using DbCon(lo, sqlLogger))
         }
-    val effect: A < (Async & Abort[SqlException] & S) = Resource.run(res)
+      }
     semaphore.fold(effect)(_.run(effect))
 
   def transact[A](f: DbTx ?=> A): A < (Abort[Throwable] & Async) =
-    val res =
-      Resource
-        .acquireRelease(acquireConnection)(releaseConnection)
-        .map { lo =>
-          Async.mask[Throwable, A, Any] {
-            connectionConfig(lo)
-            lo.setAutoCommit(false)
-            Abort
-              .catching[Throwable](
-                f(using DbTx(lo, sqlLogger))
-              )
-              .foldAbort(
-                out =>
-                  IO {
-                    lo.commit()
-                    out
-                  },
-                error =>
-                  IO {
-                    lo.rollback()
-                    Abort.fail(error)
-                  }
-              )
-          }
+    val effect =
+      acquireReleaseWith(acquireConnection)(releaseConnection) { lo =>
+        Async.mask[Throwable, A, Any] {
+          connectionConfig(lo)
+          lo.setAutoCommit(false)
+          Abort
+            .catching[Throwable](
+              f(using DbTx(lo, sqlLogger))
+            )
+            .foldAbort(
+              out =>
+                IO {
+                  lo.commit()
+                  out
+                },
+              error =>
+                IO {
+                  lo.rollback()
+                  Abort.fail(error)
+                }
+            )
         }
-    val effect = Resource.run(res)
+      }
     semaphore.fold(effect)(_.run(effect))
   end transact
 
