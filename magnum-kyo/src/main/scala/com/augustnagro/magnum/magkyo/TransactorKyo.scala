@@ -103,19 +103,18 @@ object TransactorKyo:
       connectionConfig: Connection => Unit,
       maxBlockingThreads: Maybe[Int]
   ): TransactorKyo < IO =
-    for
-      semaphore <- maxBlockingThreads.fold(IO(Maybe.empty[Meter]))(max =>
-        Meter.initSemaphore(max).map(Maybe(_))
+    val sem = maxBlockingThreads match
+      case Present(max) => Meter.initSemaphore(max).map(Maybe(_))
+      case Absent       => Absent: Maybe[Meter] < IO
+
+    sem.map(
+      new TransactorKyo(
+        dataSource,
+        sqlLogger,
+        connectionConfig,
+        _
       )
-      transactor <- IO(
-        new TransactorKyo(
-          dataSource,
-          sqlLogger,
-          connectionConfig,
-          semaphore
-        )
-      )
-    yield transactor
+    )
 
   /** Construct a TransactorKyo Layer
     *
@@ -133,11 +132,9 @@ object TransactorKyo:
       connectionConfig: Connection => Unit,
       maxBlockingThreads: Maybe[Int]
   ): Layer[TransactorKyo, Env[DataSource] & IO] = Layer(
-    Env
-      .get[DataSource]
-      .map(
-        make(_, sqlLogger, connectionConfig, maxBlockingThreads)
-      )
+    Env.use[DataSource](
+      make(_, sqlLogger, connectionConfig, maxBlockingThreads)
+    )
   )
 
   /** Construct a TransactorKyo
