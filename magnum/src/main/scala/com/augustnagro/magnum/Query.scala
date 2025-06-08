@@ -6,7 +6,10 @@ import scala.util.Using.Manager
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try, Using}
 
-class Query[E] private[magnum] (val frag: Frag, val reader: DbCodec[E]):
+class Query[E] private[magnum] (
+    val frag: Frag,
+    private[magnum] val reader: DbCodec[E]
+):
 
   def run()(using con: DbCon): Vector[E] =
     handleQuery(frag.sqlString, frag.params):
