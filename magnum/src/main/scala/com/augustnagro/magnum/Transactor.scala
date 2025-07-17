@@ -30,7 +30,7 @@ class Transactor private (
         res
       catch
         case t =>
-          con.rollback()
+          try con.rollback() catch { case t2 => t.addSuppressed(t2) }
           throw t
 end Transactor
 
