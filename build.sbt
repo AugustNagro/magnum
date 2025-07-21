@@ -46,7 +46,7 @@ val postgresDriverVersion = "42.7.4"
 
 lazy val root = project
   .in(file("."))
-  .aggregate(magnum, magnumPg, magnumZio)
+  .aggregate(magnum, magnumPg, magnumZio, magnumCats)
 
 lazy val magnum = project
   .in(file("magnum"))
