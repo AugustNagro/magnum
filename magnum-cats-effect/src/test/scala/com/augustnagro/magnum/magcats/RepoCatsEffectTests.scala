@@ -157,7 +157,7 @@ def repoCatsEffectTests(
     assertIO(result, allCars.tail)
 
   test("select via option"):
-    val vin = Some(124)
+    val vin: Option[Int] = Some(124)
     val cars =
       xa().connect:
         sql"select * from car where vin = $vin"

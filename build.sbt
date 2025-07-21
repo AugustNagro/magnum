@@ -105,7 +105,7 @@ lazy val magnumCats = project
   .in(file("magnum-cats-effect"))
   .dependsOn(magnum, magnumPg)
   .settings(
-    name := "magnum-ce",
+    name := "magnum-cats",
     Test / fork := true,
     publish / skip := false,
     libraryDependencies ++= Seq(
