@@ -172,6 +172,17 @@ def immutableRepoZioTests(
             .query[(String, Color)]
             .run()
     assert(tuples == Vector(allCars(1).model -> allCars(1).color))
+    
+  test("large tuple select"):
+    val tuples =
+      runIO:
+        xa().connect:
+          sql"select model, color, top_speed, id, vin from car where id = 2"
+            .query[(String, Color, Int, Long, Option[Int])]
+            .run()
+    assert(tuples == Vector(
+      allCars(1).model -> allCars(1).color -> allCars(1).topSpeed -> allCars(1).id -> allCars(1).vinNumber
+    ))
 
   test("reads null int as None and not Some(0)"):
     val maybeCar =
