@@ -3,8 +3,10 @@ package com.augustnagro.magnum.pg
 import java.sql
 import java.sql.JDBCType
 import java.time.{OffsetDateTime, ZoneOffset}
+import java.util.UUID
 import scala.reflect.ClassTag
 import scala.collection.mutable as m
+import org.postgresql.core.Oid
 
 /** Typeclass for converting between raw JDBC Object arrays and type A */
 trait SqlArrayCodec[A]:
@@ -112,6 +114,12 @@ object SqlArrayCodec:
         .map(_.toInstant.atOffset(ZoneOffset.UTC))
     def toArrayObj(entity: OffsetDateTime): Object =
       sql.Timestamp.from(entity.toInstant)
+
+  given SqlArrayCodec[UUID] with
+    val jdbcTypeName: String = Oid.toString(Oid.UUID)
+    def readArray(array: Object): Array[UUID] =
+      array.asInstanceOf[Array[UUID]]
+    def toArrayObj(entity: UUID): Object = entity
 
   given ArraySqlArrayCodec[A](using
       aCodec: SqlArrayCodec[A],

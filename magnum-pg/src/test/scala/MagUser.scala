@@ -15,6 +15,7 @@ import org.postgresql.util.PGInterval
 
 import java.time.OffsetDateTime
 import java.util.Objects
+import java.util.UUID
 
 @Table(PostgresDbType)
 @SqlName("mag_user")
@@ -35,7 +36,9 @@ case class MagUser(
     poly: PGpolygon,
     colors: List[Color],
     colorMap: List[Vector[Color]],
-    color: Color
+    color: Color,
+    idUuid: UUID,
+    uuids: List[UUID]
 ) derives DbCodec:
   override def equals(obj: Any): Boolean =
     obj match
@@ -46,6 +49,7 @@ case class MagUser(
         Objects.deepEquals(dates, u.dates) &&
         bx == u.bx && c == u.c && iv == u.iv && l == u.l && lSeg == u.lSeg &&
         p == u.p && pnt == u.pnt && poly == u.poly &&
-        colors == u.colors && colorMap == u.colorMap && color == u.color
+        colors == u.colors && colorMap == u.colorMap && color == u.color &&
+        idUuid == u.idUuid && uuids == u.uuids
       case _ => false
 end MagUser
