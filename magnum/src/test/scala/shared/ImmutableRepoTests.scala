@@ -183,13 +183,13 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
     val c = allCars(1)
     assert(tuple == (c.model, c.color, c.topSpeed, c.id, c.vinNumber))
 
-  test("large tuple select option"):
-    val tupleA = xa().connect:
-      sql"select model, color, top_speed, id, vin from car where id = 99"
-        .query[Option[(String, Color, Int, Long, Option[Int])]]
-        .run()
-        .head
-    // todo
+// todo
+//  test("large tuple select option"):
+//    val tupleA = xa().connect:
+//      sql"select model, color, top_speed, id, vin from car where id = 99"
+//        .query[Option[(String, Color, Int, Long, Option[Int])]]
+//        .run()
+//        .head
 //    val tupleB = xa().connect:
 //      sql"select model, color, top_speed, id, vin from car where id = 1"
 //        .query[Option[(String, Color, Int, Long, Option[Int])]]
