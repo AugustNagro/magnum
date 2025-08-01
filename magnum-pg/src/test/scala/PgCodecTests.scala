@@ -11,8 +11,8 @@ import org.postgresql.util.PGInterval
 
 import java.nio.file.{Files, Path}
 import java.time.{LocalDate, OffsetDateTime, ZoneOffset}
-import java.util
 import java.util.Objects
+import java.util.UUID
 import javax.sql.DataSource
 import scala.util.Using.Manager
 
@@ -43,7 +43,12 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
         Vector(Color.RedOrange, Color.RedOrange),
         Vector(Color.Green, Color.Green)
       ),
-      color = Color.Blue
+      color = Color.Blue,
+      idUuid = UUID.fromString("00000000-0000-0000-0000-000000000001"),
+      uuids = List(
+        UUID.fromString("00000000-0000-0001-0000-000000000000"),
+        UUID.fromString("00000000-0000-0001-0000-000000000001")
+      )
     ),
     MagUser(
       id = 2L,
@@ -65,7 +70,11 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
         Vector(Color.RedOrange, Color.Green),
         Vector(Color.Green, Color.Blue)
       ),
-      color = Color.Blue
+      color = Color.Blue,
+      idUuid = UUID.fromString("00000000-0000-0000-0000-000000000002"),
+      uuids = List(
+        UUID.fromString("00000000-0000-0002-0000-000000000000")
+      )
     )
   )
 
@@ -123,11 +132,28 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
         poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, 1), PGpoint(1, 1))),
         colors = List(Color.Blue),
         colorMap = List(Vector(Color.Blue), Vector(Color.Green)),
-        color = Color.Green
+        color = Color.Green,
+        idUuid = UUID.fromString("00000000-0000-0000-0000-000000000003"),
+        uuids = List(
+          UUID.fromString("00000000-0000-0003-0000-000000000000"),
+          UUID.fromString("00000000-0000-0003-0000-000000000001")
+        )
       )
       userRepo.insert(u)
       val dbU = userRepo.findById(3L).get
       assert(dbU == u)
+
+  test("select MagUser where uuid in set"):
+    connect(ds()):
+      val ids = Vector(
+        UUID.fromString("00000000-0000-0000-0000-000000000001"),
+        UUID.fromString("00000000-0000-0000-0000-000000000002")
+      )
+      val users =
+        sql"SELECT * FROM mag_user WHERE idUuid = ANY($ids)"
+          .query[MagUser]
+          .run()
+      assert(users == allUsers)
 
   test("insert MagCar"):
     connect(ds()):
