@@ -172,17 +172,25 @@ def immutableRepoZioTests(
             .query[(String, Color)]
             .run()
     assert(tuples == Vector(allCars(1).model -> allCars(1).color))
-    
+
+  test("large tuple support does not override hand-rolled Tuple[2-4] codecs"):
+    val tuple2ACodec = summon[DbCodec[(String, Color)]]
+    val tuple2BCodec = summon[DbCodec[(String, Int)]]
+    assert(tuple2ACodec.getClass == tuple2BCodec.getClass)
+    val tuple5ACodec = summon[DbCodec[(String, Color, Int, Long, Option[Int])]]
+    assert(tuple5ACodec.getClass != tuple2ACodec.getClass)
+    val tuple5BCodec = summon[DbCodec[(Int, Int, Int, Long, Option[Int])]]
+    assert(tuple5BCodec.getClass != tuple5ACodec.getClass)
+  
   test("large tuple select"):
-    val tuples =
-      runIO:
-        xa().connect:
-          sql"select model, color, top_speed, id, vin from car where id = 2"
-            .query[(String, Color, Int, Long, Option[Int])]
-            .run()
-    assert(tuples == Vector(
-      allCars(1).model -> allCars(1).color -> allCars(1).topSpeed -> allCars(1).id -> allCars(1).vinNumber
-    ))
+    val tuple = runIO:
+      xa().connect:
+        sql"select model, color, top_speed, id, vin from car where id = 2"
+          .query[(String, Color, Int, Long, Option[Int])]
+          .run()
+          .head
+    val c = allCars(1)
+    assert(tuple == (c.model, c.color, c.topSpeed, c.id, c.vinNumber))
 
   test("reads null int as None and not Some(0)"):
     val maybeCar =
