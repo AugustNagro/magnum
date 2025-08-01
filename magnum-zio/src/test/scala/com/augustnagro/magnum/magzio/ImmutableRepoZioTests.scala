@@ -181,7 +181,7 @@ def immutableRepoZioTests(
     assert(tuple5ACodec.getClass != tuple2ACodec.getClass)
     val tuple5BCodec = summon[DbCodec[(Int, Int, Int, Long, Option[Int])]]
     assert(tuple5BCodec.getClass != tuple5ACodec.getClass)
-  
+
   test("large tuple select"):
     val tuple = runIO:
       xa().connect:
