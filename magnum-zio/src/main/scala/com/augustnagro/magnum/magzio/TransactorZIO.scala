@@ -55,7 +55,8 @@ class TransactorZIO private (
             res
           catch
             case NonFatal(t) =>
-              cn.rollback()
+              try cn.rollback()
+              catch { case t2 => t.addSuppressed(t2) }
               throw t
         }.uninterruptible
       )
