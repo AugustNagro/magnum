@@ -19,11 +19,13 @@ import scala.compiletime.{
   constValueTuple,
   erasedValue,
   error,
+  summonAll,
   summonFrom,
   summonInline
 }
 import scala.quoted.*
 import scala.reflect.ClassTag
+import scala.util.boundary
 
 /** Typeclass for JDBC reading & writing.
   */
@@ -516,6 +518,97 @@ object DbCodec:
     val queryRepr: String =
       s"(${aCodec.queryRepr}, ${bCodec.queryRepr}, ${cCodec.queryRepr}, ${dCodec.queryRepr})"
   end Tuple4Codec
+
+  inline given TupleNCodec[T <: Tuple]: DbCodec[T] = ${ tupleNCodecImpl[T] }
+
+  private def codecExprs[T <: Tuple: Type](using
+      Quotes
+  ): Expr[IArray[DbCodec[_]]] =
+    import quotes.reflect.*
+    Type.of[T] match
+      case '[EmptyTuple] => '{ IArray.empty }
+      case '[t *: ts] =>
+        val tCodec = Expr.summon[DbCodec[t]].getOrElse {
+          report.errorAndAbort(s"No DbCodec found for type ${Type.show[t]}")
+        }
+        val tailCodecs = codecExprs[ts]
+        '{ $tCodec +: $tailCodecs }
+
+  def tupleNCodecImpl[T <: Tuple: Type](using Quotes): Expr[DbCodec[T]] =
+    import quotes.reflect.*
+    Type.of[T] match
+      case '[EmptyTuple] =>
+        '{
+          new DbCodec[EmptyTuple]:
+            val cols: IArray[Int] = IArray.empty
+
+            def readSingle(rs: ResultSet, pos: Int): EmptyTuple = EmptyTuple
+
+            def readSingleOption(rs: ResultSet, pos: Int): Option[EmptyTuple] =
+              Some(EmptyTuple)
+
+            def writeSingle(
+                e: EmptyTuple,
+                ps: PreparedStatement,
+                pos: Int
+            ): Unit = ()
+
+            val queryRepr: String = ""
+          .asInstanceOf[DbCodec[T]]
+        }
+      case '[t *: ts] =>
+        val tCodecsExpr = codecExprs[t *: ts]
+        '{
+          new DbCodec[t *: ts] {
+            val tCodecs = ${ tCodecsExpr }
+            val cols: IArray[Int] =
+              tCodecs.flatMap(codec => codec.cols)
+
+            def readSingle(rs: ResultSet, pos: Int): t *: ts =
+              val tupleSize = constValue[Tuple.Size[t *: ts]]
+              val result = scala.Array.ofDim[Any](tupleSize)
+              var tupleIdx = 0
+              var psIdx = pos
+              while tupleIdx < tupleSize do
+                val codec = tCodecs(tupleIdx)
+                result(tupleIdx) = codec.readSingle(rs, psIdx)
+                tupleIdx += 1
+                psIdx += codec.cols.length
+              Tuple.fromArray(result).asInstanceOf[t *: ts]
+
+            def readSingleOption(rs: ResultSet, pos: Int): Option[t *: ts] =
+              boundary:
+                val tupleSize = constValue[Tuple.Size[t *: ts]]
+                val res = Array.ofDim[Any](tupleSize)
+                var tupleIdx = 0
+                var psIdx = pos
+                while tupleIdx < tupleSize do
+                  val codec = tCodecs(tupleIdx)
+                  codec.readSingleOption(rs, psIdx) match
+                    case Some(value) => res(tupleIdx) = value
+                    case None        => boundary.break(Option.empty)
+                  tupleIdx += 1
+                  psIdx += codec.cols.length
+                Some(Tuple.fromArray(res)).asInstanceOf[Option[t *: ts]]
+
+            def writeSingle(e: t *: ts, ps: PreparedStatement, pos: Int): Unit =
+              val tupleSize = constValue[Tuple.Size[t *: ts]]
+              var tupleIdx = 0
+              var psIdx = pos
+              while tupleIdx < tupleSize do
+                val codec = tCodecs(tupleIdx)
+                codec
+                  .asInstanceOf[DbCodec[Any]]
+                  .writeSingle(e.productElement(tupleIdx), ps, psIdx)
+                tupleIdx += 1
+                psIdx += codec.cols.length
+
+            val queryRepr: String =
+              tCodecs.map(_.queryRepr).mkString("(", ", ", ")")
+          }.asInstanceOf[DbCodec[T]]
+        }
+    end match
+  end tupleNCodecImpl
 
   private inline def readOptImpl[A](
       codec: DbCodec[A],
