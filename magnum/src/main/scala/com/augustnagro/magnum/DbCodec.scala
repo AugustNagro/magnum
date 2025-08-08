@@ -420,6 +420,16 @@ object DbCodec:
           for i <- cols.indices do ps.setNull(pos + i, cols(i))
     def queryRepr: String = codec.queryRepr
 
+  given SomeCodec[A](using codec: DbCodec[A]): DbCodec[Some[A]] with
+    def cols: IArray[Int] = codec.cols
+    def readSingle(rs: ResultSet, pos: Int): Some[A] =
+      Some(codec.readSingle(rs, pos))
+    def readSingleOption(rs: ResultSet, pos: Int): Option[Some[A]] =
+      codec.readSingleOption(rs, pos).map(Some.apply)
+    def writeSingle(s: Some[A], ps: PreparedStatement, pos: Int): Unit =
+      codec.writeSingle(s.get, ps, pos)
+    def queryRepr: String = codec.queryRepr
+
   given Tuple2Codec[A, B](using
       aCodec: DbCodec[A],
       bCodec: DbCodec[B]
@@ -521,43 +531,25 @@ object DbCodec:
 
   inline given TupleNCodec[T <: Tuple]: DbCodec[T] = ${ tupleNCodecImpl[T] }
 
-  private def codecExprs[T <: Tuple: Type](using
-      Quotes
-  ): Expr[IArray[DbCodec[_]]] =
+  private def codecExprs[T <: Tuple: Type](
+      res: Vector[Expr[DbCodec[?]]] = Vector.empty
+  )(using Quotes): Expr[IArray[DbCodec[?]]] =
     import quotes.reflect.*
     Type.of[T] match
-      case '[EmptyTuple] => '{ IArray.empty }
+      case '[EmptyTuple] => '{ IArray.from(${ Expr.ofSeq(res) }) }
       case '[t *: ts] =>
         val tCodec = Expr.summon[DbCodec[t]].getOrElse {
           report.errorAndAbort(s"No DbCodec found for type ${Type.show[t]}")
         }
-        val tailCodecs = codecExprs[ts]
-        '{ $tCodec +: $tailCodecs }
+        codecExprs[ts](res :+ tCodec)
 
   def tupleNCodecImpl[T <: Tuple: Type](using Quotes): Expr[DbCodec[T]] =
     import quotes.reflect.*
     Type.of[T] match
       case '[EmptyTuple] =>
-        '{
-          new DbCodec[EmptyTuple]:
-            val cols: IArray[Int] = IArray.empty
-
-            def readSingle(rs: ResultSet, pos: Int): EmptyTuple = EmptyTuple
-
-            def readSingleOption(rs: ResultSet, pos: Int): Option[EmptyTuple] =
-              Some(EmptyTuple)
-
-            def writeSingle(
-                e: EmptyTuple,
-                ps: PreparedStatement,
-                pos: Int
-            ): Unit = ()
-
-            val queryRepr: String = ""
-          .asInstanceOf[DbCodec[T]]
-        }
+        report.errorAndAbort("Cannot derive DbCodec for EmptyTuple")
       case '[t *: ts] =>
-        val tCodecsExpr = codecExprs[t *: ts]
+        val tCodecsExpr = codecExprs[t *: ts]()
         '{
           new DbCodec[t *: ts] {
             val tCodecs = ${ tCodecsExpr }
@@ -566,7 +558,7 @@ object DbCodec:
 
             def readSingle(rs: ResultSet, pos: Int): t *: ts =
               val tupleSize = constValue[Tuple.Size[t *: ts]]
-              val result = scala.Array.ofDim[Any](tupleSize)
+              val result = Array.ofDim[Any](tupleSize)
               var tupleIdx = 0
               var psIdx = pos
               while tupleIdx < tupleSize do
