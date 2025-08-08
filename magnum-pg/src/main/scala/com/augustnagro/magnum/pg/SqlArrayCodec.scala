@@ -115,7 +115,7 @@ object SqlArrayCodec:
     def toArrayObj(entity: OffsetDateTime): Object =
       sql.Timestamp.from(entity.toInstant)
 
-  given SqlArrayCodec[UUID] with
+  given UUIDSqlArrayCodec: SqlArrayCodec[UUID] with
     val jdbcTypeName: String = Oid.toString(Oid.UUID)
     def readArray(array: Object): Array[UUID] =
       array.asInstanceOf[Array[UUID]]
