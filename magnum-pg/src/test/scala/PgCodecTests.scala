@@ -198,7 +198,6 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
           .flatten
           .map(_.elem.toString)
       val expected = allCars.flatMap(_.myXml).map(_.elem.toString)
-      println(found)
       assert(found == expected)
 
   test("where = ANY()"):
