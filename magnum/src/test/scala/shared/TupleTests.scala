@@ -92,4 +92,12 @@ def tupleTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
         sql"select * from $car where ${car.id} = 4".query[Car].run().head
       assert(res.color == Color.Red)
 
+  test("large tuple in large tuple"):
+    assume(dbType != OracleDbType)
+    xa().connect:
+      val tuple = sql"select 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12"
+        .query[(Int, Int, (Int, Int, Int, Int, Int, Int), Int, Int, Int, Int)]
+        .run()
+      assert(tuple.nonEmpty)
+
 end tupleTests
