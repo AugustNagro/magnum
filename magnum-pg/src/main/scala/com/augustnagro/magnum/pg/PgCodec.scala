@@ -56,7 +56,7 @@ object PgCodec:
   ): DbCodec[Seq[A]] = new DbCodec[Seq[A]]:
     require(aCodec.cols.length == 1)
     def queryRepr: String = "?"
-    val cols: IArray[Int] = aCodec.cols
+    val cols: IArray[Int] = IArray(Types.OTHER)
     def readSingle(resultSet: ResultSet, pos: Int): Seq[A] =
       readCImpl(Seq, resultSet, pos)
     def readSingleOption(resultSet: ResultSet, pos: Int): Option[Seq[A]] =
@@ -70,7 +70,7 @@ object PgCodec:
   ): DbCodec[List[A]] = new DbCodec[List[A]]:
     require(aCodec.cols.length == 1)
     def queryRepr: String = "?"
-    val cols: IArray[Int] = aCodec.cols
+    val cols: IArray[Int] = IArray(Types.OTHER)
     def readSingle(resultSet: ResultSet, pos: Int): List[A] =
       readCImpl(List, resultSet, pos)
     def readSingleOption(resultSet: ResultSet, pos: Int): Option[List[A]] =
@@ -84,7 +84,7 @@ object PgCodec:
   ): DbCodec[Vector[A]] = new DbCodec[Vector[A]]:
     require(aCodec.cols.length == 1)
     def queryRepr: String = "?"
-    val cols: IArray[Int] = aCodec.cols
+    val cols: IArray[Int] = IArray(Types.OTHER)
     def readSingle(resultSet: ResultSet, pos: Int): Vector[A] =
       readCImpl(Vector, resultSet, pos)
     def readSingleOption(resultSet: ResultSet, pos: Int): Option[Vector[A]] =
@@ -97,9 +97,8 @@ object PgCodec:
       aArrayCodec: SqlArrayCodec[A]
   ): DbCodec[m.Buffer[A]] = new DbCodec[m.Buffer[A]]:
     require(aCodec.cols.length == 1)
-    private val jdbcTypeName = JDBCType.valueOf(aCodec.cols.head).getName
     def queryRepr: String = "?"
-    val cols: IArray[Int] = aCodec.cols
+    val cols: IArray[Int] = IArray(Types.OTHER)
     def readSingle(resultSet: ResultSet, pos: Int): m.Buffer[A] =
       readCImpl(m.Buffer, resultSet, pos)
     def readSingleOption(resultSet: ResultSet, pos: Int): Option[m.Buffer[A]] =
@@ -263,7 +262,7 @@ object PgCodec:
 
     def queryRepr: String = "?"
 
-    val cols: IArray[Int] = aCodec.cols
+    val cols: IArray[Int] = IArray(Types.OTHER)
 
     def readSingle(resultSet: ResultSet, pos: Int): Array[A] =
       val jdbcArray = resultSet.getArray(pos)
@@ -289,7 +288,7 @@ object PgCodec:
 
     def queryRepr: String = "?"
 
-    val cols: IArray[Int] = aCodec.cols
+    val cols: IArray[Int] = IArray(Types.OTHER)
 
     def readSingle(resultSet: ResultSet, pos: Int): Array[A] =
       val jdbcArray = resultSet.getArray(pos)

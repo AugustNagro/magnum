@@ -198,7 +198,6 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
           .flatten
           .map(_.elem.toString)
       val expected = allCars.flatMap(_.myXml).map(_.elem.toString)
-      println(found)
       assert(found == expected)
 
   test("where = ANY()"):
@@ -222,6 +221,21 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
         service
       )
 
+  val albumRepo = Repo[MagAlbumCreator, MagAlbum, Long]
+
+  test("insertReturning MagAlbum"):
+    connect(ds()):
+      val creators = Vector(
+        MagAlbumCreator(Some(Vector(1, 2, 3))),
+        MagAlbumCreator(Some(Vector.empty)),
+        MagAlbumCreator(None)
+      )
+      val album = albumRepo.insertReturning(creators.head)
+      assertEquals(album.myVec, creators.head.myVec)
+
+      val albums = albumRepo.insertAllReturning(creators)
+      assertEquals(albums.map(_.myVec), creators.map(_.myVec))
+
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
       .Def(dockerImageName = DockerImageName.parse("postgres:17.0"))
@@ -237,21 +251,17 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
     ds.setUrl(pg.jdbcUrl)
     ds.setUser(pg.username)
     ds.setPassword(pg.password)
-    val userSql =
-      Files.readString(Path.of(getClass.getResource("/pg-user.sql").toURI))
-    val carSql =
-      Files.readString(Path.of(getClass.getResource("/pg-car.sql").toURI))
-    val serviceListSql =
-      Files.readString(
-        Path.of(getClass.getResource("/pg-service-list.sql").toURI)
-      )
+    val sql = Vector(
+      "/pg-user.sql",
+      "/pg-car.sql",
+      "/pg-service-list.sql",
+      "/pg-album.sql"
+    ).map(p => Files.readString(Path.of(getClass.getResource(p).toURI)))
+
     Manager { use =>
       val con = use(ds.getConnection)
       val stmt = use(con.createStatement)
-      stmt.execute(userSql)
-      stmt.execute(carSql)
-      stmt.execute(serviceListSql)
+      for ddl <- sql do stmt.execute(ddl)
     }.get
     ds
-  end ds
 end PgCodecTests
