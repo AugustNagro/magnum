@@ -21,7 +21,7 @@ Yet another database client for Scala. No dependencies, high productivity.
   * [`DbCodec`: Typeclass for JDBC reading & writing](#dbcodec-typeclass-for-jdbc-reading--writing)
   * [Future-Proof Queries](#future-proof-queries)
   * [Splicing Literal Values into Frags](#splicing-literal-values-into-frags)
-  * [Postgres Module](#postgres-module)
+  * [Postgres Module](/PG-MODULE.md)
   * [Logging](#logging-sql-queries)
 * [Integrations](#integrations)
   * [ZIO](#zio) 
@@ -33,7 +33,7 @@ Yet another database client for Scala. No dependencies, high productivity.
 ## Installing
 
 ```
-"com.augustnagro" %% "magnum" % "1.3.0"
+"com.augustnagro" %% "magnum" % "2.0.0"
 ```
 
 Magnum requires Scala >= 3.3.0
@@ -54,36 +54,33 @@ https://javadoc.io/doc/com.augustnagro/magnum_3
 
 ### `connect` creates a database connection.
 
-`connect` takes two parameters; the database Transactor,
-and a context function with a given `DbCon` connection.
-For example:
-
 ```scala
-import com.augustnagro.magnum.*
+import com.augustnagro.magnum.common.*
 
-val dataSource: javax.sql.DataSource = ???
-val xa = Transactor(dataSource)
+val xa = Transactor(dataSource: javax.sql.DataSource)
 
-val users: Vector[User] = connect(xa):
+val users: Vector[User] = xa.connect:
   sql"SELECT * FROM user".query[User].run()
 ```
 
+The `connect` method accepts a context function of type `DbCon ?=> A` (essentially `implicit DbCon => A` in Scala 2).
+
 ### `transact` creates a database transaction.
 
-Like `connect`, `transact` accepts a Transactor and context function.
-The context function provides a `DbTx` instance.
+Like `connect`, `transact` accepts a context function.
+The context function provides a `DbTx` capability.
 If the function throws, the transaction will be rolled back.
 
 ```scala
 // update is rolled back
-transact(xa):
+xa.transact:
   sql"UPDATE user SET first_name = $firstName WHERE id = $id".update.run()
   thisMethodThrows()
 ```
 
 ### Type-safe Transaction & Connection Management
 
-Annotate transactional methods with `using DbTx`, and connections with `using DbCon`.
+Annotate transactional methods with `using DbTx`, and ones that require connections with `using DbCon`.
 
 Since `DbTx <: DbCon`, it's impossible to call a method with the wrong context.
 
@@ -117,7 +114,7 @@ val xa = Transactor(
     con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
 )
 
-transact(xa):
+xa.transact:
   sql"SELECT id from myUser".query[Long].run()
 ```
 
@@ -164,7 +161,7 @@ val updateReturning: Returning =
 All are executed via `run()(using DbCon)`:
 
 ```scala
-transact(xa):
+xa.transact:
   val tuples: Vector[(Long, String)] = query.run()
   val updatedRows: Int = update.run()
   val updatedIds: Vector[Long] = updateReturning.run()
@@ -175,7 +172,7 @@ transact(xa):
 Batch updates are supported via `batchUpdate` method in package `com.augustnagro.magnum`.
 
 ```scala
-connect(xa):
+xa.connect:
   val users: Iterable[User] = ???
   val updateResult: BatchUpdateResult =
     batchUpdate(users): user =>
@@ -210,7 +207,7 @@ case class User(
 
 val userRepo = ImmutableRepo[User, Long]
 
-transact(xa):
+xa.transact:
   val cnt = userRepo.count
   val userOpt = userRepo.findById(2L)
 ```
@@ -219,32 +216,36 @@ Importantly, class User is annotated with `@Table`, which defines the table's da
 
 The optional `@Id` annotation denotes the table's primary key. Not setting `@Id` will default to using the first field. If there is no logical id, then remove the annotation and use Null in the ID type parameter of Repositories (see next).
 
-It is a best practice to extend ImmutableRepo to encapsulate your SQL in repositories. This way, it's easier to maintain since they're grouped together.
+You can choose to use composition or inheritance to encapsulate your SQL in repositories (Scala 3 [exports clauses](https://docs.scala-lang.org/scala3/reference/other-new-features/export.html) are a hidden gem):
 
 ```scala
-class UserRepo extends ImmutableRepo[User, Long]:
+object UserRepo extends ImmutableRepo[User, Long]:
   def firstNamesForLast(lastName: String)(using DbCon): Vector[String] =
     sql"""
       SELECT DISTINCT first_name
       FROM user
       WHERE last_name = $lastName
       """.query[String].run()
-        
-  // other User-related queries here
+      
+// alternatively
+object UserSql:
+  private val userRepo = ImmutableRepo[User, Long]
+
+  export userRepo.{findById, count}
+
+  def firstNamesForLast(lastName: String)(using DbCon): Vector[String] =
+    sql"""
+      SELECT DISTINCT first_name
+      FROM user
+      WHERE last_name = $lastName
+      """.query[String].run()
 ```
 
 ### Repositories
 
-The `Repo` class auto-generates the following methods at compile-time:
+The `Repo` class extends ImmutableRepo and also defines:
 
 ```scala
-  def count(using DbCon): Long
-  def existsById(id: ID)(using DbCon): Boolean
-  def findAll(using DbCon): Vector[E]
-  def findAll(spec: Spec[E])(using DbCon): Vector[E]
-  def findById(id: ID)(using DbCon): Option[E]
-  def findAllById(ids: Iterable[ID])(using DbCon): Vector[E]
-  
   def delete(entity: E)(using DbCon): Unit
   def deleteById(id: ID)(using DbCon): Unit
   def truncate()(using DbCon): Unit
@@ -271,15 +272,9 @@ case class User(
 
 val userRepo = Repo[User, User, Long]
 
-val countAfterUpdate = transact(xa):
+val countAfterUpdate = xa.transact:
   userRepo.deleteById(2L)
   userRepo.count
-```
-
-It is a best practice to encapsulate your SQL in repositories.
-
-```scala
-class UserRepo extends Repo[User, User, Long]
 ```
 
 Also note that Repo extends ImmutableRepo. Some databases cannot support every method, and will throw UnsupportedOperationException.
@@ -308,7 +303,7 @@ case class User(
 
 val userRepo = Repo[UserCreator, User, Long]
 
-val newUser: User = transact(xa):
+val newUser: User = xa.transact:
   userRepo.insertReturning(
     UserCreator(Some("Adam"), "Smith")
   )
@@ -319,18 +314,9 @@ val newUser: User = transact(xa):
 Specifications help you write safe, dynamic queries.
 An example use-case would be a search results page that allows users to sort and filter the paginated data.
 
-1. If you need to perform joins to get the data needed, first create a database view.
-2. Next, create an entity class that derives DbCodec.
-3. Finally, use the Spec class to create a specification.
-
 Here's an example:
 
 ```scala
-val partialName = "Ja"
-val lastNameOpt = Option("Brown")
-val searchDate = OffsetDateTime.now.minusDays(2)
-val idPosition = 42L
-
 val spec = Spec[User]
   .where(sql"first_name ILIKE '$partialName%'")
   .where(lastNameOpt.map(ln => sql"last_name = $ln").getOrElse(sql""))
@@ -339,9 +325,14 @@ val spec = Spec[User]
   .limit(10)
 
 val users: Vector[User] = userRepo.findAll(spec)
+
+def partialName = "Ja"
+def lastNameOpt = Option("Brown")
+def searchDate = OffsetDateTime.now.minusDays(2)
+def idPosition = 42L
 ```
 
-Note that both [seek pagination](https://blog.jooq.org/faster-sql-paging-with-jooq-using-the-seek-method/) and offset pagination is supported.
+Note that both [seek pagination](https://blog.jooq.org/faster-sql-paging-with-jooq-using-the-seek-method/) and offset pagination is supported. If you need to use joins to select the columns, use the `Spec.prefix` method.
 
 ### Scala 3 Enum & NewType Support
 
@@ -362,6 +353,8 @@ case class User(
 ) derives DbCodec
 ```
 
+For Postgres Enum types, see the [Postgres Module Docs](/PG-MODULE.md)
+
 NewTypes and Opaque Type Alias can cause issues with derivation since given DbCodecs are not available. A simple way to provide them is using DbCodec.bimap:
 
 ```scala
@@ -378,7 +371,7 @@ object MyId:
   given DbCodec[MyId] =
     DbCodec[Long].biMap(MyId.apply, _.underlying)
 
-transact(xa):
+xa.transact:
   val id = MyId(123L)
   sql"UPDATE my_table SET x = true WHERE id = $id".update.run()
 ```
@@ -399,7 +392,7 @@ DbCodec[Int].writeSingle(22, ps)
 
 ### Defining your own DbCodecs
 
-To modify the JDBC mappings, implement a given DbCodec instance as you would for any Typeclass.
+To modify the JDBC mappings, implement a given DbCodec instance as you would for any Typeclass. You can also use DbCodec.biMap on an existing codec.
 
 ### Future-Proof Queries
 
@@ -407,41 +400,38 @@ A common problem when writing SQL queries is that they're difficult to refactor.
 
 There's also lots of repetition when writing SQL. Magnum's repositories help scrap the boilerplate, but writing `SELECT a, b, c, d, ...` for a large table quickly gets tiring.
 
-To help with this, Magnum offers a `TableInfo` class to enable 'future-proof' queries. An important caveat is that these queries are harder to copy/paste into SQL editors like PgAdmin or DbBeaver.
+To help with this, Magnum offers a `TableInfo` class to enable 'future-proof' queries. An important caveat is that these queries are harder to copy/paste into SQL editors like PgAdmin or DbBeaver (of course, you can still find them in [DEBUG logs](#logging-sql-queries))
 
 Here's some examples:
 
 ```scala
-import com.augustnagro.magnum.*
+import com.augustnagro.magnum.common.*
 
 case class UserCreator(firstName: String, age: Int) derives DbCodec
 
 @Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
 case class User(id: Long, firstName: String, age: Int) derives DbCodec
 
-object User:
-  val Table = TableInfo[UserCreator, User, Long]
+object UserSql:
+  private val u = TableInfo[UserCreator, User, Long]
 
-def allUsers(using DbCon): Vector[User] =
-  val u = User.Table
-  // equiv to 
-  // SELECT id, first_name, age FROM user
-  sql"SELECT ${u.all} FROM $u".query[User].run()
+  def allUsers(using DbCon): Vector[User] =
+    // equiv to 
+    // SELECT id, first_name, age FROM user
+    sql"SELECT ${u.all} FROM $u".query[User].run()
 
-def firstNamesForLast(lastName: String)(using DbCon): Vector[String] =
-  val u = User.Table
-  // equiv to
-  // SELECT DISTINCT first_name FROM user WHERE last_name = ?
-  sql"""
-    SELECT DISTINCT ${u.firstName} FROM $u
-    WHERE ${u.lastName} = $lastName
-  """.query[String].run()
+  def firstNamesForLast(lastName: String)(using DbCon): Vector[String] =
+    // equiv to
+    // SELECT DISTINCT first_name FROM user WHERE last_name = ?
+    sql"""
+       SELECT DISTINCT ${u.firstName} FROM $u
+       WHERE ${u.lastName} = $lastName
+       """.query[String].run()
 
-def insertOrIgnore(creator: UserCreator)(using DbCon): Unit =
-  val u = User.Table
-  // equiv to
-  // INSERT OR IGNORE INTO user (first_name, age) VALUES (?, ?)
-  sql"INSERT OR IGNORE INTO $u ${u.insertCols} VALUES ($creator)".update.run()
+  def insertOrIgnore(creator: UserCreator)(using DbCon): Unit =
+    // equiv to
+    // INSERT OR IGNORE INTO user (first_name, age) VALUES (?, ?)
+    sql"INSERT OR IGNORE INTO $u ${u.insertCols} VALUES ($creator)".update.run()
 ```
 
 It's important that `val Table = TableInfo[X, Y, Z]` is not explicitly typed, otherwise its structural typing will be destroyed.
@@ -470,68 +460,6 @@ sql"select * from $table"
 ```
 
 This feature should be used sparingly and never with untrusted input. 
-
-### Postgres Module
-
-The Postgres Module adds support for [Geometric Types](https://www.postgresql.org/docs/current/datatype-geometric.html) and [Arrays](https://www.postgresql.org/docs/current/arrays.html). Postgres Arrays can be decoded into Scala List/Vector/IArray, etc; multi-dimensionality is also supported.
-
-```
-"com.augustnagro" %% "magnumpg" % "1.3.0"
-```
-
-Example: Insert into a table with a `point[]` type column.
-
-With table:
-
-```sql
-create table my_geo (
-  id bigint primary key,
-  pnts point[] not null
-);
-```
-
-```scala
-import org.postgresql.geometric.*
-import com.augustnagro.magnum.*
-import com.augustnagro.magnum.pg.PgCodec.given
-
-@Table(PostgresDbType)
-case class MyGeo(@Id id: Long, pnts: IArray[PGpoint]) derives DbCodec
-
-val dataSource: javax.sql.DataSource = ???
-val xa = Transactor(dataSource)
-
-val myGeoRepo = Repo[MyGeo, MyGeo, Long]
-
-transact(xa):
-  myGeoRepo.insert(MyGeo(1L, IArray(PGpoint(1, 1), PGPoint(2, 2))))
-```
-
-The import of `PgCodec.given` is required to bring Geo/Array DbCodecs into scope.
-
-#### Arrays of Enums
-
-The `pg` module supports arrays of simple (non-ADT) enums.
-
-If you want to map an array of [Postgres enums](https://www.postgresql.org/docs/current/datatype-enum.html) to a sequence of Scala enums, use the following import when deriving the DbCodec:
-
-```scala
-import com.augustnagro.magnum.pg.PgCodec.given
-import com.augustnagro.magnum.pg.enums.PgEnumToScalaEnumSqlArrayCodec
-
-// in postgres: `create type Color as enum ('Red', 'Green', 'Blue');`
-enum Color derives DbCodec:
-  case Red, Green, Blue
-
-@Table(PostgresDbType)
-case class Car(@Id id: Long, colors: Vector[Color]) derives DbCodec
-```
-
-If instead your Postgres type is an array of varchar or text, use the following import:
-
-```scala
-import com.augustnagro.magnum.pg.enums.PgStringToScalaEnumSqlArrayCodec
-```
 
 ### Logging SQL queries
 
@@ -596,6 +524,7 @@ The tests are written using TestContainers, which requires Docker be installed.
 ## Talks and Blogs
 
 * Scala Days 2023: [slides](/Magnum-Slides-to-Share.pdf), [talk](https://www.youtube.com/watch?v=iKNRS5b1zAY)
+* Functional Scala 2024: https://www.youtube.com/watch?v=pkBfdHkeTtA
 
 ## Frequently Asked Questions
 
@@ -645,6 +574,16 @@ case class Address(
   zipCode: String,
   country: String
 ) derives DbCodec
+
+def companyInfo(companyName: String)(using DbCon): Vector[(Company, Address)] =
+  val c = TableInfo[Company, Company, String].alias("c")
+  val a = TableInfo[Address, Address, Long].alias("a")
+  sql"""
+     SELECT ${c.all}, ${a.all}"
+     FROM $c
+     JOIN $a ON ${a.id} = ${c.addressId}
+     WHERE ${c.name} = $companyName
+     """.query[(Company, Address)].run()
 ```
 
 #### UUID DbCodec doesn't work for my database
@@ -654,7 +593,7 @@ Some databases directly support the UUID type; these include Postgres, Clickhous
 Other databases like MySql, Oracle, and Sqlite, however, do not natively support UUID columns. Users have to choose an alternate datatype to store the UUID: most commonly `varchar(36)` or `binary(16)`. The JDBC drivers for these databases do not support direct serialization and deserialization of `java.util.UUID`, therefore the default `DbCodec[UUID]` will not be sufficient. Instead, import the appropriate codec from `com.augustnagro.magnum.UUIDCodec`. For example,
 
 ```scala
-import com.augustnagro.magnum.*
+import com.augustnagro.magnum.common.*
 import com.augustnagro.magnum.UUIDCodec.VarCharUUIDCodec
 import java.util.UUID
 
@@ -663,7 +602,5 @@ case class Person(@Id id: Long, name: String, tracking_id: Option[UUID]) derives
 ```
 
 ## Todo
-* JSON / XML support
 * Support MSSql
 * Cats Effect & ZIO modules
-* Explicit Nulls support
