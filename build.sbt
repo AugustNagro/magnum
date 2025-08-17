@@ -41,11 +41,12 @@ addCommandAlias("fmt", "scalafmtAll")
 val testcontainersVersion = "0.41.4"
 val circeVersion = "0.14.10"
 val munitVersion = "1.1.0"
+val munitCatsEffectVersion = "2.0.0"
 val postgresDriverVersion = "42.7.4"
 
 lazy val root = project
   .in(file("."))
-  .aggregate(magnum, magnumPg, magnumZio)
+  .aggregate(magnum, magnumPg, magnumZio, magnumCats)
 
 lazy val magnum = project
   .in(file("magnum"))
@@ -94,6 +95,23 @@ lazy val magnumZio = project
     libraryDependencies ++= Seq(
       "dev.zio" %% "zio" % "2.1.12" % Provided,
       "org.scalameta" %% "munit" % munitVersion % Test,
+      "com.dimafeng" %% "testcontainers-scala-munit" % testcontainersVersion % Test,
+      "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion % Test,
+      "org.postgresql" % "postgresql" % postgresDriverVersion % Test
+    )
+  )
+
+lazy val magnumCats = project
+  .in(file("magnum-cats-effect"))
+  .dependsOn(magnum, magnumPg)
+  .settings(
+    name := "magnum-cats",
+    Test / fork := true,
+    publish / skip := false,
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-effect" % "3.5.7" % Provided,
+      "org.scalameta" %% "munit" % munitVersion % Test,
+      "org.typelevel" %% "munit-cats-effect" % munitCatsEffectVersion % Test,
       "com.dimafeng" %% "testcontainers-scala-munit" % testcontainersVersion % Test,
       "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion % Test,
       "org.postgresql" % "postgresql" % postgresDriverVersion % Test
