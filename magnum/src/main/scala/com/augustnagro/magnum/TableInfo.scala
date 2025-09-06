@@ -77,8 +77,10 @@ object TableInfo:
         .lazyZip(exprs.eElemNamesSql)
         .map((elemName, elemNameSqlExpr) =>
           '{
+            val tableName = ${ exprs.tableNameSql }
             val elemNameSql = $elemNameSqlExpr
-            ColumnName(${ Expr(elemName) }, elemNameSql, elemNameSql)
+            val queryRepr = tableName + "." + elemNameSql
+            ColumnName(${ Expr(elemName) }, elemNameSql, queryRepr)
           }
         )
     )

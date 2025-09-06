@@ -33,14 +33,14 @@ class Frag(
   def returningKeys[E](colName: ColumnName, xs: ColumnName*)(using
       reader: DbCodec[E]
   ): Returning[E] =
-    Returning(this, reader, (colName +: xs).map(_.queryRepr))
+    Returning(this, reader, (colName +: xs).map(_.sqlName))
 
   /** For databases that support RETURNING statements via `getGeneratedKeys`
     */
   def returningKeys[E](colNames: ColumnNames)(using
       reader: DbCodec[E]
   ): Returning[E] =
-    Returning(this, reader, colNames.columnNames.map(_.queryRepr))
+    Returning(this, reader, colNames.columnNames.map(_.sqlName))
 
   /** Strips leading whitespace characters followed by a specified char from the
     * beginning of each line in this {@link Frag} .

@@ -89,7 +89,7 @@ def entityCreatorTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
         sql"update $user set ${user.firstName} = $newName where ${user.id} = ${u.id}".update
       assertNoDiff(
         update.frag.sqlString,
-        "update my_user set first_name = ? where id = ?"
+        "update my_user set my_user.first_name = ? where my_user.id = ?"
       )
       val rowsUpdated = update.run()
       assert(rowsUpdated == 1)

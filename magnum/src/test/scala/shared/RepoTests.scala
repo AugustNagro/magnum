@@ -298,7 +298,7 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
         sql"update $person set ${person.isAdmin} = $newIsAdmin where ${person.id} = ${p.id}".update
       assertNoDiff(
         update.frag.sqlString,
-        "update person set is_admin = ? where id = ?"
+        "update person set person.is_admin = ? where person.id = ?"
       )
       val rowsUpdated = update.run()
       assert(rowsUpdated == 1)

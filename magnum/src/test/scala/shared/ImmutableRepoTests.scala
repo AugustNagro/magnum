@@ -99,7 +99,7 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
           .query[Car]
       assertNoDiff(
         query.frag.sqlString,
-        "select model, id, top_speed, vin, color, created from car where top_speed > ?"
+        "select car.model, car.id, car.top_speed, car.vin, car.color, car.created from car where car.top_speed > ?"
       )
       assert(query.frag.params == Vector(minSpeed))
       assert(query.run() == allCars.tail)
