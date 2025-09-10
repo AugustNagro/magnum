@@ -149,7 +149,7 @@ def immutableRepoZioTests(
           query.run()
     assertNoDiff(
       query.frag.sqlString,
-      "select c.model, c.id, c.top_speed, c.vin, c.color, c.created from car c where c.top_speed > ?"
+      "select c.model, c.id, c.top_speed, c.vin, c.color, c.created from car AS c where c.top_speed > ?"
     )
     assert(query.frag.params == Vector(minSpeed))
     assert(result == allCars.tail)

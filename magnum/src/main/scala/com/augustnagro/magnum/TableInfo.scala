@@ -33,7 +33,7 @@ class TableInfo[EC, E, ID](
 
   def alias(tableAlias: String): this.type =
     require(tableAlias.nonEmpty, "custom tableAlias cannot be empty")
-    val queryRepr = table + " " + tableAlias
+    val queryRepr = table + " AS " + tableAlias
 
     val allSchemaNames = all.columnNames.map(cn =>
       val sqlName = cn.sqlName

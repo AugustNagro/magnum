@@ -113,10 +113,23 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
           .query[Car]
       assertNoDiff(
         query.frag.sqlString,
-        "select c.model, c.id, c.top_speed, c.vin, c.color, c.created from car c where c.top_speed > ?"
+        "select c.model, c.id, c.top_speed, c.vin, c.color, c.created from car AS c where c.top_speed > ?"
       )
       assert(query.frag.params == Vector(minSpeed))
       assert(query.run() == allCars.tail)
+
+  test("select query with aliasing and joins"):
+    xa().connect:
+      val c1 = car.alias("c1")
+      val c2 = car.alias("c2")
+      val query =
+        sql"SELECT ${c1.model}, ${c2.model} FROM $c1 JOIN $c2 ON ${c1.topSpeed} > ${c2.topSpeed}"
+          .query[(String, String)]
+      assertNoDiff(
+        query.frag.sqlString,
+        "SELECT c1.model, c2.model FROM car AS c1 JOIN car AS c2 ON c1.top_speed > c2.top_speed"
+      )
+      assert(query.run().nonEmpty)
 
   test("select via option"):
     xa().connect:
