@@ -1,7 +1,10 @@
 package com.augustnagro.magnum
 
+import DbType.IdMeta
+
 import scala.reflect.ClassTag
 import scala.deriving.Mirror
+import scala.quoted.Expr
 
 /** Factory for Repo default methods */
 trait DbType:
@@ -12,12 +15,13 @@ trait DbType:
       eElemCodecs: Seq[DbCodec[?]],
       ecElemNames: Seq[String],
       ecElemNamesSql: Seq[String],
-      idIndex: Int
+      ids: Seq[IdMeta]
   )(using
       eCodec: DbCodec[E],
       ecCodec: DbCodec[EC],
-      idCodec: DbCodec[ID],
       eClassTag: ClassTag[E],
       ecClassTag: ClassTag[EC],
-      idClassTag: ClassTag[ID]
   ): RepoDefaults[EC, E, ID]
+
+object DbType:
+  case class IdMeta(index: Int, codec: DbCodec[?], classTag: ClassTag[?])

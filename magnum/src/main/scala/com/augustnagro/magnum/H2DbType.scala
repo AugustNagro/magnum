@@ -16,16 +16,29 @@ object H2DbType extends DbType:
       eElemCodecs: Seq[DbCodec[?]],
       ecElemNames: Seq[String],
       ecElemNamesSql: Seq[String],
-      idIndex: Int
+      idMetas: Seq[DbType.IdMeta]
   )(using
       eCodec: DbCodec[E],
       ecCodec: DbCodec[EC],
-      idCodec: DbCodec[ID],
       eClassTag: ClassTag[E],
-      ecClassTag: ClassTag[EC],
-      idClassTag: ClassTag[ID]
+      ecClassTag: ClassTag[EC]
   ): RepoDefaults[EC, E, ID] =
     val idName = eElemNamesSql(idIndex)
+
+    val idSelectors = idMetas
+      .map(idMeta =>
+        val colName = eElemNamesSql(idMeta.index)
+        val queryRepr = idMeta.codec.queryRepr
+        s"$colName = $queryRepr"
+      )
+      .mkString(", ")
+    
+    val findAllByIdSelectors = idMetas
+      .map(idMeta =>
+        val colName = eElemNamesSql(idMeta.index)
+        s"$colName = ANY(?)"
+      )
+
     val selectKeys = eElemNamesSql.mkString(", ")
     val ecInsertKeys = ecElemNamesSql.mkString("(", ", ", ")")
 
@@ -45,24 +58,25 @@ object H2DbType extends DbType:
     val countSql = s"SELECT count(*) FROM $tableNameSql"
     val countQuery = Frag(countSql, Vector.empty, FragWriter.empty).query[Long]
     val existsByIdSql =
-      s"SELECT 1 FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
+      s"SELECT 1 FROM $tableNameSql WHERE $idSelectors"
     val findAllSql = s"SELECT * FROM $tableNameSql"
     val findAllQuery = Frag(findAllSql, Vector.empty, FragWriter.empty).query[E]
     val findByIdSql =
-      s"SELECT * FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
-    val findAllByIdSql = s"SELECT * FROM $tableNameSql WHERE $idName = ANY(?)"
+      s"SELECT * FROM $tableNameSql WHERE $idSelectors"
+    val findAllByIdSql = s"SELECT * FROM $tableNameSql WHERE $findAllByIdSelectors"
     val deleteByIdSql =
-      s"DELETE FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
+      s"DELETE FROM $tableNameSql WHERE $idSelectors"
     val truncateSql = s"TRUNCATE TABLE $tableNameSql"
     val truncateUpdate =
       Frag(truncateSql, Vector.empty, FragWriter.empty).update
     val insertSql =
       s"INSERT INTO $tableNameSql $ecInsertKeys VALUES (${ecCodec.queryRepr})"
     val updateSql =
-      s"UPDATE $tableNameSql SET $updateKeys WHERE $idName = ${idCodec.queryRepr}"
+      s"UPDATE $tableNameSql SET $updateKeys WHERE $idSelectors"
 
-    val compositeId = idCodec.cols.distinct.size != 1
-    val idFirstTypeName = JDBCType.valueOf(idCodec.cols.head).getName
+    // todo
+//    val compositeId = idCodec.cols.distinct.size != 1
+//    val idFirstTypeName = JDBCType.valueOf(idCodec.cols.head).getName
 
     def idWriter(id: ID): FragWriter = (ps, pos) =>
       idCodec.writeSingle(id, ps, pos)

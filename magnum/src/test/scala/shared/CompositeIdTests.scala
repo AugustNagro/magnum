@@ -19,9 +19,11 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
   @Table(dbType, SqlNameMapper.CamelToSnakeCase)
   case class Point(@Id x: Int, @Id y: Int, descr: String) derives DbCodec
 
-  val pointRepo = Repo[Point, Point, (Int, Int)]
+  case class PointId(x: Int, y: Int) derives DbCodec
+
+  val pointRepo = Repo[Point, Point, PointId]
 
   test("find by composite id".only):
     xa().connect:
-      assert(pointRepo.findById((1, 1)).isDefined)
-      assert(pointRepo.findById((1, 0)).isEmpty)
+      assert(pointRepo.findById(PointId(1, 1)).isDefined)
+      assert(pointRepo.findById(PointId(1, 0)).isEmpty)

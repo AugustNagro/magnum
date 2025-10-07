@@ -267,7 +267,6 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
   import quotes.reflect.*
   assertECIsSubsetOfE[EC, E]
 
-  val idIndex = idAnnotIndex[E]
   val table: Expr[Table] =
     DerivingUtil.tableAnnot[E] match
       case Some(table) => table
@@ -282,6 +281,7 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
           $eMirror: Mirror.Of[E] {
             type MirroredLabel = eLabel
             type MirroredElemLabels = eMels
+            type MirroredElemTypes = eMets
           }
         }) =>
       Expr.summon[Mirror.Of[EC]] match
@@ -290,6 +290,7 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
                 type MirroredElemLabels = ecMels
               }
             }) =>
+          val ids = idMetas[E, eMets]
           val tableNameScala = Type.valueOfConstant[eLabel].get.toString
           val tableNameScalaExpr = Expr(tableNameScala)
           val tableNameSql = DerivingUtil.sqlTableNameAnnot[E] match
@@ -317,7 +318,7 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
             eElemNamesSql,
             ecElemNames,
             ecElemNamesSql,
-            idIndex
+            ids
           )
         case _ =>
           report.errorAndAbort(
@@ -343,6 +344,47 @@ private def idAnnotIndex[E: Type](using q: Quotes): Expr[Int] =
     case -1 => 0
     case x  => x
   Expr(index)
+
+private def idMetas[E: Type, Mets: Type, ID: Type](using
+    q: Quotes
+): Seq[Expr[DbType.IdMeta]] =
+  import q.reflect.*
+  if TypeRepr.of[ID] =:= TypeRepr.of[Null] then
+    Seq('{ DbType.IdMeta(0, DbCodec.AnyCodec, ClassTag.Any) })
+  else
+    val idAnnot = TypeRepr.of[Id].typeSymbol
+    val paramSymbols = TypeRepr
+      .of[E]
+      .typeSymbol
+      .primaryConstructor
+      .paramSymss
+      .head
+    idMetasImpl[Mets](using q)(paramSymbols, idAnnot)
+
+private def idMetasImpl[Mets: Type](using
+    q: Quotes
+)(
+    paramSymbols: Seq[q.reflect.Symbol],
+    idAnnot: q.reflect.Symbol,
+    res: Seq[Expr[DbType.IdMeta]] = Vector.empty,
+    idx: Int = 0
+): Seq[Expr[DbType.IdMeta]] =
+  import q.reflect.*
+  Type.of[Mets] match
+    case '[met *: metTail] =>
+      if paramSymbols.head.hasAnnotation(idAnnot) then
+        val idxExpr = Expr(idx)
+        val codec =
+          Expr.summon[met].getOrElse(report.errorAndAbort("todo better error"))
+        val classTag = Expr
+          .summon[ClassTag[met]]
+          .getOrElse(report.errorAndAbort("todo better error msg"))
+        val idMeta = '{ DbType.IdMeta($idxExpr, $codec, $classTag) }
+        idMetasImpl[metTail](paramSymbols.tail, idAnnot, res :+ idMeta, idx + 1)
+      else idMetasImpl[metTail](paramSymbols.tail, idAnnot, res, idx + 1)
+    case '[EmptyTuple] =>
+      res
+end idMetasImpl
 
 private def elemNames[Mels: Type](res: List[String] = Nil)(using
     Quotes

@@ -44,16 +44,8 @@ object RepoDefaults:
     val eElemCodecs = getEElemCodecs[E]
     val eCodec = Expr.summon[DbCodec[E]].get
     val ecCodec = Expr.summon[DbCodec[EC]].get
-    val idCodec =
-      if TypeRepr.of[ID] =:= TypeRepr.of[Null] then
-        '{ DbCodec.AnyCodec.asInstanceOf[DbCodec[ID]] }
-      else Expr.summon[DbCodec[ID]].get
     val eClassTag = Expr.summon[ClassTag[E]].get
     val ecClassTag = Expr.summon[ClassTag[EC]].get
-    val idClassTag =
-      if TypeRepr.of[ID] =:= TypeRepr.of[Null] then
-        '{ ClassTag.Any.asInstanceOf[ClassTag[ID]] }
-      else Expr.summon[ClassTag[ID]].get
     '{
       ${ exprs.tableAnnot }.dbType.buildRepoDefaults[EC, E, ID](
         ${ exprs.tableNameSql },
@@ -62,14 +54,12 @@ object RepoDefaults:
         $eElemCodecs,
         ${ Expr(exprs.ecElemNames) },
         ${ Expr.ofSeq(exprs.ecElemNamesSql) },
-        ${ exprs.idIndex }
+        ${ Expr.ofSeq(exprs.ids) }
       )(using
         $eCodec,
         $ecCodec,
-        $idCodec,
         $eClassTag,
-        $ecClassTag,
-        $idClassTag
+        $ecClassTag
       )
     }
   end genImpl

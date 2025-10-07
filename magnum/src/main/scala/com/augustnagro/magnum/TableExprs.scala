@@ -10,5 +10,5 @@ private case class TableExprs(
     eElemNamesSql: Seq[Expr[String]],
     ecElemNames: List[String],
     ecElemNamesSql: Seq[Expr[String]],
-    idIndex: Expr[Int]
+    ids: Seq[Expr[DbType.IdMeta]]
 )
