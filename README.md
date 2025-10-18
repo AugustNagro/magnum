@@ -326,13 +326,13 @@ An example use-case would be a search results page that allows users to sort and
 Here's an example:
 
 ```scala
-val partialName = "Ja"
+val partialName = "Ja%"
 val lastNameOpt = Option("Brown")
 val searchDate = OffsetDateTime.now.minusDays(2)
 val idPosition = 42L
 
 val spec = Spec[User]
-  .where(sql"first_name ILIKE '$partialName%'")
+  .where(sql"first_name ILIKE $partialName")
   .where(lastNameOpt.map(ln => sql"last_name = $ln").getOrElse(sql""))
   .where(sql"created >= $searchDate")
   .seek("id", SeekDir.Gt, idPosition, SortOrder.Asc)

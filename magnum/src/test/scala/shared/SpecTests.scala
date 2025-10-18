@@ -58,6 +58,12 @@ def specTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
     )
   )
 
+  test("like"):
+    xa().transact:
+      val model = "Ferr%"
+      val spec = Spec[Car].where(sql"model LIKE $model")
+      assert(carRepo.findAll(spec) == Vector(allCars(1)))
+
   test("select all"):
     xa().transact:
       val spec = Spec[Car]
