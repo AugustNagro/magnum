@@ -38,6 +38,7 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
     val tableDDLs = Vector(
       "clickhouse/car.sql",
       "clickhouse/no-id.sql",
+      "clickhouse/composite-id.sql",
       "clickhouse/person.sql",
       "clickhouse/big-dec.sql",
       "clickhouse/my-time.sql"
