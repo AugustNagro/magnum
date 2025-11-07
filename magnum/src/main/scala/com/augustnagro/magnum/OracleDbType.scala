@@ -28,7 +28,7 @@ object OracleDbType extends DbType:
       eElemCodecs: Seq[DbCodec[?]],
       ecElemNames: Seq[String],
       ecElemNamesSql: Seq[String],
-      idIndex: Int
+      idIndexes: List[Int]
   )(using
       eCodec: DbCodec[E],
       ecCodec: DbCodec[EC],
@@ -37,44 +37,55 @@ object OracleDbType extends DbType:
       ecClassTag: ClassTag[EC],
       idClassTag: ClassTag[ID]
   ): RepoDefaults[EC, E, ID] =
-    val idName = eElemNamesSql(idIndex)
+    val idNames = idIndexes.map(eElemNamesSql)
+    val idKeys = idNames.mkString("(", ", ", ")")
     val selectKeys = eElemNamesSql.mkString(", ")
     val ecInsertKeys = ecElemNamesSql.mkString("(", ", ", ")")
 
-    val updateKeys: String = eElemNamesSql
-      .lazyZip(eElemCodecs)
+    val eElemNamesAndCodecs = eElemNamesSql.lazyZip(eElemCodecs)
+    val (idNamesAndCodecs, ecNamesAndCodecs) =
+      eElemNamesAndCodecs.partition((sqlName, _) => idNames.contains(sqlName))
+
+    val idFilter = idKeys + " = " + idCodec.queryRepr
+
+    val updateKeys: String = ecNamesAndCodecs
       .map((sqlName, codec) => sqlName + " = " + codec.queryRepr)
-      .patch(idIndex, Seq.empty, 1)
       .mkString(", ")
 
-    val updateCodecs = eElemCodecs
-      .patch(idIndex, Seq.empty, 1)
-      .appended(idCodec)
-      .asInstanceOf[Seq[DbCodec[Any]]]
+    val updateCodecs =
+      (ecNamesAndCodecs.map(_._2) ++ idNamesAndCodecs.map(_._2))
+        .toSeq
+        .asInstanceOf[Seq[DbCodec[Any]]]
 
     val insertGenKeys = Array.from(eElemNamesSql)
 
     val countSql = s"SELECT count(*) FROM $tableNameSql"
     val countQuery = Frag(countSql, Vector.empty, FragWriter.empty).query[Long]
     val existsByIdSql =
-      s"SELECT 1 FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
+      s"SELECT 1 FROM $tableNameSql WHERE $idFilter"
     val findAllSql = s"SELECT * FROM $tableNameSql"
     val findAllQuery = Frag(findAllSql, Vector.empty, FragWriter.empty).query[E]
     val findByIdSql =
-      s"SELECT * FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
+      s"SELECT * FROM $tableNameSql WHERE $idFilter"
     val deleteByIdSql =
-      s"DELETE FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
+      s"DELETE FROM $tableNameSql WHERE $idFilter"
     val truncateSql = s"TRUNCATE TABLE $tableNameSql"
     val truncateUpdate =
       Frag(truncateSql, Vector.empty, FragWriter.empty).update
     val insertSql =
       s"INSERT INTO $tableNameSql $ecInsertKeys VALUES (${ecCodec.queryRepr})"
     val updateSql =
-      s"UPDATE $tableNameSql SET $updateKeys WHERE $idName = ${idCodec.queryRepr}"
+      s"UPDATE $tableNameSql SET $updateKeys WHERE $idFilter"
 
     def idWriter(id: ID): FragWriter = (ps, pos) =>
       idCodec.writeSingle(id, ps, pos)
       pos + idCodec.cols.length
+
+    def entityId(entity: E): ID =
+      val idElems = idIndexes.map(entity.asInstanceOf[Product].productElement)
+      idElems match
+        case head :: Nil => head.asInstanceOf[ID]
+        case _ => idClassTag.runtimeClass.getDeclaredConstructors().head.newInstance(idElems*).asInstanceOf[ID]
 
     new RepoDefaults[EC, E, ID]:
       def count(using con: DbCon): Long = countQuery.run().head
@@ -103,10 +114,7 @@ object OracleDbType extends DbType:
 
       def delete(entity: E)(using DbCon): Unit =
         deleteById(
-          entity
-            .asInstanceOf[Product]
-            .productElement(idIndex)
-            .asInstanceOf[ID]
+          entityId(entity)
         )
 
       def deleteById(id: ID)(using DbCon): Unit =
@@ -117,9 +125,7 @@ object OracleDbType extends DbType:
 
       def deleteAll(entities: Iterable[E])(using DbCon): BatchUpdateResult =
         deleteAllById(
-          entities.map(e =>
-            e.asInstanceOf[Product].productElement(idIndex).asInstanceOf[ID]
-          )
+          entities.map(entityId)
         )
 
       def deleteAllById(ids: Iterable[ID])(using
@@ -168,9 +174,9 @@ object OracleDbType extends DbType:
               .productIterator
               .toVector
             // put ID at the end
-            val updateValues = entityValues
-              .patch(idIndex, Vector.empty, 1)
-              .appended(entityValues(idIndex))
+            val (idValues, ecValues) = entityValues.zipWithIndex
+              .partition((_, index) => idIndexes.contains(index))
+            val updateValues = ecValues.map(_._1) ++ idValues.map(_._1)
 
             var pos = 1
             for (field, codec) <- updateValues.lazyZip(updateCodecs) do
@@ -189,9 +195,9 @@ object OracleDbType extends DbType:
                 .productIterator
                 .toVector
               // put ID at the end
-              val updateValues = entityValues
-                .patch(idIndex, Vector.empty, 1)
-                .appended(entityValues(idIndex))
+              val (idValues, ecValues) = entityValues.zipWithIndex
+                .partition((_, index) => idIndexes.contains(index))
+              val updateValues = ecValues.map(_._1) ++ idValues.map(_._1)
 
               var pos = 1
               for (field, codec) <- updateValues.lazyZip(updateCodecs) do

@@ -12,7 +12,7 @@ trait DbType:
       eElemCodecs: Seq[DbCodec[?]],
       ecElemNames: Seq[String],
       ecElemNamesSql: Seq[String],
-      idIndex: Int
+      idIndexes: List[Int]
   )(using
       eCodec: DbCodec[E],
       ecCodec: DbCodec[EC],
