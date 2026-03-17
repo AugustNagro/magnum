@@ -1,4 +1,5 @@
 import com.augustnagro.magnum.*
+import com.clickhouse.client.config.ClickHouseDefaults
 import com.clickhouse.jdbc.ClickHouseDataSource
 import com.dimafeng.testcontainers.ClickHouseContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
@@ -7,7 +8,7 @@ import org.testcontainers.utility.DockerImageName
 import shared.*
 
 import java.nio.file.{Files, Path}
-import java.util.UUID
+import java.util.{Properties, UUID}
 import scala.util.Using
 
 class ClickHouseTests extends FunSuite, TestContainersFixtures:
@@ -34,7 +35,10 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
 
   def xa(): Transactor =
     val clickHouse = clickHouseContainer()
-    val ds = ClickHouseDataSource(clickHouse.jdbcUrl)
+    val props = Properties()
+    props.put(ClickHouseDefaults.USER.getKey, clickHouse.username)
+    props.put(ClickHouseDefaults.PASSWORD.getKey, clickHouse.password)
+    val ds = ClickHouseDataSource(clickHouse.jdbcUrl, props)
     val tableDDLs = Vector(
       "clickhouse/car.sql",
       "clickhouse/no-id.sql",
@@ -50,4 +54,5 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
       )
       .get
     Transactor(ds)
+  end xa
 end ClickHouseTests
