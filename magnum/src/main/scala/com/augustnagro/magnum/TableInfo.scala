@@ -24,6 +24,7 @@ class TableInfo[EC, E, ID](
     val insertColumns: ColumnNames,
     val alias: Option[String],
     val queryRepr: String,
+    val idColumn: Option[ColumnName],
     private[magnum] val table: String,
     private[magnum] val eClassName: String
 ) extends Selectable, SqlLiteral:
@@ -45,12 +46,16 @@ class TableInfo[EC, E, ID](
     )
     val allQueryRepr = allSchemaNames.map(_.queryRepr).mkString(", ")
     val allCols = ColumnNames(allQueryRepr, allSchemaNames)
+    val newIdColumn = idColumn.flatMap(oldId =>
+      allSchemaNames.find(_.scalaName == oldId.scalaName)
+    )
 
     new TableInfo[EC, E, ID](
       all = allCols,
       insertColumns = insertColumns,
       alias = Some(tableAlias),
       queryRepr = queryRepr,
+      idColumn = newIdColumn,
       table = table,
       eClassName = eClassName
     ).asInstanceOf[this.type]
@@ -94,6 +99,10 @@ object TableInfo:
         )
     )
 
+    val idIdx =
+      if TypeRepr.of[ID] =:= TypeRepr.of[Null] then '{ None }
+      else '{ Some(${ exprs.idIndex }) }
+
     refinement.asType match
       case '[tpe] =>
         '{
@@ -105,6 +114,7 @@ object TableInfo:
           val insertQueryRepr =
             insertColumns.map(_.queryRepr).mkString("(", ", ", ")")
           val insertCols = ColumnNames(insertQueryRepr, insertColumns)
+          val idColumn = $idIdx.map(idx => allColumns(idx))
 
           val tableName = ${ exprs.tableNameSql }
           new TableInfo[EC, E, ID](
@@ -113,6 +123,7 @@ object TableInfo:
             alias = None,
             table = tableName,
             queryRepr = tableName,
+            idColumn = idColumn,
             eClassName = ${ exprs.tableNameScala }
           ).asInstanceOf[tpe]
         }

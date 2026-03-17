@@ -26,4 +26,5 @@ def sharedTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
   optionalProductTests(suite, dbType, xa)
   dateTimeTests(suite, dbType, xa)
   tupleTests(suite, dbType, xa)
+  tableInfoTests(suite, dbType, xa)
 end sharedTests
