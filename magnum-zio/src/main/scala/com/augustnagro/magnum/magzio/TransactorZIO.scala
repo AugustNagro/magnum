@@ -1,7 +1,7 @@
 package com.augustnagro.magnum.magzio
 
 import com.augustnagro.magnum.{DbCon, DbTx, SqlException, SqlLogger}
-import zio.{Semaphore, Task, Trace, UIO, URLayer, ZIO, ZLayer}
+import zio.{Task, Trace, UIO, URLayer, ZIO, ZLayer}
 
 import java.sql.Connection
 import javax.sql.DataSource
@@ -10,16 +10,14 @@ import scala.util.control.NonFatal
 class TransactorZIO private (
     dataSource: DataSource,
     sqlLogger: SqlLogger,
-    connectionConfig: Connection => Unit,
-    semaphore: Option[Semaphore]
+    connectionConfig: Connection => Unit
 ):
 
   def withSqlLogger(sqlLogger: SqlLogger): TransactorZIO =
     new TransactorZIO(
       dataSource,
       sqlLogger,
-      connectionConfig,
-      semaphore
+      connectionConfig
     )
 
   def withConnectionConfig(
@@ -28,12 +26,11 @@ class TransactorZIO private (
     new TransactorZIO(
       dataSource,
       sqlLogger,
-      connectionConfig,
-      semaphore
+      connectionConfig
     )
 
   def connect[A](f: DbCon ?=> A)(using Trace): Task[A] =
-    val zio = ZIO.blocking(
+    ZIO.blocking(
       ZIO.acquireReleaseWith(acquireConnection)(releaseConnection)(cn =>
         ZIO.attempt {
           connectionConfig(cn)
@@ -41,10 +38,9 @@ class TransactorZIO private (
         }
       )
     )
-    semaphore.fold(zio)(_.withPermit(zio))
 
   def transact[A](f: DbTx ?=> A)(using Trace): Task[A] =
-    val zio = ZIO.blocking(
+    ZIO.blocking(
       ZIO.acquireReleaseWith(acquireConnection)(releaseConnection)(cn =>
         ZIO.attempt {
           connectionConfig(cn)
@@ -61,7 +57,6 @@ class TransactorZIO private (
         }.uninterruptible
       )
     )
-    semaphore.fold(zio)(_.withPermit(zio))
 
   private def acquireConnection(using Trace): Task[Connection] =
     ZIO
@@ -87,71 +82,37 @@ object TransactorZIO:
     *   Logging configuration
     * @param connectionConfig
     *   Customize the underlying JDBC Connections
-    * @param maxBlockingThreads
-    *   Number of threads in your connection pool. This helps magzio be more
-    *   memory efficient by limiting the number of blocking pool threads used.
-    *   Not needed if using the ZIO virtual-thread based blocking executor
-    */
-  def layer(
-      sqlLogger: SqlLogger,
-      connectionConfig: Connection => Unit,
-      maxBlockingThreads: Option[Int]
-  ): URLayer[DataSource, TransactorZIO] =
-    ZLayer.fromZIO {
-      for {
-        dataSource <- ZIO.service[DataSource]
-        transactor <- ZIO
-          .fromOption(maxBlockingThreads)
-          .flatMap(threads => Semaphore.make(threads))
-          .unsome
-          .map(semaphoreOpt =>
-            new TransactorZIO(
-              dataSource = dataSource,
-              sqlLogger = sqlLogger,
-              connectionConfig = connectionConfig,
-              semaphore = semaphoreOpt
-            )
-          )
-      } yield transactor
-    }
-
-  /** Construct a TransactorZIO
-    *
-    * @param sqlLogger
-    *   Logging configuration
-    * @param connectionConfig
-    *   Customize the underlying JDBC Connections
     */
   def layer(
       sqlLogger: SqlLogger,
       connectionConfig: Connection => Unit
   ): URLayer[DataSource, TransactorZIO] =
-    layer(
-      sqlLogger = sqlLogger,
-      connectionConfig = connectionConfig,
-      maxBlockingThreads = None
-    )
+    ZLayer
+      .service[DataSource]
+      .project(ds =>
+        TransactorZIO(
+          dataSource = ds,
+          sqlLogger = sqlLogger,
+          connectionConfig = connectionConfig
+        )
+      )
 
   /** Construct a TransactorZIO
     *
-    * @param dataSource
-    *   Datasource to be used
     * @param sqlLogger
     *   Logging configuration
     */
   def layer(sqlLogger: SqlLogger): URLayer[DataSource, TransactorZIO] =
     layer(
       sqlLogger = sqlLogger,
-      connectionConfig = noOpConnectionConfig,
-      maxBlockingThreads = None
+      connectionConfig = noOpConnectionConfig
     )
 
   /** Construct a TransactorZIO */
   def layer: URLayer[DataSource, TransactorZIO] =
     layer(
       sqlLogger = SqlLogger.Default,
-      connectionConfig = noOpConnectionConfig,
-      maxBlockingThreads = None
+      connectionConfig = noOpConnectionConfig
     )
 
   /** Construct a TransactorZIO
@@ -164,20 +125,7 @@ object TransactorZIO:
   ): URLayer[DataSource, TransactorZIO] =
     layer(
       sqlLogger = SqlLogger.Default,
-      connectionConfig = connectionConfig,
-      maxBlockingThreads = None
-    )
-
-  /** @param maxBlockingThreads
-    *   Number of threads in your connection pool. This helps magzio be more
-    *   memory efficient by limiting the number of blocking pool threads used.
-    *   Not needed if using the ZIO virtual-thread based blocking executor
-    */
-  def layer(maxBlockingThreads: Int): URLayer[DataSource, TransactorZIO] =
-    layer(
-      sqlLogger = SqlLogger.Default,
-      connectionConfig = noOpConnectionConfig,
-      maxBlockingThreads = Some(maxBlockingThreads)
+      connectionConfig = connectionConfig
     )
 
 end TransactorZIO
