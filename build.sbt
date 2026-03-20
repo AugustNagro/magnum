@@ -92,7 +92,7 @@ lazy val magnumZio = project
     Test / fork := true,
     publish / skip := false,
     libraryDependencies ++= Seq(
-      "dev.zio" %% "zio" % "2.1.12" % Provided,
+      "dev.zio" %% "zio" % "2.1.24" % Provided,
       "org.scalameta" %% "munit" % munitVersion % Test,
       "com.dimafeng" %% "testcontainers-scala-munit" % testcontainersVersion % Test,
       "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion % Test,
