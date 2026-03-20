@@ -474,7 +474,8 @@ You can log slow queries by using the `Transactor` class in conjunction with `Sq
 
 ### ZIO
 
-Magnum provides a fine layer of integration with ZIO.    
+Magnum provides a fine layer of integration with ZIO.
+
 The `magnum-zio` module provides an implementation of the `connect` and `transact` utils that return a ZIO effect.
 
 To use the ZIO integration, add the following dependency:
@@ -486,6 +487,8 @@ and import these utils in your code with:
 ```scala
 import com.augustnagro.magnum.magzio.*
 ```
+
+We recommend that you use the Virtual Thread blocking executor for maximum efficiency (Runtime.enableLoomBasedBlockingExecutor): https://zio.dev/reference/core/runtime/#enabling-virtual-threads
 
 ## Motivation
 
