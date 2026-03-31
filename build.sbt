@@ -1,7 +1,7 @@
 ThisBuild / organization := "com.augustnagro"
 ThisBuild / version := "2.0.0-M2"
 ThisBuild / versionScheme := Some("early-semver")
-ThisBuild / scalaVersion := "3.3.4"
+ThisBuild / scalaVersion := "3.3.7"
 ThisBuild / scalacOptions ++= Seq("-deprecation")
 ThisBuild / homepage := Some(url("https://github.com/AugustNagro/magnum"))
 ThisBuild / licenses += (
@@ -50,7 +50,6 @@ lazy val root = project
 lazy val magnum = project
   .in(file("magnum"))
   .settings(
-    Test / fork := true,
     publish / skip := false,
     libraryDependencies ++= Seq(
       "org.scalameta" %% "munit" % munitVersion % Test,
@@ -72,7 +71,6 @@ lazy val magnumPg = project
   .in(file("magnum-pg"))
   .dependsOn(magnum)
   .settings(
-    Test / fork := true,
     publish / skip := false,
     libraryDependencies ++= Seq(
       "org.postgresql" % "postgresql" % postgresDriverVersion % "provided",
@@ -89,7 +87,6 @@ lazy val magnumZio = project
   .in(file("magnum-zio"))
   .dependsOn(magnum)
   .settings(
-    Test / fork := true,
     publish / skip := false,
     libraryDependencies ++= Seq(
       "dev.zio" %% "zio" % "2.1.24" % Provided,
