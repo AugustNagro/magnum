@@ -51,7 +51,9 @@ class PgZioTests extends FunSuite, TestContainersFixtures:
           TransactorZIO.layer
             .build(Scope.global)
             .map(_.get)
-            .provide(ZLayer.succeed(ds))
+            .provide(
+              ZLayer.succeed(ds) ++ zio.Runtime.enableLoomBasedBlockingExecutor
+            )
         )
         .getOrThrow()
     }

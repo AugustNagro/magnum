@@ -15,9 +15,17 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - uses: actions/checkout@v4
-      - uses: olafurpg/setup-scala@v14
+      - name: Checkout current branch
+        uses: actions/checkout@v6.0.2
+      - name: Setup Java
+        uses: actions/setup-java@v5.2.0
         with:
-          java-version: 17
-      - name: run tests
-        run: sbt 'clean; scalafmtCheckAll; test'
+          distribution: temurin
+          java-version: 25
+          check-latest: true
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
+      - name: Cache scala dependencies
+        uses: coursier/cache-action@v8
+      - name: Run tests
+        run: sbt 'scalafmtCheckAll; test'
