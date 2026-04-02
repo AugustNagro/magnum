@@ -1,5 +1,5 @@
 ThisBuild / organization := "com.augustnagro"
-ThisBuild / version := "2.0.0-M2"
+ThisBuild / version := "2.0.0-M3"
 ThisBuild / versionScheme := Some("early-semver")
 ThisBuild / scalaVersion := "3.3.7"
 ThisBuild / scalacOptions ++= Seq("-deprecation")
@@ -28,11 +28,10 @@ ThisBuild / developers := List(
 ThisBuild / publishMavenStyle := true
 ThisBuild / pomIncludeRepository := { _ => false }
 ThisBuild / publishTo := {
-  val nexus = "https://oss.sonatype.org/"
-  if (isSnapshot.value)
-    Some("snapshots" at nexus + "content/repositories/snapshots")
-  else
-    Some("releases" at nexus + "service/local/staging/deploy/maven2")
+  val centralSnapshots =
+    "https://central.sonatype.com/repository/maven-snapshots/"
+  if (isSnapshot.value) Some("central-snapshots" at centralSnapshots)
+  else localStaging.value
 }
 ThisBuild / publish / skip := true
 
