@@ -151,6 +151,31 @@ class OracleTests extends FunSuite, TestContainersFixtures:
           """insert into no_id (created_at, user_name, user_action) values
             |(timestamp '1997-08-17 00:00:00', 'Greg', 'ran some QA tests')""".stripMargin
         )
+        try stmt.execute("drop table composite_id")
+        catch case _ => ()
+        stmt.execute(
+          """create table composite_id (
+            |  first_id number not null,
+            |  second_id number not null,
+            |  created_at timestamp not null,
+            |  user_name varchar2(200) not null,
+            |  user_action varchar2(200) not null,
+            |  primary key (first_id, second_id)
+            |)
+            |""".stripMargin
+        )
+        stmt.execute(
+          """insert into composite_id values
+            |(1, 1, timestamp '1997-08-15 00:00:00', 'Josh', 'clicked a button')""".stripMargin
+        )
+        stmt.execute(
+          """insert into composite_id values
+            |(1, 2, timestamp '1997-08-16 00:00:00', 'Danny', 'opened a toaster')""".stripMargin
+        )
+        stmt.execute(
+          """insert into composite_id values
+            |(2, 1, timestamp '1997-08-17 00:00:00', 'Greg', 'ran some QA tests')""".stripMargin
+        )
         try stmt.execute("drop table big_dec")
         catch case _ => ()
         stmt.execute(

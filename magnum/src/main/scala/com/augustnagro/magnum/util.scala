@@ -267,7 +267,7 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
   import quotes.reflect.*
   assertECIsSubsetOfE[EC, E]
 
-  val idIndex = idAnnotIndex[E]
+  val idIndexes = idAnnotIndex[E]
   val table: Expr[Table] =
     DerivingUtil.tableAnnot[E] match
       case Some(table) => table
@@ -317,7 +317,7 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
             eElemNamesSql,
             ecElemNames,
             ecElemNamesSql,
-            idIndex
+            idIndexes
           )
         case _ =>
           report.errorAndAbort(
@@ -330,19 +330,20 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
   end match
 end tableExprs
 
-private def idAnnotIndex[E: Type](using q: Quotes): Expr[Int] =
+private def idAnnotIndex[E: Type](using q: Quotes): Expr[List[Int]] =
   import q.reflect.*
   val idAnnot = TypeRepr.of[Id].typeSymbol
-  val index = TypeRepr
+  val indexes = TypeRepr
     .of[E]
     .typeSymbol
     .primaryConstructor
     .paramSymss
     .head
-    .indexWhere(sym => sym.hasAnnotation(idAnnot)) match
-    case -1 => 0
-    case x  => x
-  Expr(index)
+    .zipWithIndex
+    .collect:
+      case (sym, index) if sym.hasAnnotation(idAnnot) => index
+  val nonEmptyIdIndexes = if (indexes.isEmpty) List(0) else indexes
+  Expr(nonEmptyIdIndexes)
 
 private def elemNames[Mels: Type](res: List[String] = Nil)(using
     Quotes

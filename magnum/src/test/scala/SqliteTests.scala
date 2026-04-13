@@ -109,6 +109,23 @@ class SqliteTests extends FunSuite:
           |('2024-11-24T22:17:30.000000000Z', 'Danny', 'opened a toaster'),
           |('2024-11-24T22:17:30.000000000Z', 'Greg', 'ran some QA tests');""".stripMargin
       )
+      stmt.execute("drop table if exists composite_id")
+      stmt.execute(
+        """create table composite_id (
+          |  first_id integer not null,
+          |  second_id integer not null,
+          |  created_at text not null,
+          |  user_name text not null,
+          |  user_action text not null,
+          |  primary key (first_id, second_id)
+          |)""".stripMargin
+      )
+      stmt.execute(
+        """insert into composite_id values
+          |(1, 1, '2024-11-24T22:17:30.000000000Z', 'Josh', 'clicked a button'),
+          |(1, 2, '2024-11-24T22:17:30.000000000Z', 'Danny', 'opened a toaster'),
+          |(2, 1, '2024-11-24T22:17:30.000000000Z', 'Greg', 'ran some QA tests')""".stripMargin
+      )
       stmt.execute("drop table if exists big_dec")
       stmt.execute(
         """create table big_dec (

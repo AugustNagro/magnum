@@ -62,7 +62,7 @@ object RepoDefaults:
         $eElemCodecs,
         ${ Expr(exprs.ecElemNames) },
         ${ Expr.ofSeq(exprs.ecElemNamesSql) },
-        ${ exprs.idIndex }
+        ${ exprs.idIndexes }
       )(using
         $eCodec,
         $ecCodec,
