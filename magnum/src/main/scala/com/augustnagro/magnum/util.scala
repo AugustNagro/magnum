@@ -164,9 +164,15 @@ private def summonWriter[T: Type](using Quotes): Expr[DbCodec[T]] =
     )
     .getOrElse:
       report.info(
-        s"Could not find given DbCodec for ${TypeRepr.of[T].show}. Using PreparedStatement::setObject instead."
+        s"Could not find given DbCodec for ${TypeRepr.of[T].widen.show}. Using PreparedStatement::setObject instead."
       )
-      '{ DbCodec.AnyCodec.asInstanceOf[DbCodec[T]] }
+      // Summoned rather than spliced directly, so a user-supplied
+      // DbCodec[Any] in scope takes precedence over DbCodec.AnyCodec.
+      Expr
+        .summon[DbCodec[Any]]
+        .map(codec => '{ $codec.asInstanceOf[DbCodec[T]] })
+        .getOrElse('{ DbCodec.AnyCodec.asInstanceOf[DbCodec[T]] })
+end summonWriter
 
 def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
     con: DbCon
