@@ -1,6 +1,6 @@
 package com.augustnagro.magnum
 
-import java.sql.{Connection, PreparedStatement, ResultSet, Statement}
+import java.sql.{Connection, JDBCType, PreparedStatement, ResultSet, Statement}
 import java.time.OffsetDateTime
 import scala.collection.View
 import scala.deriving.Mirror
@@ -41,7 +41,8 @@ object MySqlDbType extends DbType:
       eElemCodecs: Seq[DbCodec[?]],
       ecElemNames: Seq[String],
       ecElemNamesSql: Seq[String],
-      idIndex: Int
+      idIndices: Seq[Int],
+      idFromProduct: Seq[Any] => ID
   )(using
       eCodec: DbCodec[E],
       ecCodec: DbCodec[EC],
@@ -50,45 +51,82 @@ object MySqlDbType extends DbType:
       ecClassTag: ClassTag[EC],
       idClassTag: ClassTag[ID]
   ): RepoDefaults[EC, E, ID] =
-    val idName = eElemNamesSql(idIndex)
+    val idNames = idIndices.map(eElemNamesSql)
     val selectKeys = eElemNamesSql.mkString(", ")
     val ecInsertKeys = ecElemNamesSql.mkString("(", ", ", ")")
-
-    val insertGenKeys = Array(idName)
+    val idCodecs =
+      if idIndices.nonEmpty then idIndices.map(eElemCodecs).toVector
+      else Vector(idCodec)
 
     val updateKeys: String = eElemNamesSql
-      .lazyZip(eElemCodecs)
-      .map((sqlName, codec) => sqlName + " = " + codec.queryRepr)
-      .patch(idIndex, Seq.empty, 1)
+      .zip(eElemCodecs)
+      .zipWithIndex
+      .collect {
+        case ((sqlName, codec), idx) if !idIndices.contains(idx) =>
+          sqlName + " = " + codec.queryRepr
+      }
       .mkString(", ")
 
-    val updateCodecs = eElemCodecs
-      .patch(idIndex, Seq.empty, 1)
-      .appended(idCodec)
-      .asInstanceOf[Seq[DbCodec[Any]]]
+    val updateCodecs: IArray[DbCodec[Any]] = IArray.from(
+      eElemCodecs.zipWithIndex
+        .collect { case (codec, idx) if !idIndices.contains(idx) => codec }
+        .appendedAll(idCodecs)
+        .map(_.asInstanceOf[DbCodec[Any]])
+    )
+    val updateParamIndices: IArray[Int] = IArray.from(
+      eElemNames.indices.filterNot(idIndices.contains) ++ idIndices
+    )
+
+    val idWhereClause = idNames match
+      case Seq() => "1 = 0"
+      case _ =>
+        idNames
+          .zip(idCodecs)
+          .map((name, codec) => name + " = " + codec.queryRepr)
+          .mkString(" AND ")
 
     val countSql = s"SELECT count(*) FROM $tableNameSql"
     val countQuery = Frag(countSql, Vector.empty, FragWriter.empty).query[Long]
     val existsByIdSql =
-      s"SELECT 1 FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
-    val findAllSql = s"SELECT * FROM $tableNameSql"
+      s"SELECT 1 FROM $tableNameSql WHERE $idWhereClause"
+    val findAllSql = s"SELECT $selectKeys FROM $tableNameSql"
     val findAllQuery = Frag(findAllSql, Vector.empty, FragWriter.empty).query[E]
     val findByIdSql =
-      s"SELECT * FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
+      s"SELECT $selectKeys FROM $tableNameSql WHERE $idWhereClause"
     val deleteByIdSql =
-      s"DELETE FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
+      s"DELETE FROM $tableNameSql WHERE $idWhereClause"
     val truncateSql = s"TRUNCATE TABLE $tableNameSql"
     val truncateUpdate =
       Frag(truncateSql, Vector.empty, FragWriter.empty).update
     val insertSql =
       s"INSERT INTO $tableNameSql $ecInsertKeys VALUES (${ecCodec.queryRepr})"
     val updateSql =
-      s"UPDATE $tableNameSql SET $updateKeys WHERE $idName = ${idCodec.queryRepr}"
-    val insertAndFindByIdSql = insertSql + "\n" + findByIdSql
+      s"UPDATE $tableNameSql SET $updateKeys WHERE $idWhereClause"
+
+    val idFirstTypeName = JDBCType.valueOf(idCodec.cols.head).getName
 
     def idWriter(id: ID): FragWriter = (ps, pos) =>
       idCodec.writeSingle(id, ps, pos)
       pos + idCodec.cols.length
+
+    def entityToId(entity: E): ID =
+      val product = entity.asInstanceOf[Product]
+      val idValues = idIndices.map(i => product.productElement(i))
+      idFromProduct(idValues)
+
+    def writeUpdateParams(entity: E, ps: PreparedStatement): Unit =
+      val product = entity.asInstanceOf[Product]
+      var pos = 1
+      var i = 0
+      while i < updateParamIndices.length do
+        val codec = updateCodecs(i)
+        codec.writeSingle(
+          product.productElement(updateParamIndices(i)),
+          ps,
+          pos
+        )
+        pos += codec.cols.length
+        i += 1
 
     new RepoDefaults[EC, E, ID]:
       def count(using con: DbCon): Long = countQuery.run().head
@@ -116,12 +154,7 @@ object MySqlDbType extends DbType:
         )
 
       def delete(entity: E)(using DbCon): Unit =
-        deleteById(
-          entity
-            .asInstanceOf[Product]
-            .productElement(idIndex)
-            .asInstanceOf[ID]
-        )
+        deleteById(entityToId(entity))
 
       def deleteById(id: ID)(using DbCon): Unit =
         Frag(deleteByIdSql, IArray(id), idWriter(id)).update
@@ -130,11 +163,7 @@ object MySqlDbType extends DbType:
       def truncate()(using DbCon): Unit = truncateUpdate.run()
 
       def deleteAll(entities: Iterable[E])(using DbCon): BatchUpdateResult =
-        deleteAllById(
-          entities.map(e =>
-            e.asInstanceOf[Product].productElement(idIndex).asInstanceOf[ID]
-          )
-        )
+        deleteAllById(entities.map(entityToId))
 
       def deleteAllById(ids: Iterable[ID])(using
           con: DbCon
@@ -170,19 +199,7 @@ object MySqlDbType extends DbType:
       def update(entity: E)(using con: DbCon): Unit =
         handleQuery(updateSql, entity):
           Using(con.connection.prepareStatement(updateSql)): ps =>
-            val entityValues: Vector[Any] = entity
-              .asInstanceOf[Product]
-              .productIterator
-              .toVector
-            // put ID at the end
-            val updateValues = entityValues
-              .patch(idIndex, Vector.empty, 1)
-              .appended(entityValues(idIndex))
-
-            var pos = 1
-            for (field, codec) <- updateValues.lazyZip(updateCodecs) do
-              codec.writeSingle(field, ps, pos)
-              pos += codec.cols.length
+            writeUpdateParams(entity, ps)
             timed(ps.executeUpdate())
 
       def updateAll(entities: Iterable[E])(using
@@ -191,19 +208,7 @@ object MySqlDbType extends DbType:
         handleQuery(updateSql, entities):
           Using(con.connection.prepareStatement(updateSql)): ps =>
             for entity <- entities do
-              val entityValues: Vector[Any] = entity
-                .asInstanceOf[Product]
-                .productIterator
-                .toVector
-              // put ID at the end
-              val updateValues = entityValues
-                .patch(idIndex, Vector.empty, 1)
-                .appended(entityValues(idIndex))
-
-              var pos = 1
-              for (field, codec) <- updateValues.lazyZip(updateCodecs) do
-                codec.writeSingle(field, ps, pos)
-                pos += codec.cols.length
+              writeUpdateParams(entity, ps)
               ps.addBatch()
 
             timed(batchUpdateResult(ps.executeBatch()))

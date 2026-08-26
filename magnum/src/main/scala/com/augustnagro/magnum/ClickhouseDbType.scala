@@ -16,7 +16,8 @@ object ClickhouseDbType extends DbType:
       eElemCodecs: Seq[DbCodec[?]],
       ecElemNames: Seq[String],
       ecElemNamesSql: Seq[String],
-      idIndex: Int
+      idIndices: Seq[Int],
+      idFromProduct: Seq[Any] => ID
   )(using
       eCodec: DbCodec[E],
       ecCodec: DbCodec[EC],
@@ -29,20 +30,31 @@ object ClickhouseDbType extends DbType:
       eClassTag.runtimeClass == ecClassTag.runtimeClass,
       "ClickHouse does not support generated keys, so EC must equal E"
     )
-    val idName = eElemNamesSql(idIndex)
+    val idNames = idIndices.map(eElemNamesSql)
     val selectKeys = eElemNamesSql.mkString(", ")
     val ecInsertKeys = ecElemNamesSql.mkString("(", ", ", ")")
+    val idCodecs =
+      if idIndices.nonEmpty then idIndices.map(eElemCodecs).toVector
+      else Vector(idCodec)
+
+    val idWhereClause = idNames match
+      case Seq() => "1 = 0"
+      case _ =>
+        idNames
+          .zip(idCodecs)
+          .map((name, codec) => name + " = " + codec.queryRepr)
+          .mkString(" AND ")
 
     val countSql = s"SELECT count(*) FROM $tableNameSql"
     val countQuery = Frag(countSql, Vector.empty, FragWriter.empty).query[Long]
     val existsByIdSql =
-      s"SELECT 1 FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
+      s"SELECT 1 FROM $tableNameSql WHERE $idWhereClause"
     val findAllSql = s"SELECT $selectKeys FROM $tableNameSql"
     val findAllQuery = Frag(findAllSql, Vector.empty, FragWriter.empty).query[E]
     val findByIdSql =
-      s"SELECT $selectKeys FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
+      s"SELECT $selectKeys FROM $tableNameSql WHERE $idWhereClause"
     val deleteByIdSql =
-      s"DELETE FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
+      s"DELETE FROM $tableNameSql WHERE $idWhereClause"
     val truncateSql = s"TRUNCATE TABLE $tableNameSql"
     val truncateUpdate =
       Frag(truncateSql, Vector.empty, FragWriter.empty).update
@@ -52,6 +64,11 @@ object ClickhouseDbType extends DbType:
     def idWriter(id: ID): FragWriter = (ps, pos) =>
       idCodec.writeSingle(id, ps, pos)
       pos + idCodec.cols.length
+
+    def entityToId(entity: E): ID =
+      val product = entity.asInstanceOf[Product]
+      val idValues = idIndices.map(i => product.productElement(i))
+      idFromProduct(idValues)
 
     new RepoDefaults[EC, E, ID]:
       def count(using con: DbCon): Long = countQuery.run().head
@@ -77,12 +94,7 @@ object ClickhouseDbType extends DbType:
         throw UnsupportedOperationException()
 
       def delete(entity: E)(using DbCon): Unit =
-        deleteById(
-          entity
-            .asInstanceOf[Product]
-            .productElement(idIndex)
-            .asInstanceOf[ID]
-        )
+        deleteById(entityToId(entity))
 
       def deleteById(id: ID)(using DbCon): Unit =
         Frag(deleteByIdSql, IArray(id), idWriter(id)).update
@@ -92,11 +104,7 @@ object ClickhouseDbType extends DbType:
         truncateUpdate.run()
 
       def deleteAll(entities: Iterable[E])(using DbCon): BatchUpdateResult =
-        deleteAllById(
-          entities.map(e =>
-            e.asInstanceOf[Product].productElement(idIndex).asInstanceOf[ID]
-          )
-        )
+        deleteAllById(entities.map(entityToId))
 
       def deleteAllById(ids: Iterable[ID])(using
           con: DbCon
