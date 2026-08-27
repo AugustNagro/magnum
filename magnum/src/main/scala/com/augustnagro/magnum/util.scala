@@ -208,13 +208,11 @@ private def parseParams(params: Any): Iterator[Iterator[Any]] =
   params match
     case p: Product => Iterator(p.productIterator)
     case it: Iterable[?] =>
-      it.headOption match
-        case Some(h: Product) =>
-          it.asInstanceOf[Iterable[Product]]
-            .iterator
-            .map(_.productIterator)
-        case _ =>
-          Iterator(it.iterator)
+      val items = it.iterator.toVector
+      if items.nonEmpty && items.forall(_.isInstanceOf[Product]) then
+        items.iterator.map(_.asInstanceOf[Product].productIterator)
+      else
+        Iterator(items.iterator)
     case x => Iterator(Iterator(x))
 
 private def paramsString(params: Iterator[Iterator[Any]]): String =
