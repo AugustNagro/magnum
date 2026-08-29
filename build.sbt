@@ -57,7 +57,7 @@ lazy val magnum = project
       "org.postgresql" % "postgresql" % postgresDriverVersion % Test,
       "com.dimafeng" %% "testcontainers-scala-mysql" % testcontainersVersion % Test,
       "com.mysql" % "mysql-connector-j" % "9.0.0" % Test,
-      "com.h2database" % "h2" % "2.3.232" % Test,
+      "com.h2database" % "h2" % "2.4.240" % Test,
       "com.dimafeng" %% "testcontainers-scala-oracle-xe" % testcontainersVersion % Test,
       "com.oracle.database.jdbc" % "ojdbc11" % "21.9.0.0" % Test,
       "com.dimafeng" %% "testcontainers-scala-clickhouse" % testcontainersVersion % Test,
