@@ -90,7 +90,7 @@ object H2DbType extends DbType:
       case _ =>
         val unnestCalls = idNames.zipWithIndex
           .map { case (_, i) =>
-            s"?::${JDBCType.valueOf(idCodec.cols(i)).getName}[]"
+            s"CAST(? AS ${JDBCType.valueOf(idCodec.cols(i)).getName} ARRAY)"
           }
           .mkString(", ")
         val rowPlaceholders =

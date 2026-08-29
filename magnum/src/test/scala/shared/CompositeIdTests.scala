@@ -87,7 +87,10 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
       assertEquals(compIdRepo.findById(CompId(9, "missing")), None)
 
   test("non-leading composite id findAllById"):
-    assume(dbType == PostgresDbType)
+    assume(dbType != ClickhouseDbType)
+    assume(dbType != MySqlDbType)
+    assume(dbType != OracleDbType)
+    assume(dbType != SqliteDbType)
     xa().connect:
       assertEquals(
         compIdRepo
@@ -102,7 +105,6 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
     assume(dbType != MySqlDbType)
     assume(dbType != OracleDbType)
     assume(dbType != SqliteDbType)
-    assume(dbType != H2DbType)
     xa().connect:
       assertEquals(
         pointRepo.findAllById(Vector(PointId(1, 1), PointId(1, 2))),
@@ -119,7 +121,6 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
     assume(dbType != MySqlDbType)
     assume(dbType != OracleDbType)
     assume(dbType != SqliteDbType)
-    assume(dbType != H2DbType)
     xa().connect:
       assertEquals(
         pointRepoTupled.findAllById(Vector((1, 1), (1, 2))),
