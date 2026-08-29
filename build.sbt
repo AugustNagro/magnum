@@ -38,7 +38,7 @@ ThisBuild / publish / skip := true
 addCommandAlias("fmt", "scalafmtAll")
 
 val testcontainersVersion = "0.44.1"
-val circeVersion = "0.14.10"
+val circeVersion = "0.14.16"
 val munitVersion = "1.3.5"
 val postgresDriverVersion = "42.7.4"
 
