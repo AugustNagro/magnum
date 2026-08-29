@@ -39,7 +39,6 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
       "/mysql/no-id.sql",
       "/mysql/big-dec.sql",
       "/mysql/my-time.sql",
-      "/mysql/point.sql",
       "/mysql/comp-id.sql"
     ).map(p => Files.readString(Path.of(getClass.getResource(p).toURI)))
     Manager(use =>

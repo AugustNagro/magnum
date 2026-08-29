@@ -36,7 +36,6 @@ class PgTests extends FunSuite, TestContainersFixtures:
       "/pg/no-id.sql",
       "/pg/big-dec.sql",
       "/pg/my-time.sql",
-      "/pg/point.sql",
       "/pg/comp-id.sql"
     ).map(p => Files.readString(Path.of(getClass.getResource(p).toURI)))
 

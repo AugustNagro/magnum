@@ -45,7 +45,6 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
       "clickhouse/person.sql",
       "clickhouse/big-dec.sql",
       "clickhouse/my-time.sql",
-      "clickhouse/point.sql",
       "clickhouse/comp-id.sql"
     ).map(p => Files.readString(Path.of(getClass.getResource(p).toURI)))
     Using

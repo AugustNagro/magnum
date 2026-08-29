@@ -25,7 +25,6 @@ class H2Tests extends FunSuite:
       "/h2/no-id.sql",
       "/h2/big-dec.sql",
       "/h2/my-time.sql",
-      "/h2/point.sql",
       "/h2/comp-id.sql"
     ).map(p => Files.readString(Path.of(getClass.getResource(p).toURI)))
     Manager(use =>

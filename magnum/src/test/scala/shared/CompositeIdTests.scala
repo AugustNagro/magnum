@@ -9,22 +9,6 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
 ): Unit =
   import suite.*
 
-  @Table(dbType, SqlNameMapper.CamelToSnakeCase)
-  case class Point(@Id x: Int, @Id y: Int, descr: String) derives DbCodec
-
-  case class PointId(x: Int, y: Int) derives DbCodec
-
-  val pointRepo = Repo[Point, Point, PointId]
-  val point = TableInfo[Point, Point, PointId]
-
-  val pointRepoTupled = Repo[Point, Point, (Int, Int)]
-  val pointTupled = TableInfo[Point, Point, (Int, Int)]
-
-  val allPoints = Vector(
-    Point(x = 1, y = 1, descr = "hello"),
-    Point(x = 1, y = 2, descr = "world")
-  )
-
   @SqlName("comp_id")
   @Table(dbType, SqlNameMapper.CamelToSnakeCase)
   case class CompIdRow(a: String, @Id b: Int, c: Int, @Id d: String)
@@ -33,6 +17,10 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
   case class CompId(b: Int, d: String) derives DbCodec
 
   val compIdRepo = Repo[CompIdRow, CompIdRow, CompId]
+  val compId = TableInfo[CompIdRow, CompIdRow, CompId]
+  val compIdRepoTupled = Repo[CompIdRow, CompIdRow, (Int, String)]
+  val compIdTupled = TableInfo[CompIdRow, CompIdRow, (Int, String)]
+
   val allCompIdRows = Vector(
     CompIdRow("alpha", 1, 10, "first"),
     CompIdRow("beta", 2, 20, "second"),
@@ -43,62 +31,41 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
 
   test("composite id existsById"):
     xa().connect:
-      assert(pointRepo.existsById(PointId(1, 1)))
-      assert(pointRepo.existsById(PointId(1, 2)))
-      assert(!pointRepo.existsById(PointId(2, 1)))
+      assert(compIdRepo.existsById(CompId(1, "first")))
+      assert(compIdRepo.existsById(CompId(2, "second")))
+      assert(!compIdRepo.existsById(CompId(9, "missing")))
 
   test("composite id existsById (tupled)"):
     xa().connect:
-      assert(pointRepoTupled.existsById((1, 1)))
-      assert(pointRepoTupled.existsById((1, 2)))
-      assert(!pointRepoTupled.existsById((2, 1)))
+      assert(compIdRepoTupled.existsById((1, "first")))
+      assert(compIdRepoTupled.existsById((2, "second")))
+      assert(!compIdRepoTupled.existsById((9, "missing")))
 
-  test("composit id findAll (Spec)"):
-    xa().connect:
-      val spec = Spec[Point].where(sql"${point.x} = 1 AND ${point.y} = 1")
-      assertEquals(pointRepo.findAll(spec), Vector(allPoints(0)))
-
-  test("composit id findAll (Spec) (tupled)"):
+  test("composite id findAll (Spec)"):
     xa().connect:
       val spec =
-        Spec[Point].where(sql"${pointTupled.x} = 1 AND ${pointTupled.y} = 1")
-      assertEquals(pointRepoTupled.findAll(spec), Vector(allPoints(0)))
+        Spec[CompIdRow].where(sql"${compId.b} = 1 AND ${compId.d} = 'first'")
+      assertEquals(compIdRepo.findAll(spec), Vector(allCompIdRows(0)))
+
+  test("composite id findAll (Spec) (tupled)"):
+    xa().connect:
+      val spec =
+        Spec[CompIdRow].where(
+          sql"${compIdTupled.b} = 1 AND ${compIdTupled.d} = 'first'"
+        )
+      assertEquals(compIdRepoTupled.findAll(spec), Vector(allCompIdRows(0)))
 
   test("composite id findById"):
     xa().connect:
-      assert(pointRepo.findById(PointId(1, 1)).get == allPoints(0))
-      assert(pointRepo.findById(PointId(1, 2)).get == allPoints(1))
-      assert(pointRepo.findById(PointId(2, 2)).isEmpty)
+      assert(compIdRepo.findById(CompId(1, "first")).get == allCompIdRows(0))
+      assert(compIdRepo.findById(CompId(2, "second")).get == allCompIdRows(1))
+      assert(compIdRepo.findById(CompId(9, "missing")).isEmpty)
 
   test("composite id findById (tupled)"):
     xa().connect:
-      assert(pointRepoTupled.findById((1, 1)).get == allPoints(0))
-      assert(pointRepoTupled.findById((1, 2)).get == allPoints(1))
-      assert(pointRepoTupled.findById((2, 2)).isEmpty)
-
-  test("non-leading composite id lookup"):
-    xa().connect:
-      assert(compIdRepo.existsById(CompId(1, "first")))
-      assertEquals(
-        compIdRepo.findById(CompId(2, "second")),
-        Some(allCompIdRows(1))
-      )
-      assert(!compIdRepo.existsById(CompId(9, "missing")))
-      assertEquals(compIdRepo.findById(CompId(9, "missing")), None)
-
-  test("non-leading composite id findAllById"):
-    assume(dbType != ClickhouseDbType)
-    assume(dbType != MySqlDbType)
-    assume(dbType != OracleDbType)
-    assume(dbType != SqliteDbType)
-    xa().connect:
-      assertEquals(
-        compIdRepo
-          .findAllById(Vector(CompId(1, "first"), CompId(3, "third")))
-          .toSet,
-        Set(allCompIdRows(0), allCompIdRows(2))
-      )
-      assertEquals(compIdRepo.findAllById(Vector.empty), Vector.empty)
+      assert(compIdRepoTupled.findById((1, "first")).get == allCompIdRows(0))
+      assert(compIdRepoTupled.findById((2, "second")).get == allCompIdRows(1))
+      assert(compIdRepoTupled.findById((9, "missing")).isEmpty)
 
   test("composite id findAllById"):
     assume(dbType != ClickhouseDbType)
@@ -107,14 +74,18 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
     assume(dbType != SqliteDbType)
     xa().connect:
       assertEquals(
-        pointRepo.findAllById(Vector(PointId(1, 1), PointId(1, 2))),
-        allPoints
+        compIdRepo.findAllById(
+          Vector(CompId(1, "first"), CompId(2, "second"))
+        ),
+        Vector(allCompIdRows(0), allCompIdRows(1))
       )
       assertEquals(
-        pointRepo.findAllById(Vector(PointId(1, 1), PointId(9, 9))),
-        Vector(allPoints(0))
+        compIdRepo.findAllById(
+          Vector(CompId(1, "first"), CompId(9, "missing"))
+        ),
+        Vector(allCompIdRows(0))
       )
-      assertEquals(pointRepo.findAllById(Vector.empty), Vector.empty)
+      assertEquals(compIdRepo.findAllById(Vector.empty), Vector.empty)
 
   test("composite id findAllById (tupled)"):
     assume(dbType != ClickhouseDbType)
@@ -123,278 +94,290 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
     assume(dbType != SqliteDbType)
     xa().connect:
       assertEquals(
-        pointRepoTupled.findAllById(Vector((1, 1), (1, 2))),
-        allPoints
+        compIdRepoTupled.findAllById(
+          Vector((1, "first"), (2, "second"))
+        ),
+        Vector(allCompIdRows(0), allCompIdRows(1))
       )
       assertEquals(
-        pointRepoTupled.findAllById(Vector((1, 1), (9, 9))),
-        Vector(allPoints(0))
+        compIdRepoTupled.findAllById(
+          Vector((1, "first"), (9, "missing"))
+        ),
+        Vector(allCompIdRows(0))
       )
-      assertEquals(pointRepoTupled.findAllById(Vector.empty), Vector.empty)
+      assertEquals(compIdRepoTupled.findAllById(Vector.empty), Vector.empty)
 
   // Repo methods
 
   test("composite id delete"):
     xa().connect:
-      val p = pointRepo.findById(PointId(1, 1)).get
-      pointRepo.delete(p)
-      assert(pointRepo.count == 1L)
-      assert(pointRepo.findById(PointId(1, 1)).isEmpty)
+      val row = compIdRepo.findById(CompId(1, "first")).get
+      compIdRepo.delete(row)
+      assert(compIdRepo.count == 2L)
+      assert(compIdRepo.findById(CompId(1, "first")).isEmpty)
 
   test("composite id delete (tupled)"):
     xa().connect:
-      val p = pointRepoTupled.findById((1, 1)).get
-      pointRepoTupled.delete(p)
-      assert(pointRepoTupled.count == 1L)
-      assert(pointRepoTupled.findById((1, 1)).isEmpty)
+      val row = compIdRepoTupled.findById((1, "first")).get
+      compIdRepoTupled.delete(row)
+      assert(compIdRepoTupled.count == 2L)
+      assert(compIdRepoTupled.findById((1, "first")).isEmpty)
 
   test("composite id deleteById"):
     xa().connect:
-      pointRepo.deleteById(PointId(1, 1))
-      assert(pointRepo.count == 1L)
-      assert(pointRepo.findById(PointId(1, 1)).isEmpty)
-      assert(pointRepo.findById(PointId(1, 2)).isDefined)
+      compIdRepo.deleteById(CompId(1, "first"))
+      assert(compIdRepo.count == 2L)
+      assert(compIdRepo.findById(CompId(1, "first")).isEmpty)
+      assert(compIdRepo.findById(CompId(2, "second")).isDefined)
 
   test("composite id deleteById (tupled)"):
     xa().connect:
-      pointRepoTupled.deleteById((1, 1))
-      assert(pointRepoTupled.count == 1L)
-      assert(pointRepoTupled.findById((1, 1)).isEmpty)
-      assert(pointRepoTupled.findById((1, 2)).isDefined)
-
-  test("non-leading composite id deleteById"):
-    xa().connect:
-      compIdRepo.deleteById(CompId(2, "second"))
-      assertEquals(compIdRepo.count, 2L)
-      assert(!compIdRepo.existsById(CompId(2, "second")))
-      assertEquals(
-        compIdRepo.findAll.toSet,
-        Set(allCompIdRows(0), allCompIdRows(2))
-      )
+      compIdRepoTupled.deleteById((1, "first"))
+      assert(compIdRepoTupled.count == 2L)
+      assert(compIdRepoTupled.findById((1, "first")).isEmpty)
+      assert(compIdRepoTupled.findById((2, "second")).isDefined)
 
   test("composite id deleteAll"):
     xa().connect:
-      val p1 = pointRepo.findById(PointId(1, 1)).get
-      val p2 = pointRepo.findById(PointId(1, 2)).get
-      val result = pointRepo.deleteAll(Vector(p1, p2))
+      val row1 = compIdRepo.findById(CompId(1, "first")).get
+      val row2 = compIdRepo.findById(CompId(2, "second")).get
+      val result = compIdRepo.deleteAll(Vector(row1, row2))
       assert(result == BatchUpdateResult.Success(2))
-      assert(pointRepo.count == 0L)
+      assert(compIdRepo.count == 1L)
 
   test("composite id deleteAll (tupled)"):
     xa().connect:
-      val p1 = pointRepoTupled.findById((1, 1)).get
-      val p2 = pointRepoTupled.findById((1, 2)).get
-      val result = pointRepoTupled.deleteAll(Vector(p1, p2))
+      val row1 = compIdRepoTupled.findById((1, "first")).get
+      val row2 = compIdRepoTupled.findById((2, "second")).get
+      val result = compIdRepoTupled.deleteAll(Vector(row1, row2))
       assert(result == BatchUpdateResult.Success(2))
-      assert(pointRepoTupled.count == 0L)
+      assert(compIdRepoTupled.count == 1L)
 
   test("composite id deleteAllById"):
     xa().connect:
-      val result = pointRepo.deleteAllById(Vector(PointId(1, 1), PointId(1, 2)))
+      val result = compIdRepo.deleteAllById(
+        Vector(CompId(1, "first"), CompId(2, "second"))
+      )
       assert(result == BatchUpdateResult.Success(2))
-      assert(pointRepo.count == 0L)
-      assert(pointRepo.findAll.isEmpty)
+      assert(compIdRepo.count == 1L)
+      assertEquals(compIdRepo.findAll, Vector(allCompIdRows(2)))
 
   test("composite id deleteAllById (tupled)"):
     xa().connect:
-      val result = pointRepoTupled.deleteAllById(Vector((1, 1), (1, 2)))
+      val result = compIdRepoTupled.deleteAllById(
+        Vector((1, "first"), (2, "second"))
+      )
       assert(result == BatchUpdateResult.Success(2))
-      assert(pointRepoTupled.count == 0L)
-      assert(pointRepoTupled.findAll.isEmpty)
+      assert(compIdRepoTupled.count == 1L)
+      assertEquals(compIdRepoTupled.findAll, Vector(allCompIdRows(2)))
 
   test("composite id deleteAllById partial"):
     xa().connect:
-      val result = pointRepo.deleteAllById(Vector(PointId(1, 1), PointId(9, 9)))
+      val result = compIdRepo.deleteAllById(
+        Vector(CompId(1, "first"), CompId(9, "missing"))
+      )
       if dbType == ClickhouseDbType then
         assertEquals(result, BatchUpdateResult.Success(2))
       else assertEquals(result, BatchUpdateResult.Success(1))
-      assert(pointRepo.count == 1L)
-      assert(pointRepo.findById(PointId(1, 1)).isEmpty)
-      assert(pointRepo.findById(PointId(1, 2)).isDefined)
+      assert(compIdRepo.count == 2L)
+      assert(compIdRepo.findById(CompId(1, "first")).isEmpty)
+      assert(compIdRepo.findById(CompId(2, "second")).isDefined)
 
   test("composite id deleteAllById partial (tupled)"):
     xa().connect:
-      val result = pointRepoTupled.deleteAllById(Vector((1, 1), (9, 9)))
+      val result = compIdRepoTupled.deleteAllById(
+        Vector((1, "first"), (9, "missing"))
+      )
       if dbType == ClickhouseDbType then
         assertEquals(result, BatchUpdateResult.Success(2))
       else assertEquals(result, BatchUpdateResult.Success(1))
-      assert(pointRepoTupled.count == 1L)
-      assert(pointRepoTupled.findById((1, 1)).isEmpty)
-      assert(pointRepoTupled.findById((1, 2)).isDefined)
+      assert(compIdRepoTupled.count == 2L)
+      assert(compIdRepoTupled.findById((1, "first")).isEmpty)
+      assert(compIdRepoTupled.findById((2, "second")).isDefined)
 
   test("composite id insert"):
     xa().connect:
-      pointRepo.insert(Point(2, 1, "new point"))
-      assert(pointRepo.count == 3L)
-      val inserted = pointRepo.findById(PointId(2, 1)).get
-      assert(inserted.x == 2)
-      assert(inserted.y == 1)
-      assert(inserted.descr == "new point")
+      compIdRepo.insert(CompIdRow("delta", 4, 40, "fourth"))
+      assert(compIdRepo.count == 4L)
+      val inserted = compIdRepo.findById(CompId(4, "fourth")).get
+      assert(inserted.a == "delta")
+      assert(inserted.b == 4)
+      assert(inserted.c == 40)
+      assert(inserted.d == "fourth")
 
   test("composite id insert (tupled)"):
     xa().connect:
-      pointRepoTupled.insert(Point(2, 1, "new point"))
-      assert(pointRepoTupled.count == 3L)
-      val inserted = pointRepoTupled.findById((2, 1)).get
-      assert(inserted.x == 2)
-      assert(inserted.y == 1)
-      assert(inserted.descr == "new point")
+      compIdRepoTupled.insert(CompIdRow("delta", 4, 40, "fourth"))
+      assert(compIdRepoTupled.count == 4L)
+      val inserted = compIdRepoTupled.findById((4, "fourth")).get
+      assert(inserted.a == "delta")
+      assert(inserted.b == 4)
+      assert(inserted.c == 40)
+      assert(inserted.d == "fourth")
 
   test("composite id insertAll"):
     xa().connect:
-      val newPoints = Vector(
-        Point(2, 1, "point A"),
-        Point(2, 2, "point B")
+      val newRows = Vector(
+        CompIdRow("delta", 4, 40, "fourth"),
+        CompIdRow("epsilon", 5, 50, "fifth")
       )
-      pointRepo.insertAll(newPoints)
-      assert(pointRepo.count == 4L)
-      // Use findById individually since findAllById doesn't support composite IDs on H2
-      val p1 = pointRepo.findById(PointId(2, 1)).get
-      val p2 = pointRepo.findById(PointId(2, 2)).get
-      assert(p1.descr == "point A")
-      assert(p2.descr == "point B")
+      compIdRepo.insertAll(newRows)
+      assert(compIdRepo.count == 5L)
+      val row1 = compIdRepo.findById(CompId(4, "fourth")).get
+      val row2 = compIdRepo.findById(CompId(5, "fifth")).get
+      assert(row1.a == "delta")
+      assert(row2.a == "epsilon")
 
   test("composite id insertAll (tupled)"):
     xa().connect:
-      val newPoints = Vector(
-        Point(2, 1, "point A"),
-        Point(2, 2, "point B")
+      val newRows = Vector(
+        CompIdRow("delta", 4, 40, "fourth"),
+        CompIdRow("epsilon", 5, 50, "fifth")
       )
-      pointRepoTupled.insertAll(newPoints)
-      assert(pointRepoTupled.count == 4L)
-      val p1 = pointRepoTupled.findById((2, 1)).get
-      val p2 = pointRepoTupled.findById((2, 2)).get
-      assert(p1.descr == "point A")
-      assert(p2.descr == "point B")
+      compIdRepoTupled.insertAll(newRows)
+      assert(compIdRepoTupled.count == 5L)
+      val row1 = compIdRepoTupled.findById((4, "fourth")).get
+      val row2 = compIdRepoTupled.findById((5, "fifth")).get
+      assert(row1.a == "delta")
+      assert(row2.a == "epsilon")
 
   test("composite id insertReturning"):
     assume(dbType != MySqlDbType)
     assume(dbType != SqliteDbType)
     xa().connect:
-      val inserted = pointRepo.insertReturning(Point(2, 1, "returned"))
-      assert(inserted.descr == "returned")
-      assert(pointRepo.findById(PointId(2, 1)).get == inserted)
+      val inserted =
+        compIdRepo.insertReturning(CompIdRow("delta", 4, 40, "fourth"))
+      assert(inserted.a == "delta")
+      assert(compIdRepo.findById(CompId(4, "fourth")).get == inserted)
 
   test("composite id insertReturning (tupled)"):
     assume(dbType != MySqlDbType)
     assume(dbType != SqliteDbType)
     xa().connect:
-      val inserted = pointRepoTupled.insertReturning(Point(2, 1, "returned"))
-      assert(inserted.descr == "returned")
-      assert(pointRepoTupled.findById((2, 1)).get == inserted)
+      val inserted = compIdRepoTupled.insertReturning(
+        CompIdRow("delta", 4, 40, "fourth")
+      )
+      assert(inserted.a == "delta")
+      assert(compIdRepoTupled.findById((4, "fourth")).get == inserted)
 
   test("composite id insertAllReturning"):
     assume(dbType != MySqlDbType)
     assume(dbType != SqliteDbType)
     xa().connect:
-      val newPoints = Vector(
-        Point(2, 1, "first"),
-        Point(2, 2, "second")
+      val newRows = Vector(
+        CompIdRow("delta", 4, 40, "fourth"),
+        CompIdRow("epsilon", 5, 50, "fifth")
       )
-      val returned = pointRepo.insertAllReturning(newPoints)
+      val returned = compIdRepo.insertAllReturning(newRows)
       assert(returned.size == 2)
-      assert(returned.map(_.descr) == Vector("first", "second"))
+      assert(returned.map(_.a) == Vector("delta", "epsilon"))
 
   test("composite id insertAllReturning (tupled)"):
     assume(dbType != MySqlDbType)
     assume(dbType != SqliteDbType)
     xa().connect:
-      val newPoints = Vector(
-        Point(2, 1, "first"),
-        Point(2, 2, "second")
+      val newRows = Vector(
+        CompIdRow("delta", 4, 40, "fourth"),
+        CompIdRow("epsilon", 5, 50, "fifth")
       )
-      val returned = pointRepoTupled.insertAllReturning(newPoints)
+      val returned = compIdRepoTupled.insertAllReturning(newRows)
       assert(returned.size == 2)
-      assert(returned.map(_.descr) == Vector("first", "second"))
+      assert(returned.map(_.a) == Vector("delta", "epsilon"))
 
   test("composite id update"):
     assume(dbType != ClickhouseDbType)
     xa().connect:
-      val p = pointRepo.findById(PointId(1, 1)).get
-      val updated = p.copy(descr = "updated hello")
-      pointRepo.update(updated)
-      val fetched = pointRepo.findById(PointId(1, 1)).get
-      assert(fetched.descr == "updated hello")
-      assert(fetched.x == 1)
-      assert(fetched.y == 1)
+      val row = compIdRepo.findById(CompId(1, "first")).get
+      val updated = row.copy(a = "updated alpha")
+      compIdRepo.update(updated)
+      val fetched = compIdRepo.findById(CompId(1, "first")).get
+      assert(fetched.a == "updated alpha")
+      assert(fetched.b == 1)
+      assert(fetched.d == "first")
       assert(fetched == updated)
 
   test("composite id update (tupled)"):
     assume(dbType != ClickhouseDbType)
     xa().connect:
-      val p = pointRepoTupled.findById((1, 1)).get
-      val updated = p.copy(descr = "updated hello")
-      pointRepoTupled.update(updated)
-      val fetched = pointRepoTupled.findById((1, 1)).get
-      assert(fetched.descr == "updated hello")
-      assert(fetched.x == 1)
-      assert(fetched.y == 1)
+      val row = compIdRepoTupled.findById((1, "first")).get
+      val updated = row.copy(a = "updated alpha")
+      compIdRepoTupled.update(updated)
+      val fetched = compIdRepoTupled.findById((1, "first")).get
+      assert(fetched.a == "updated alpha")
+      assert(fetched.b == 1)
+      assert(fetched.d == "first")
       assert(fetched == updated)
 
   test("composite id updateAll"):
     assume(dbType != ClickhouseDbType)
     xa().connect:
-      val p1 = pointRepo.findById(PointId(1, 1)).get
-      val p2 = pointRepo.findById(PointId(1, 2)).get
+      val row1 = compIdRepo.findById(CompId(1, "first")).get
+      val row2 = compIdRepo.findById(CompId(2, "second")).get
       val updated = Vector(
-        p1.copy(descr = "new hello"),
-        p2.copy(descr = "new world")
+        row1.copy(a = "updated alpha"),
+        row2.copy(a = "updated beta")
       )
-      val result = pointRepo.updateAll(updated)
+      val result = compIdRepo.updateAll(updated)
       assert(result == BatchUpdateResult.Success(2))
-      assert(pointRepo.findById(PointId(1, 1)).get.descr == "new hello")
-      assert(pointRepo.findById(PointId(1, 2)).get.descr == "new world")
+      assert(compIdRepo.findById(CompId(1, "first")).get.a == "updated alpha")
+      assert(compIdRepo.findById(CompId(2, "second")).get.a == "updated beta")
 
   test("composite id updateAll (tupled)"):
     assume(dbType != ClickhouseDbType)
     xa().connect:
-      val p1 = pointRepoTupled.findById((1, 1)).get
-      val p2 = pointRepoTupled.findById((1, 2)).get
+      val row1 = compIdRepoTupled.findById((1, "first")).get
+      val row2 = compIdRepoTupled.findById((2, "second")).get
       val updated = Vector(
-        p1.copy(descr = "new hello"),
-        p2.copy(descr = "new world")
+        row1.copy(a = "updated alpha"),
+        row2.copy(a = "updated beta")
       )
-      val result = pointRepoTupled.updateAll(updated)
+      val result = compIdRepoTupled.updateAll(updated)
       assert(result == BatchUpdateResult.Success(2))
-      assert(pointRepoTupled.findById((1, 1)).get.descr == "new hello")
-      assert(pointRepoTupled.findById((1, 2)).get.descr == "new world")
+      assert(
+        compIdRepoTupled.findById((1, "first")).get.a == "updated alpha"
+      )
+      assert(
+        compIdRepoTupled.findById((2, "second")).get.a == "updated beta"
+      )
 
   // Sql interpolator tests
 
   test("composite id table info aliasing"):
     xa().connect:
-      val pAlias = point.alias("p")
+      val rowAlias = compId.alias("r")
       // Verify the SQL is generated correctly with alias
       val query =
-        sql"select ${pAlias.all} from $pAlias where ${pAlias.x} = 1 and ${pAlias.y} = 1"
-      assert(query.sqlString.contains("p.x") || query.sqlString.contains("p.y"))
-      val points = query.query[Point].run()
-      assert(points == Vector(allPoints(0)))
+        sql"select ${rowAlias.all} from $rowAlias where ${rowAlias.b} = 1 and ${rowAlias.d} = 'first'"
+      assert(query.sqlString.contains("r.b"))
+      assert(query.sqlString.contains("r.d"))
+      val rows = query.query[CompIdRow].run()
+      assert(rows == Vector(allCompIdRows(0)))
 
   test("composite id table info aliasing (tupled)"):
     xa().connect:
-      val pAlias = pointTupled.alias("p")
+      val rowAlias = compIdTupled.alias("r")
       // Verify the SQL is generated correctly with alias
       val query =
-        sql"select ${pAlias.all} from $pAlias where ${pAlias.x} = 1 and ${pAlias.y} = 1"
-      assert(query.sqlString.contains("p.x") || query.sqlString.contains("p.y"))
-      val points = query.query[Point].run()
-      assert(points == Vector(allPoints(0)))
+        sql"select ${rowAlias.all} from $rowAlias where ${rowAlias.b} = 1 and ${rowAlias.d} = 'first'"
+      assert(query.sqlString.contains("r.b"))
+      assert(query.sqlString.contains("r.d"))
+      val rows = query.query[CompIdRow].run()
+      assert(rows == Vector(allCompIdRows(0)))
 
   test("composite id TableInfo idIndices"):
     xa().connect:
       assert(
-        point.idColumns.columnNames
+        compId.idColumns.columnNames
           .map(_.scalaName)
-          .sameElements(Vector("x", "y"))
+          .sameElements(Vector("b", "d"))
       )
 
   test("composite id TableInfo idIndices (tupled)"):
     xa().connect:
       assert(
-        pointTupled.idColumns.columnNames
+        compIdTupled.idColumns.columnNames
           .map(_.scalaName)
-          .sameElements(Vector("x", "y"))
+          .sameElements(Vector("b", "d"))
       )
 
 end compositeIdTests
