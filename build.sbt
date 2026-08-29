@@ -62,7 +62,7 @@ lazy val magnum = project
       "com.oracle.database.jdbc" % "ojdbc11" % "21.9.0.0" % Test,
       "com.dimafeng" %% "testcontainers-scala-clickhouse" % testcontainersVersion % Test,
       "com.clickhouse" % "clickhouse-jdbc" % "0.6.0" % Test classifier "http",
-      "org.xerial" % "sqlite-jdbc" % "3.46.1.3" % Test
+      "org.xerial" % "sqlite-jdbc" % "3.53.4.0" % Test
     )
   )
 
