@@ -78,7 +78,7 @@ lazy val magnumPg = project
       "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion % Test,
       "io.circe" %% "circe-core" % circeVersion % Test,
       "io.circe" %% "circe-parser" % circeVersion % Test,
-      "org.scala-lang.modules" %% "scala-xml" % "2.3.0" % Test
+      "org.scala-lang.modules" %% "scala-xml" % "2.4.0" % Test
     )
   )
 
