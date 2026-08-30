@@ -58,8 +58,8 @@ lazy val magnum = project
       "com.dimafeng" %% "testcontainers-scala-mysql" % testcontainersVersion % Test,
       "com.mysql" % "mysql-connector-j" % "9.0.0" % Test,
       "com.h2database" % "h2" % "2.4.240" % Test,
-      "com.dimafeng" %% "testcontainers-scala-oracle-xe" % testcontainersVersion % Test,
-      "com.oracle.database.jdbc" % "ojdbc11" % "21.9.0.0" % Test,
+      "org.testcontainers" % "testcontainers-oracle-free" % "2.0.3" % Test,
+      "com.oracle.database.jdbc" % "ojdbc17" % "23.26.3.0.0" % Test,
       "com.dimafeng" %% "testcontainers-scala-clickhouse" % testcontainersVersion % Test,
       "com.clickhouse" % "clickhouse-jdbc" % "0.6.0" % Test classifier "http",
       "org.xerial" % "sqlite-jdbc" % "3.53.4.0" % Test
