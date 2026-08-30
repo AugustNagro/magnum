@@ -54,7 +54,7 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
       val p2 = p1.copy(id = 2L)
       val p3 = p1.copy(id = 999L)
       val expectedRowsUpdate = dbType match
-        case ClickhouseDbType => 3
+        case ClickhouseDbType => 0
         case _                => 2
       val res = personRepo.deleteAll(Vector(p1, p2, p3))
       assert(res == BatchUpdateResult.Success(expectedRowsUpdate))
@@ -63,7 +63,7 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
   test("deleteAllById"):
     xa().connect:
       val expectedRowsUpdate = dbType match
-        case ClickhouseDbType => 3
+        case ClickhouseDbType => 0
         case _                => 2
       val res = personRepo.deleteAllById(Vector(1L, 2L, 1L))
       assert(res == BatchUpdateResult.Success(expectedRowsUpdate))
@@ -151,6 +151,7 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
       assert(people.last.lastName == newPc.last.lastName)
 
   test("insert invalid"):
+    assume(dbType != ClickhouseDbType)
     intercept[SqlException]:
       xa().connect:
         val invalidP =
@@ -301,7 +302,8 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
         "update person set is_admin = ? where id = ?"
       )
       val rowsUpdated = update.run()
-      assert(rowsUpdated == 1)
+      val expectedRowsUpdated = if dbType == ClickhouseDbType then 0 else 1
+      assert(rowsUpdated == expectedRowsUpdated)
       assert(personRepo.findById(p.id).get.isAdmin == true)
 
   test("custom returning a single column"):

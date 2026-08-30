@@ -1,17 +1,44 @@
 import com.augustnagro.magnum.*
-import com.clickhouse.client.config.ClickHouseDefaults
-import com.clickhouse.jdbc.ClickHouseDataSource
 import com.dimafeng.testcontainers.ClickHouseContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import munit.{AnyFixture, FunSuite, Location}
 import org.testcontainers.utility.DockerImageName
 import shared.*
 
+import java.io.PrintWriter
 import java.nio.file.{Files, Path}
+import java.sql.{Connection, DriverManager}
+import java.time.{LocalDateTime, LocalTime}
+import java.util.logging.Logger
 import java.util.{Properties, UUID}
+import javax.sql.DataSource
 import scala.util.Using
 
+private final class DriverManagerDataSource(url: String, properties: Properties)
+    extends DataSource:
+  override def getConnection: Connection =
+    DriverManager.getConnection(url, properties)
+
+  override def getConnection(username: String, password: String): Connection =
+    DriverManager.getConnection(url, username, password)
+
+  override def getLogWriter: PrintWriter = DriverManager.getLogWriter
+  override def setLogWriter(writer: PrintWriter): Unit = DriverManager.setLogWriter(writer)
+  override def getLoginTimeout: Int = DriverManager.getLoginTimeout
+  override def setLoginTimeout(seconds: Int): Unit = DriverManager.setLoginTimeout(seconds)
+  override def getParentLogger: Logger = Logger.getLogger("com.clickhouse.jdbc")
+  override def unwrap[T](iface: Class[T]): T =
+    if iface.isInstance(this) then iface.cast(this)
+    else throw java.sql.SQLException(s"Not a wrapper for ${iface.getName}")
+  override def isWrapperFor(iface: Class[?]): Boolean = iface.isInstance(this)
+
 class ClickHouseTests extends FunSuite, TestContainersFixtures:
+
+  given DbCodec[LocalTime] =
+    DbCodec[String].biMap(LocalTime.parse, _.toString)
+
+  given DbCodec[LocalDateTime] =
+    DbCodec[String].biMap(value => LocalDateTime.parse(value.replace(' ', 'T')), _.toString)
 
   sharedTests(this, ClickhouseDbType, xa)
 
@@ -25,7 +52,7 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
   val clickHouseContainer = ForAllContainerFixture(
     ClickHouseContainer
       .Def(dockerImageName =
-        DockerImageName.parse("clickhouse/clickhouse-server:24.3.12.75")
+        DockerImageName.parse("clickhouse/clickhouse-server:26.3.25.2")
       )
       .createContainer()
   )
@@ -36,21 +63,30 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
   def xa(): Transactor =
     val clickHouse = clickHouseContainer()
     val props = Properties()
-    props.put(ClickHouseDefaults.USER.getKey, clickHouse.username)
-    props.put(ClickHouseDefaults.PASSWORD.getKey, clickHouse.password)
-    val ds = ClickHouseDataSource(clickHouse.jdbcUrl, props)
-    val tableDDLs = Vector(
+    props.put("user", clickHouse.username)
+    props.put("password", clickHouse.password)
+    props.put("jdbc_ignore_unsupported_values", "true")
+    val ds = DriverManagerDataSource(clickHouse.jdbcUrl, props)
+    val tableStatements = Vector(
       "clickhouse/car.sql",
       "clickhouse/no-id.sql",
       "clickhouse/person.sql",
       "clickhouse/big-dec.sql",
       "clickhouse/my-time.sql"
-    ).map(p => Files.readString(Path.of(getClass.getResource(p).toURI)))
+    ).flatMap(p =>
+      Files
+        .readString(Path.of(getClass.getResource(p).toURI))
+        .split(';')
+        .map(_.trim)
+        .filter(_.nonEmpty)
+    )
     Using
       .Manager(use =>
         val con = use(ds.getConnection)
         val stmt = use(con.createStatement)
-        for ddl <- tableDDLs do stmt.execute(ddl)
+        for sql <- tableStatements do stmt.execute(sql)
+        stmt.execute("alter table person modify setting enable_block_number_column = 1")
+        stmt.execute("alter table person modify setting enable_block_offset_column = 1")
       )
       .get
     Transactor(ds)

@@ -17,7 +17,8 @@ def dateTimeTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
     Location,
     DbCodec[OffsetDateTime],
     DbCodec[LocalDate],
-    DbCodec[LocalTime]
+    DbCodec[LocalTime],
+    DbCodec[LocalDateTime]
 ): Unit =
   import suite.*
 
