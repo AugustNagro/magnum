@@ -31,10 +31,11 @@ object ClickhouseDbType extends DbType:
       "ClickHouse does not support generated keys, so EC must equal E"
     )
     val idNames = idIndices.map(eElemNamesSql)
+    val hasId = idIndices.nonEmpty
     val selectKeys = eElemNamesSql.mkString(", ")
     val ecInsertKeys = ecElemNamesSql.mkString("(", ", ", ")")
     val idCodecs =
-      if idIndices.nonEmpty then idIndices.map(eElemCodecs).toVector
+      if hasId then idIndices.map(eElemCodecs).toVector
       else Vector(idCodec)
 
     val idWhereClause = idNames match
@@ -65,6 +66,42 @@ object ClickhouseDbType extends DbType:
       idCodec.writeSingle(id, ps, pos)
       pos + idCodec.cols.length
 
+    val existsByIdImpl: (ID, DbCon) => Boolean =
+      if hasId then
+        (id, con) =>
+          Frag(existsByIdSql, IArray(id), idWriter(id))
+            .query[Int]
+            .run()(using con)
+            .nonEmpty
+      else (_, _) => false
+
+    val findByIdImpl: (ID, DbCon) => Option[E] =
+      if hasId then
+        (id, con) =>
+          Frag(findByIdSql, IArray(id), idWriter(id))
+            .query[E]
+            .run()(using con)
+            .headOption
+      else (_, _) => None
+
+    val deleteByIdImpl: (ID, DbCon) => Unit =
+      if hasId then
+        (id, con) =>
+          Frag(deleteByIdSql, IArray(id), idWriter(id)).update
+            .run()(using con)
+          ()
+      else (_, _) => ()
+
+    val deleteAllByIdImpl: (Iterable[ID], DbCon) => BatchUpdateResult =
+      if hasId then
+        (ids, con) =>
+          given DbCon = con
+          handleQuery(deleteByIdSql, ids):
+            Using(con.connection.prepareStatement(deleteByIdSql)): ps =>
+              idCodec.write(ids, ps)
+              timed(batchUpdateResult(ps.executeBatch()))
+      else (_, _) => BatchUpdateResult.Success(0)
+
     def entityToId(entity: E): ID =
       val product = entity.asInstanceOf[Product]
       val idValues = idIndices.map(i => product.productElement(i))
@@ -73,22 +110,16 @@ object ClickhouseDbType extends DbType:
     new RepoDefaults[EC, E, ID]:
       def count(using con: DbCon): Long = countQuery.run().head
 
-      def existsById(id: ID)(using DbCon): Boolean =
-        Frag(existsByIdSql, IArray(id), idWriter(id))
-          .query[Int]
-          .run()
-          .nonEmpty
+      def existsById(id: ID)(using con: DbCon): Boolean =
+        existsByIdImpl(id, con)
 
       def findAll(using DbCon): Vector[E] = findAllQuery.run()
 
       def findAll(spec: Spec[E])(using DbCon): Vector[E] =
         SpecImpl.Default.findAll(spec, tableNameSql)
 
-      def findById(id: ID)(using DbCon): Option[E] =
-        Frag(findByIdSql, IArray(id), idWriter(id))
-          .query[E]
-          .run()
-          .headOption
+      def findById(id: ID)(using con: DbCon): Option[E] =
+        findByIdImpl(id, con)
 
       def findAllById(ids: Iterable[ID])(using DbCon): Vector[E] =
         throw UnsupportedOperationException()
@@ -96,9 +127,8 @@ object ClickhouseDbType extends DbType:
       def delete(entity: E)(using DbCon): Unit =
         deleteById(entityToId(entity))
 
-      def deleteById(id: ID)(using DbCon): Unit =
-        Frag(deleteByIdSql, IArray(id), idWriter(id)).update
-          .run()
+      def deleteById(id: ID)(using con: DbCon): Unit =
+        deleteByIdImpl(id, con)
 
       def truncate()(using DbCon): Unit =
         truncateUpdate.run()
@@ -109,10 +139,7 @@ object ClickhouseDbType extends DbType:
       def deleteAllById(ids: Iterable[ID])(using
           con: DbCon
       ): BatchUpdateResult =
-        handleQuery(deleteByIdSql, ids):
-          Using(con.connection.prepareStatement(deleteByIdSql)): ps =>
-            idCodec.write(ids, ps)
-            timed(batchUpdateResult(ps.executeBatch()))
+        deleteAllByIdImpl(ids, con)
 
       def insert(entityCreator: EC)(using con: DbCon): Unit =
         handleQuery(insertSql, entityCreator):
