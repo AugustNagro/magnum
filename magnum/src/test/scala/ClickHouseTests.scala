@@ -6,7 +6,7 @@ import org.testcontainers.utility.DockerImageName
 import shared.*
 
 import java.io.PrintWriter
-import java.nio.file.{Files, Path}
+import java.nio.charset.StandardCharsets
 import java.sql.{Connection, DriverManager}
 import java.time.{LocalDateTime, LocalTime}
 import java.util.logging.Logger
@@ -79,8 +79,10 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
       "clickhouse/big-dec.sql",
       "clickhouse/my-time.sql"
     ).flatMap(p =>
-      Files
-        .readString(Path.of(getClass.getResource(p).toURI))
+      Using
+        .resource(getClass.getResourceAsStream(p))(stream =>
+          String(stream.readAllBytes(), StandardCharsets.UTF_8)
+        )
         .split(';')
         .map(_.trim)
         .filter(_.nonEmpty)

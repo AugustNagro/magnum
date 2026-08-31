@@ -3,7 +3,8 @@ import munit.FunSuite
 import org.h2.jdbcx.JdbcDataSource
 import shared.*
 
-import java.nio.file.{Files, Path}
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 import scala.util.Using
 import scala.util.Using.Manager
 
@@ -25,12 +26,17 @@ class H2Tests extends FunSuite:
       "/h2/no-id.sql",
       "/h2/big-dec.sql",
       "/h2/my-time.sql"
-    ).map(p => Files.readString(Path.of(getClass.getResource(p).toURI)))
+    ).map(p =>
+      Using.resource(getClass.getResourceAsStream(p))(stream =>
+        String(stream.readAllBytes(), StandardCharsets.UTF_8)
+      )
+    )
     Manager(use =>
       val con = use(ds.getConnection)
       val stmt = use(con.createStatement)
       for ddl <- tableDDLs do stmt.execute(ddl)
     )
     Transactor(ds)
+  end xa
 
 end H2Tests

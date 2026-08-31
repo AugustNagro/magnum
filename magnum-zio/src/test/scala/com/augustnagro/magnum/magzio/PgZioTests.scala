@@ -8,7 +8,7 @@ import org.postgresql.ds.PGSimpleDataSource
 import org.testcontainers.utility.DockerImageName
 import zio.{Scope, Unsafe, ZLayer}
 
-import java.nio.file.{Files, Path}
+import java.nio.charset.StandardCharsets
 import scala.util.Using
 import scala.util.Using.Manager
 
@@ -18,7 +18,7 @@ class PgZioTests extends FunSuite, TestContainersFixtures:
 
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
-      .Def(dockerImageName = DockerImageName.parse("postgres:17.0"))
+      .Def(dockerImageName = DockerImageName.parse("postgres:18.6"))
       .createContainer()
   )
 
@@ -37,7 +37,11 @@ class PgZioTests extends FunSuite, TestContainersFixtures:
       "/pg/my-user.sql",
       "/pg/no-id.sql",
       "/pg/big-dec.sql"
-    ).map(p => Files.readString(Path.of(getClass.getResource(p).toURI)))
+    ).map(p =>
+      Using.resource(getClass.getResourceAsStream(p))(stream =>
+        String(stream.readAllBytes(), StandardCharsets.UTF_8)
+      )
+    )
 
     Manager(use =>
       val con = use(ds.getConnection)
