@@ -23,9 +23,11 @@ private final class DriverManagerDataSource(url: String, properties: Properties)
     DriverManager.getConnection(url, username, password)
 
   override def getLogWriter: PrintWriter = DriverManager.getLogWriter
-  override def setLogWriter(writer: PrintWriter): Unit = DriverManager.setLogWriter(writer)
+  override def setLogWriter(writer: PrintWriter): Unit =
+    DriverManager.setLogWriter(writer)
   override def getLoginTimeout: Int = DriverManager.getLoginTimeout
-  override def setLoginTimeout(seconds: Int): Unit = DriverManager.setLoginTimeout(seconds)
+  override def setLoginTimeout(seconds: Int): Unit =
+    DriverManager.setLoginTimeout(seconds)
   override def getParentLogger: Logger = Logger.getLogger("com.clickhouse.jdbc")
   override def unwrap[T](iface: Class[T]): T =
     if iface.isInstance(this) then iface.cast(this)
@@ -38,7 +40,10 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
     DbCodec[String].biMap(LocalTime.parse, _.toString)
 
   given DbCodec[LocalDateTime] =
-    DbCodec[String].biMap(value => LocalDateTime.parse(value.replace(' ', 'T')), _.toString)
+    DbCodec[String].biMap(
+      value => LocalDateTime.parse(value.replace(' ', 'T')),
+      _.toString
+    )
 
   sharedTests(this, ClickhouseDbType, xa)
 
@@ -85,8 +90,12 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
         val con = use(ds.getConnection)
         val stmt = use(con.createStatement)
         for sql <- tableStatements do stmt.execute(sql)
-        stmt.execute("alter table person modify setting enable_block_number_column = 1")
-        stmt.execute("alter table person modify setting enable_block_offset_column = 1")
+        stmt.execute(
+          "alter table person modify setting enable_block_number_column = 1"
+        )
+        stmt.execute(
+          "alter table person modify setting enable_block_offset_column = 1"
+        )
       )
       .get
     Transactor(ds)

@@ -537,7 +537,7 @@ object DbCodec:
     import quotes.reflect.*
     Type.of[T] match
       case '[EmptyTuple] => '{ IArray.from(${ Expr.ofSeq(res) }) }
-      case '[t *: ts] =>
+      case '[t *: ts]    =>
         val tCodec = Expr.summon[DbCodec[t]].getOrElse {
           report.errorAndAbort(s"No DbCodec found for type ${Type.show[t]}")
         }
@@ -663,7 +663,7 @@ object DbCodec:
               val str = rs.getString(pos)
               nameMap.find((name, _) => name == str) match
                 case Some((_, v)) => v
-                case None =>
+                case None         =>
                   throw IllegalArgumentException(
                     str + " not convertible to " + $melExpr
                   )
@@ -671,7 +671,7 @@ object DbCodec:
               Option(rs.getString(pos)).map(str =>
                 nameMap.find((name, _) => name == str) match
                   case Some((_, v)) => v
-                  case None =>
+                  case None         =>
                     throw IllegalArgumentException(
                       str + " not convertible to " + $melExpr
                     )
@@ -679,7 +679,7 @@ object DbCodec:
             def writeSingle(entity: E, ps: PreparedStatement, pos: Int): Unit =
               nameMap.find((_, v) => v == entity) match
                 case Some((k, _)) => ps.setString(pos, k)
-                case None =>
+                case None         =>
                   throw IllegalArgumentException(
                     entity.toString + " not convertible to " + $melExpr
                   )

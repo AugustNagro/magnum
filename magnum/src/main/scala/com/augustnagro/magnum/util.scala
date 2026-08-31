@@ -192,7 +192,7 @@ def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
     batchUpdateResult(ps.executeBatch())
   ) match
     case Success(res) => res
-    case Failure(t) =>
+    case Failure(t)   =>
       throw SqlException(
         con.sqlLogger.exceptionMsg(
           SqlExceptionEvent(firstFrag.sqlString, firstFrag.params, t)
@@ -206,7 +206,7 @@ private val Log = System.getLogger("com.augustnagro.magnum")
 
 private def parseParams(params: Any): Iterator[Iterator[Any]] =
   params match
-    case p: Product => Iterator(p.productIterator)
+    case p: Product      => Iterator(p.productIterator)
     case it: Iterable[?] =>
       it.headOption match
         case Some(h: Product) =>
@@ -271,7 +271,7 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
   val table: Expr[Table] =
     DerivingUtil.tableAnnot[E] match
       case Some(table) => table
-      case None =>
+      case None        =>
         report.errorAndAbort(
           s"${TypeRepr.of[E].show} must have @Table annotation"
         )
@@ -299,14 +299,14 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
           val eElemNamesSql = eElemNames.map(elemName =>
             sqlNameAnnot[E](elemName) match
               case Some(sqlName) => '{ $sqlName.name }
-              case None =>
+              case None          =>
                 '{ $nameMapper.toColumnName(${ Expr(elemName) }) }
           )
           val ecElemNames = elemNames[ecMels]()
           val ecElemNamesSql = ecElemNames.map(elemName =>
             sqlNameAnnot[E](elemName) match
               case Some(sqlName) => '{ $sqlName.name }
-              case None =>
+              case None          =>
                 '{ $nameMapper.toColumnName(${ Expr(elemName) }) }
           )
           TableExprs(

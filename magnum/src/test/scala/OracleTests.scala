@@ -5,7 +5,10 @@ import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import munit.{AnyFixture, FunSuite}
 import oracle.jdbc.datasource.impl.OracleDataSource
 import org.testcontainers.oracle.{OracleContainer as JavaOracleContainer}
-import org.testcontainers.containers.wait.strategy.{WaitStrategy, WaitStrategyTarget}
+import org.testcontainers.containers.wait.strategy.{
+  WaitStrategy,
+  WaitStrategyTarget
+}
 import org.testcontainers.utility.DockerImageName
 import shared.*
 
@@ -205,30 +208,32 @@ class OracleTests extends FunSuite, TestContainersFixtures:
     s"jdbc:oracle:thin:@${oracle.host}:${oracle.mappedPort(1521)}/FREEPDB1"
 
   private def awaitOracleReady(oracle: OracleFreeContainer): Unit =
-    if !oracleReady then this.synchronized {
-      if !oracleReady then
-        val ds = OracleDataSource()
-        ds.setURL(jdbcUrl(oracle))
-        ds.setUser(oracle.container.getUsername)
-        ds.setPassword(oracle.container.getPassword)
-        ds.setLoginTimeout(5)
-        val deadline = System.nanoTime() + Duration.ofSeconds(240).toNanos()
-        var consecutiveSuccesses = 0
-        while consecutiveSuccesses < 5 && System.nanoTime() < deadline do
-          try
-            val querySucceeded = Using.Manager { use =>
-              val connection = use(ds.getConnection())
-              val statement = use(connection.createStatement())
-              val result = use(statement.executeQuery("select 1 from dual"))
-              result.next() && result.getInt(1) == 1
-            }.get
-            if querySucceeded then consecutiveSuccesses += 1
-            else consecutiveSuccesses = 0
-          catch
-            case _: Exception => consecutiveSuccesses = 0
-          if consecutiveSuccesses < 5 then Thread.sleep(1000)
-        if consecutiveSuccesses < 5 then
-          throw IllegalStateException("Timed out waiting for Oracle Free to finish initializing")
-        oracleReady = true
-    }
+    if !oracleReady then
+      this.synchronized {
+        if !oracleReady then
+          val ds = OracleDataSource()
+          ds.setURL(jdbcUrl(oracle))
+          ds.setUser(oracle.container.getUsername)
+          ds.setPassword(oracle.container.getPassword)
+          ds.setLoginTimeout(5)
+          val deadline = System.nanoTime() + Duration.ofSeconds(240).toNanos()
+          var consecutiveSuccesses = 0
+          while consecutiveSuccesses < 5 && System.nanoTime() < deadline do
+            try
+              val querySucceeded = Using.Manager { use =>
+                val connection = use(ds.getConnection())
+                val statement = use(connection.createStatement())
+                val result = use(statement.executeQuery("select 1 from dual"))
+                result.next() && result.getInt(1) == 1
+              }.get
+              if querySucceeded then consecutiveSuccesses += 1
+              else consecutiveSuccesses = 0
+            catch case _: Exception => consecutiveSuccesses = 0
+            if consecutiveSuccesses < 5 then Thread.sleep(1000)
+          if consecutiveSuccesses < 5 then
+            throw IllegalStateException(
+              "Timed out waiting for Oracle Free to finish initializing"
+            )
+          oracleReady = true
+      }
 end OracleTests
