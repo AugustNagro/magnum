@@ -267,7 +267,7 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
   import quotes.reflect.*
   assertECIsSubsetOfE[EC, E]
 
-  val idIndex = idAnnotIndex[E]
+  val idIndices = idAnnotIndices[E, ID]
   val table: Expr[Table] =
     DerivingUtil.tableAnnot[E] match
       case Some(table) => table
@@ -317,7 +317,7 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
             eElemNamesSql,
             ecElemNames,
             ecElemNamesSql,
-            idIndex
+            idIndices
           )
         case _ =>
           report.errorAndAbort(
@@ -330,19 +330,22 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
   end match
 end tableExprs
 
-private def idAnnotIndex[E: Type](using q: Quotes): Expr[Int] =
+private def idAnnotIndices[E: Type, ID: Type](using q: Quotes): Expr[Seq[Int]] =
   import q.reflect.*
-  val idAnnot = TypeRepr.of[Id].typeSymbol
-  val index = TypeRepr
-    .of[E]
-    .typeSymbol
-    .primaryConstructor
-    .paramSymss
-    .head
-    .indexWhere(sym => sym.hasAnnotation(idAnnot)) match
-    case -1 => 0
-    case x  => x
-  Expr(index)
+
+  if TypeRepr.of[ID] =:= TypeRepr.of[Null] then '{ List.empty[Int] }
+  else
+    val idAnnot = TypeRepr.of[Id].typeSymbol
+    val params = TypeRepr
+      .of[E]
+      .typeSymbol
+      .primaryConstructor
+      .paramSymss
+      .head
+    val indices = params.zipWithIndex
+      .collect { case (sym, idx) if sym.hasAnnotation(idAnnot) => idx }
+    val indicesWithDefault = if indices.isEmpty then List(0) else indices
+    Expr(indicesWithDefault)
 
 private def elemNames[Mels: Type](res: List[String] = Nil)(using
     Quotes

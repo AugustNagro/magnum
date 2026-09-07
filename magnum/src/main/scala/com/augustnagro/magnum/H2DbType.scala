@@ -6,6 +6,7 @@ import scala.collection.View
 import scala.deriving.Mirror
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Using}
+import java.util.StringJoiner
 
 object H2DbType extends DbType:
 
@@ -16,7 +17,8 @@ object H2DbType extends DbType:
       eElemCodecs: Seq[DbCodec[?]],
       ecElemNames: Seq[String],
       ecElemNamesSql: Seq[String],
-      idIndex: Int
+      idIndices: Seq[Int],
+      idFromProduct: Seq[Any] => ID
   )(using
       eCodec: DbCodec[E],
       ecCodec: DbCodec[EC],
@@ -25,118 +27,198 @@ object H2DbType extends DbType:
       ecClassTag: ClassTag[EC],
       idClassTag: ClassTag[ID]
   ): RepoDefaults[EC, E, ID] =
-    val idName = eElemNamesSql(idIndex)
+    val idNames = idIndices.map(eElemNamesSql)
+    val hasId = idIndices.nonEmpty
     val selectKeys = eElemNamesSql.mkString(", ")
     val ecInsertKeys = ecElemNamesSql.mkString("(", ", ", ")")
+    val idCodecs =
+      if hasId then idIndices.map(eElemCodecs).toVector
+      else Vector(idCodec)
 
     val updateKeys: String = eElemNamesSql
-      .lazyZip(eElemCodecs)
-      .map((sqlName, codec) => sqlName + " = " + codec.queryRepr)
-      .patch(idIndex, Seq.empty, 1)
+      .zip(eElemCodecs)
+      .zipWithIndex
+      .collect {
+        case ((sqlName, codec), idx) if !idIndices.contains(idx) =>
+          sqlName + " = " + codec.queryRepr
+      }
       .mkString(", ")
 
-    val updateCodecs = eElemCodecs
-      .patch(idIndex, Seq.empty, 1)
-      .appended(idCodec)
-      .asInstanceOf[Seq[DbCodec[Any]]]
+    val updateCodecs: IArray[DbCodec[Any]] = IArray.from(
+      eElemCodecs.zipWithIndex
+        .collect { case (codec, idx) if !idIndices.contains(idx) => codec }
+        .appendedAll(idCodecs)
+        .map(_.asInstanceOf[DbCodec[Any]])
+    )
+    val updateParamIndices: IArray[Int] = IArray.from(
+      eElemNames.indices.filterNot(idIndices.contains) ++ idIndices
+    )
 
-    val insertGenKeys: Array[String] = Array.from(eElemNamesSql)
+    val idWhereClause = idNames match
+      case Seq() => "1 = 0"
+      case _ =>
+        idNames
+          .zip(idCodecs)
+          .map((name, codec) => name + " = " + codec.queryRepr)
+          .mkString(" AND ")
 
     val countSql = s"SELECT count(*) FROM $tableNameSql"
     val countQuery = Frag(countSql, Vector.empty, FragWriter.empty).query[Long]
     val existsByIdSql =
-      s"SELECT 1 FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
-    val findAllSql = s"SELECT * FROM $tableNameSql"
+      s"SELECT 1 FROM $tableNameSql WHERE $idWhereClause"
+    val findAllSql = s"SELECT $selectKeys FROM $tableNameSql"
     val findAllQuery = Frag(findAllSql, Vector.empty, FragWriter.empty).query[E]
     val findByIdSql =
-      s"SELECT * FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
-    val findAllByIdSql = s"SELECT * FROM $tableNameSql WHERE $idName = ANY(?)"
+      s"SELECT $selectKeys FROM $tableNameSql WHERE $idWhereClause"
+
+    val findAllByIdImpl: (Iterable[ID], DbCon) => Vector[E] = idNames match
+      case Seq() => (_, _) => Vector.empty
+      case Seq(name) =>
+        val findAllByIdSql =
+          s"SELECT $selectKeys FROM $tableNameSql WHERE $name = ANY(?)"
+        val idFirstTypeName = JDBCType.valueOf(idCodec.cols.head).getName
+        (ids, con) =>
+          val idsArray = Array.from[Any](ids)
+          Frag(
+            findAllByIdSql,
+            IArray(idsArray),
+            (ps, pos) =>
+              val sqlArray =
+                ps.getConnection.createArrayOf(idFirstTypeName, idsArray)
+              ps.setArray(pos, sqlArray)
+              pos + 1
+          ).query[E].run()(using con)
+      case _ =>
+        val unnestCalls = idNames.zipWithIndex
+          .map { case (_, i) =>
+            s"CAST(? AS ${JDBCType.valueOf(idCodec.cols(i)).getName} ARRAY)"
+          }
+          .mkString(", ")
+        val rowPlaceholders =
+          idNames.zipWithIndex.map { case (n, i) => s"col$i" }.mkString(", ")
+        val findAllByIdSql =
+          s"SELECT $selectKeys FROM $tableNameSql WHERE (${idNames.mkString(", ")}) IN (SELECT $rowPlaceholders FROM unnest($unnestCalls) AS t($rowPlaceholders))"
+        (ids, con) =>
+          val idsSeq = ids.toSeq
+          val fieldArrays = idNames.indices.map(idIdx =>
+            idsSeq.map(_.asInstanceOf[Product].productElement(idIdx))
+          )
+          val arrays = fieldArrays.map(Array.from[Any])
+          val params = IArray.from(arrays)
+          Frag(
+            findAllByIdSql,
+            params,
+            (ps, pos) =>
+              var currentPos = pos
+              for (colType, array) <- idCodec.cols.zip(arrays) do
+                val sqlArray = ps.getConnection.createArrayOf(
+                  JDBCType.valueOf(colType).getName,
+                  array
+                )
+                ps.setArray(currentPos, sqlArray)
+                currentPos += 1
+              currentPos
+          ).query[E].run()(using con)
+
     val deleteByIdSql =
-      s"DELETE FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
+      s"DELETE FROM $tableNameSql WHERE $idWhereClause"
     val truncateSql = s"TRUNCATE TABLE $tableNameSql"
     val truncateUpdate =
       Frag(truncateSql, Vector.empty, FragWriter.empty).update
     val insertSql =
       s"INSERT INTO $tableNameSql $ecInsertKeys VALUES (${ecCodec.queryRepr})"
     val updateSql =
-      s"UPDATE $tableNameSql SET $updateKeys WHERE $idName = ${idCodec.queryRepr}"
+      s"UPDATE $tableNameSql SET $updateKeys WHERE $idWhereClause"
 
-    val compositeId = idCodec.cols.distinct.size != 1
-    val idFirstTypeName = JDBCType.valueOf(idCodec.cols.head).getName
+    val insertGenKeys: Array[String] = eElemNamesSql.toArray
 
     def idWriter(id: ID): FragWriter = (ps, pos) =>
       idCodec.writeSingle(id, ps, pos)
       pos + idCodec.cols.length
 
+    val existsByIdImpl: (ID, DbCon) => Boolean =
+      if hasId then
+        (id, con) =>
+          Frag(existsByIdSql, IArray(id), idWriter(id))
+            .query[Int]
+            .run()(using con)
+            .nonEmpty
+      else (_, _) => false
+
+    val findByIdImpl: (ID, DbCon) => Option[E] =
+      if hasId then
+        (id, con) =>
+          Frag(findByIdSql, IArray(id), idWriter(id))
+            .query[E]
+            .run()(using con)
+            .headOption
+      else (_, _) => None
+
+    val deleteByIdImpl: (ID, DbCon) => Unit =
+      if hasId then
+        (id, con) =>
+          Frag(deleteByIdSql, IArray(id), idWriter(id)).update
+            .run()(using con)
+          ()
+      else (_, _) => ()
+
+    val deleteAllByIdImpl: (Iterable[ID], DbCon) => BatchUpdateResult =
+      if hasId then
+        (ids, con) =>
+          given DbCon = con
+          handleQuery(deleteByIdSql, ids):
+            Using(con.connection.prepareStatement(deleteByIdSql)): ps =>
+              idCodec.write(ids, ps)
+              timed(batchUpdateResult(ps.executeBatch()))
+      else (_, _) => BatchUpdateResult.Success(0)
+
+    def writeUpdateParams(entity: E, ps: PreparedStatement): Unit =
+      val product = entity.asInstanceOf[Product]
+      var pos = 1
+      var i = 0
+      while i < updateParamIndices.length do
+        val codec = updateCodecs(i)
+        codec.writeSingle(
+          product.productElement(updateParamIndices(i)),
+          ps,
+          pos
+        )
+        pos += codec.cols.length
+        i += 1
+
     new RepoDefaults[EC, E, ID]:
       def count(using con: DbCon): Long = countQuery.run().head
 
-      def existsById(id: ID)(using DbCon): Boolean =
-        Frag(existsByIdSql, IArray(id), idWriter(id))
-          .query[Int]
-          .run()
-          .nonEmpty
+      def existsById(id: ID)(using con: DbCon): Boolean =
+        existsByIdImpl(id, con)
 
       def findAll(using DbCon): Vector[E] = findAllQuery.run()
 
       def findAll(spec: Spec[E])(using DbCon): Vector[E] =
         SpecImpl.Default.findAll(spec, tableNameSql)
 
-      def findById(id: ID)(using DbCon): Option[E] =
-        Frag(findByIdSql, IArray(id), idWriter(id))
-          .query[E]
-          .run()
-          .headOption
+      def findById(id: ID)(using con: DbCon): Option[E] =
+        findByIdImpl(id, con)
 
-      def findAllById(ids: Iterable[ID])(using DbCon): Vector[E] =
-        if compositeId then
-          throw UnsupportedOperationException(
-            "Composite ids unsupported for findAllById."
-          )
-        val idsArray = Array.from[Any](ids)
-        Frag(
-          findAllByIdSql,
-          IArray(idsArray),
-          (ps, pos) =>
-            val sqlArray =
-              ps.getConnection.createArrayOf(idFirstTypeName, idsArray)
-            ps.setArray(pos, sqlArray)
-            pos + 1
-        ).query[E].run()
-//        // h2 doesn't support setObject(..) with primitive arrays,
-//        // so we need to convert to Array[Object]
-//        val builder = Array.newBuilder[Object]
-//        if ids.knownSize > -1 then builder.sizeHint(ids.knownSize)
-//        for id <- ids do builder += id.asInstanceOf[Object]
-//        Sql(findAllByIdSql, Vector(builder.result())).run
+      def findAllById(ids: Iterable[ID])(using con: DbCon): Vector[E] =
+        findAllByIdImpl(ids, con)
 
       def delete(entity: E)(using DbCon): Unit =
-        deleteById(
-          entity
-            .asInstanceOf[Product]
-            .productElement(idIndex)
-            .asInstanceOf[ID]
-        )
+        deleteById(entityToId(entity))
 
-      def deleteById(id: ID)(using DbCon): Unit =
-        Frag(deleteByIdSql, IArray(id), idWriter(id)).update.run()
+      def deleteById(id: ID)(using con: DbCon): Unit =
+        deleteByIdImpl(id, con)
 
-      def truncate()(using DbCon): Unit = truncateUpdate.run()
+      def truncate()(using DbCon): Unit =
+        truncateUpdate.run()
 
       def deleteAll(entities: Iterable[E])(using DbCon): BatchUpdateResult =
-        deleteAllById(
-          entities.map(e =>
-            e.asInstanceOf[Product].productElement(idIndex).asInstanceOf[ID]
-          )
-        )
+        deleteAllById(entities.map(entityToId))
 
       def deleteAllById(ids: Iterable[ID])(using
           con: DbCon
       ): BatchUpdateResult =
-        handleQuery(deleteByIdSql, ids):
-          Using(con.connection.prepareStatement(deleteByIdSql)): ps =>
-            idCodec.write(ids, ps)
-            timed(batchUpdateResult(ps.executeBatch()))
+        deleteAllByIdImpl(ids, con)
 
       def insert(entityCreator: EC)(using con: DbCon): Unit =
         handleQuery(insertSql, entityCreator):
@@ -178,19 +260,7 @@ object H2DbType extends DbType:
       def update(entity: E)(using con: DbCon): Unit =
         handleQuery(updateSql, entity):
           Using(con.connection.prepareStatement(updateSql)): ps =>
-            val entityValues: Vector[Any] = entity
-              .asInstanceOf[Product]
-              .productIterator
-              .toVector
-            // put ID at the end
-            val updateValues = entityValues
-              .patch(idIndex, Vector.empty, 1)
-              .appended(entityValues(idIndex))
-
-            var pos = 1
-            for (field, codec) <- updateValues.lazyZip(updateCodecs) do
-              codec.writeSingle(field, ps, pos)
-              pos += codec.cols.length
+            writeUpdateParams(entity, ps)
             timed(ps.executeUpdate())
 
       def updateAll(entities: Iterable[E])(using
@@ -199,22 +269,15 @@ object H2DbType extends DbType:
         handleQuery(updateSql, entities):
           Using(con.connection.prepareStatement(updateSql)): ps =>
             for entity <- entities do
-              val entityValues: Vector[Any] = entity
-                .asInstanceOf[Product]
-                .productIterator
-                .toVector
-              // put ID at the end
-              val updateValues = entityValues
-                .patch(idIndex, Vector.empty, 1)
-                .appended(entityValues(idIndex))
-
-              var pos = 1
-              for (field, codec) <- updateValues.lazyZip(updateCodecs) do
-                codec.writeSingle(field, ps, pos)
-                pos += codec.cols.length
+              writeUpdateParams(entity, ps)
               ps.addBatch()
 
             timed(batchUpdateResult(ps.executeBatch()))
+
+      def entityToId(entity: E): ID =
+        val product = entity.asInstanceOf[Product]
+        val idValues = idIndices.map(i => product.productElement(i))
+        idFromProduct(idValues)
 
     end new
   end buildRepoDefaults

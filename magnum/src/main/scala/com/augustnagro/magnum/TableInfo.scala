@@ -24,7 +24,7 @@ class TableInfo[EC, E, ID](
     val insertColumns: ColumnNames,
     val alias: Option[String],
     val queryRepr: String,
-    val idColumn: Option[ColumnName],
+    val idColumns: ColumnNames,
     private[magnum] val table: String,
     private[magnum] val eClassName: String
 ) extends Selectable, SqlLiteral:
@@ -36,7 +36,21 @@ class TableInfo[EC, E, ID](
     require(tableAlias.nonEmpty, "custom tableAlias cannot be empty")
     val queryRepr = table + " " + tableAlias
 
-    val allSchemaNames = all.columnNames.map(cn =>
+    new TableInfo[EC, E, ID](
+      all = aliasColumnNames(all, tableAlias),
+      insertColumns = insertColumns,
+      alias = Some(tableAlias),
+      queryRepr = queryRepr,
+      idColumns = aliasColumnNames(idColumns, tableAlias),
+      table = table,
+      eClassName = eClassName
+    ).asInstanceOf[this.type]
+
+  private def aliasColumnNames(
+      columnNames: ColumnNames,
+      tableAlias: String
+  ): ColumnNames =
+    val aliasedColumnNames = columnNames.columnNames.map(cn =>
       val sqlName = cn.sqlName
       ColumnName(
         scalaName = cn.scalaName,
@@ -44,22 +58,8 @@ class TableInfo[EC, E, ID](
         queryRepr = tableAlias + "." + sqlName
       )
     )
-    val allQueryRepr = allSchemaNames.map(_.queryRepr).mkString(", ")
-    val allCols = ColumnNames(allQueryRepr, allSchemaNames)
-    val newIdColumn = idColumn.flatMap(oldId =>
-      allSchemaNames.find(_.scalaName == oldId.scalaName)
-    )
-
-    new TableInfo[EC, E, ID](
-      all = allCols,
-      insertColumns = insertColumns,
-      alias = Some(tableAlias),
-      queryRepr = queryRepr,
-      idColumn = newIdColumn,
-      table = table,
-      eClassName = eClassName
-    ).asInstanceOf[this.type]
-  end alias
+    val aliasedQueryRep = aliasedColumnNames.map(_.queryRepr).mkString(", ")
+    ColumnNames(aliasedQueryRep, aliasedColumnNames)
 
 end TableInfo
 
@@ -99,10 +99,6 @@ object TableInfo:
         )
     )
 
-    val idIdx =
-      if TypeRepr.of[ID] =:= TypeRepr.of[Null] then '{ None }
-      else '{ Some(${ exprs.idIndex }) }
-
     refinement.asType match
       case '[tpe] =>
         '{
@@ -114,7 +110,11 @@ object TableInfo:
           val insertQueryRepr =
             insertColumns.map(_.queryRepr).mkString("(", ", ", ")")
           val insertCols = ColumnNames(insertQueryRepr, insertColumns)
-          val idColumn = $idIdx.map(idx => allColumns(idx))
+
+          val idIndices = IArray.from(${ exprs.idIndices })
+          val idColumns = idIndices.map(allColumns.apply)
+          val idColumnsQueryRepr = idColumns.map(_.queryRepr).mkString(", ")
+          val idColumnNames = ColumnNames(idColumnsQueryRepr, idColumns)
 
           val tableName = ${ exprs.tableNameSql }
           new TableInfo[EC, E, ID](
@@ -123,7 +123,7 @@ object TableInfo:
             alias = None,
             table = tableName,
             queryRepr = tableName,
-            idColumn = idColumn,
+            idColumns = idColumnNames,
             eClassName = ${ exprs.tableNameScala }
           ).asInstanceOf[tpe]
         }

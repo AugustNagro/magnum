@@ -48,13 +48,15 @@ def tableInfoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
   val noIdTableInfo = TableInfo[NoId, NoId, Null]
 
   test("NoId TableInfo.idColumn == None"):
-    assert(noIdTableInfo.idColumn == None)
+    assert(noIdTableInfo.idColumns.columnNames.isEmpty)
 
   test("can use TableInfo.idColumn to scrap boilerplate"):
     extension [EC: DbCodec, E, ID](table: TableInfo[EC, E, ID])
       def onConflictDoUpdate(entityCreator: EC): Update =
         val updatedCols = table.all.columnNames
-          .filterNot(col => table.idColumn.exists(_.scalaName == col.scalaName))
+          .filterNot(col =>
+            table.idColumns.columnNames.exists(_.scalaName == col.scalaName)
+          )
           .map(col => sql"$col = EXCLUDED.$col")
           .reduceLeft((a, b) => sql"$a, $b")
         sql"""INSERT INTO $table ${table.insertColumns} VALUES ($entityCreator)
