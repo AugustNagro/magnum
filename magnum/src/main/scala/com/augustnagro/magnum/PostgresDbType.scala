@@ -170,11 +170,6 @@ object PostgresDbType extends DbType:
               timed(batchUpdateResult(ps.executeBatch()))
       else (_, _) => BatchUpdateResult.Success(0)
 
-    def entityToId(entity: E): ID =
-      val product = entity.asInstanceOf[Product]
-      val idValues = idIndices.map(i => product.productElement(i))
-      idFromProduct(idValues)
-
     def writeUpdateParams(entity: E, ps: PreparedStatement): Unit =
       val product = entity.asInstanceOf[Product]
       var pos = 1
@@ -280,6 +275,12 @@ object PostgresDbType extends DbType:
               ps.addBatch()
 
             timed(batchUpdateResult(ps.executeBatch()))
+
+      def entityToId(entity: E): ID =
+        val product = entity.asInstanceOf[Product]
+        val idValues = idIndices.map(i => product.productElement(i))
+        idFromProduct(idValues)
+
     end new
   end buildRepoDefaults
 end PostgresDbType

@@ -102,11 +102,6 @@ object ClickhouseDbType extends DbType:
               timed(batchUpdateResult(ps.executeBatch()))
       else (_, _) => BatchUpdateResult.Success(0)
 
-    def entityToId(entity: E): ID =
-      val product = entity.asInstanceOf[Product]
-      val idValues = idIndices.map(i => product.productElement(i))
-      idFromProduct(idValues)
-
     new RepoDefaults[EC, E, ID]:
       def count(using con: DbCon): Long = countQuery.run().head
 
@@ -178,6 +173,11 @@ object ClickhouseDbType extends DbType:
           con: DbCon
       ): BatchUpdateResult =
         throw UnsupportedOperationException()
+
+      def entityToId(entity: E): ID =
+        val product = entity.asInstanceOf[Product]
+        val idValues = idIndices.map(i => product.productElement(i))
+        idFromProduct(idValues)
 
     end new
   end buildRepoDefaults
