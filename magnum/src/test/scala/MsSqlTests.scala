@@ -14,6 +14,26 @@ class MsSqlTests extends FunSuite, TestContainersFixtures:
 
   sharedTests(this, MsSqlDbType, xa)
 
+  // SQL Server caps a statement at 2100 parameters, so findAllById splits
+  // long id lists across several statements. 2500 ids forces two round trips.
+  test("findAllById chunks id lists over the parameter limit"):
+    @Table(MsSqlDbType, SqlNameMapper.CamelToSnakeCase)
+    case class Car(
+        model: String,
+        @Id id: Long,
+        topSpeed: Int,
+        @SqlName("vin") vinNumber: Option[Int],
+        color: shared.Color,
+        created: java.time.OffsetDateTime
+    ) derives DbCodec
+
+    val carRepo = ImmutableRepo[Car, Long]
+    xa().connect:
+      val ids = (1L to 2500L).toVector
+      assert(ids.size > 2000)
+      val found = carRepo.findAllById(ids)
+      assertEquals(found.map(_.id).sorted, Vector(1L, 2L, 3L))
+
   val mssqlContainer = ForAllContainerFixture(
     MSSQLServerContainer
       .Def(dockerImageName =

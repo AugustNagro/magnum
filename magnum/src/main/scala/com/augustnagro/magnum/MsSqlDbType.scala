@@ -5,7 +5,9 @@ import scala.util.Using
 
 object MsSqlDbType extends DbType:
 
-  /** SQL Server allows at most 2100 parameters per statement. */
+  /** SQL Server allows at most 2100 parameters per statement. `findAllById`
+    * chunks its id list to this size, leaving some headroom under that cap.
+    */
   private val maxInParams = 2000
 
   private val specImpl = new SpecImpl:
@@ -118,36 +120,34 @@ object MsSqlDbType extends DbType:
           .headOption
 
       // SQL Server has no 'ANY' keyword, so the IN list is built per call.
+      // Long id lists are split across several statements to stay under the
+      // parameter limit. Like Postgres' `= ANY(?)`, no result order is
+      // guaranteed, so the chunks can simply be concatenated.
+      def findAllByIdChunk(idChunk: Seq[ID])(using DbCon): Vector[E] =
+        val placeholders =
+          Vector.fill(idChunk.size)(idCodec.queryRepr).mkString(", ")
+        val findAllByIdSql =
+          s"SELECT $selectKeys FROM $tableNameSql WHERE $idName IN ($placeholders)"
+        Frag(
+          findAllByIdSql,
+          idChunk,
+          (ps, startingPos) =>
+            var pos = startingPos
+            for id <- idChunk do
+              idCodec.writeSingle(id, ps, pos)
+              pos += idCodec.cols.length
+            pos
+        ).query[E].run()
+
       def findAllById(ids: Iterable[ID])(using DbCon): Vector[E] =
         if compositeId then
           throw UnsupportedOperationException(
             "Composite ids unsupported for findAllById."
           )
-        val idSeq = ids.toVector
-        if idSeq.isEmpty then Vector.empty
-        else if idSeq.size > maxInParams then
-          throw UnsupportedOperationException(
-            s"SQL Server supports at most $maxInParams parameters per statement, " +
-              s"but ${idSeq.size} ids were given. Use findById in a loop, " +
-              "or batch the ids into smaller groups."
-          )
-        else
-          val placeholders =
-            Vector.fill(idSeq.size)(idCodec.queryRepr).mkString(", ")
-          val findAllByIdSql =
-            s"SELECT $selectKeys FROM $tableNameSql WHERE $idName IN ($placeholders)"
-          Frag(
-            findAllByIdSql,
-            idSeq,
-            (ps, startingPos) =>
-              var pos = startingPos
-              for id <- idSeq do
-                idCodec.writeSingle(id, ps, pos)
-                pos += idCodec.cols.length
-              pos
-          ).query[E].run()
-        end if
-      end findAllById
+        ids.iterator
+          .grouped(maxInParams)
+          .flatMap(findAllByIdChunk)
+          .toVector
 
       def delete(entity: E)(using DbCon): Unit =
         deleteById(
@@ -201,8 +201,10 @@ object MsSqlDbType extends DbType:
           * will return rows to the client even if the statement encounters
           * errors and is rolled back. The result shouldn't be used if any error
           * occurs.
-          * 
-          * Conclusion: This should not be implemented as a default. It is implementable, if you know your DB does not have certain trigers enabled
+          *
+          * Conclusion: This should not be implemented as a default. It is
+          * implementable, if you know your DB does not have certain trigers
+          * enabled
           */
         throw UnsupportedOperationException()
 
