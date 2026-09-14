@@ -191,9 +191,19 @@ object MsSqlDbType extends DbType:
             timed(batchUpdateResult(ps.executeBatch()))
 
       def insertReturning(entityCreator: EC)(using con: DbCon): E =
-        // SQL Server's getGeneratedKeys only returns the IDENTITY column, not
-        // defaulted or computed columns. Returning the full entity requires an
-        // OUTPUT INSERTED.* clause, which is not implemented.
+        /** https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql?view=sql-server-ver16#triggers
+          *
+          * If the OUTPUT clause is specified without also specifying the INTO
+          * keyword, the target of the DML operation can't have any enabled
+          * trigger defined on it for the given DML action.
+          *
+          * An UPDATE, INSERT, or DELETE statement that has an OUTPUT clause
+          * will return rows to the client even if the statement encounters
+          * errors and is rolled back. The result shouldn't be used if any error
+          * occurs.
+          * 
+          * Conclusion: This should not be implemented as a default. It is implementable, if you know your DB does not have certain trigers enabled
+          */
         throw UnsupportedOperationException()
 
       def insertAllReturning(
