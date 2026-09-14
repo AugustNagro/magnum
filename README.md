@@ -662,6 +662,28 @@ import java.util.UUID
 case class Person(@Id id: Long, name: String, tracking_id: Option[UUID]) derives DbCodec
 ```
 
+On SQL Server you can store the UUID in either a `varchar(36)` or a `uniqueidentifier`
+column, and `VarCharUUIDCodec` reads and writes both. They are not interchangeable when
+sorting, however. `uniqueidentifier` compares by byte group, last group first, rather than
+lexicographically, and it renders back uppercase whatever case was written:
+
+```sql
+-- rows inserted: '00000000-0000-0000-0000-000000000002'
+--                'ffffffff-0000-0000-0000-000000000001'
+
+select ug from probe order by ug   -- uniqueidentifier
+-- FFFFFFFF-0000-0000-0000-000000000001
+-- 00000000-0000-0000-0000-000000000002
+
+select vc from probe order by vc   -- varchar(36)
+-- 00000000-0000-0000-0000-000000000002
+-- ffffffff-0000-0000-0000-000000000001
+```
+
+So `ORDER BY` on a UUID column, and any `Spec` seek paginating over one, will give a
+different row order on SQL Server than on the other dialects. Pick `varchar(36)` if you
+need the ordering to match.
+
 ## Todo
 * JSON / XML support
 * Cats Effect & ZIO modules
