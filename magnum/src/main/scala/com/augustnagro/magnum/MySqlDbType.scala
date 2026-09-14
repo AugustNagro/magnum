@@ -26,8 +26,7 @@ object MySqlDbType extends DbType:
 
     override def offsetLimitSql(
         offset: Option[Long],
-        limit: Option[Int],
-        hasOrderBy: Boolean
+        limit: Option[Int]
     ): Option[String] =
       (offset, limit) match
         case (Some(o), Some(l)) => Some(s"LIMIT $o, $l")

@@ -1,6 +1,10 @@
 package com.augustnagro.magnum
 
 import java.util.StringJoiner
+import java.util.regex.Pattern
+
+private val orderByRegex =
+  java.util.regex.Pattern.compile("\\border\\s+by\\b", Pattern.CASE_INSENSITIVE)
 
 private trait SpecImpl:
   def sortSql(sort: Sort): String =
@@ -16,16 +20,18 @@ private trait SpecImpl:
       case _                 => throw UnsupportedOperationException()
     sort.column + dir + nullOrder
 
-  def offsetLimitSql(
-      offset: Option[Long],
-      limit: Option[Int],
-      hasOrderBy: Boolean
-  ): Option[String] =
+  def offsetLimitSql(offset: Option[Long], limit: Option[Int]): Option[String] =
     (offset, limit) match
       case (Some(o), Some(l)) => Some(s"OFFSET $o LIMIT $l")
       case (Some(o), None)    => Some(s"OFFSET $o")
       case (None, Some(l))    => Some(s"LIMIT $l")
       case (None, None)       => None
+
+  /** Emitted in place of an ORDER BY clause when the Spec has none but an
+    * offset or limit is present. T-SQL requires an ORDER BY for either clause;
+    * dialects that don't leave this as None.
+    */
+  def orderByFallback: Option[String] = None
 
   def seekSql(seek: Seek): String =
     val seekDir = seek.seekDirection match
@@ -33,6 +39,13 @@ private trait SpecImpl:
       case SeekDir.Lt => "<"
       case _          => throw UnsupportedOperationException()
     s"${seek.column} $seekDir ?"
+
+  /** Whether a user-supplied prefix Frag already carries its own ORDER BY, in
+    * which case orderByFallback must not be emitted. This is a textual check,
+    * so an ORDER BY appearing only inside a subquery reads as a false positive.
+    */
+  private def hasOrderBy(prefixSql: String): Boolean =
+    orderByRegex.matcher(prefixSql).find()
 
   def findAll[E: DbCodec](spec: Spec[E], tableNameSql: String)(using
       DbCon
@@ -73,14 +86,11 @@ private trait SpecImpl:
     val whereClauseStr = whereClause.toString
     if whereClauseStr.nonEmpty then finalSj.add(whereClauseStr)
     val orderByClauseStr = orderByClause.toString
+    val offsetLimit = offsetLimitSql(spec.offset, spec.limit)
     if orderByClauseStr.nonEmpty then finalSj.add(orderByClauseStr)
-
-    for offsetLimit <- offsetLimitSql(
-        spec.offset,
-        spec.limit,
-        orderByClauseStr.nonEmpty
-      )
-    do finalSj.add(offsetLimit)
+    else if offsetLimit.isDefined && !hasOrderBy(prefixFrag.sqlString) then
+      orderByFallback.foreach(finalSj.add)
+    for ol <- offsetLimit do finalSj.add(ol)
 
     val allFrags = prefixFrag +: whereFrags
     val fragWriter: FragWriter = (ps, startingPos) =>

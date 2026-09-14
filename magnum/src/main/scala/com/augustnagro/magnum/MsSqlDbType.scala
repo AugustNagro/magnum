@@ -29,20 +29,22 @@ object MsSqlDbType extends DbType:
         case _                 => throw UnsupportedOperationException()
       nullSort + sort.column + dir
 
-    // T-SQL requires OFFSET before FETCH NEXT, and requires an ORDER BY
-    // clause for either.
+    // T-SQL requires OFFSET before FETCH NEXT.
     override def offsetLimitSql(
         offset: Option[Long],
-        limit: Option[Int],
-        hasOrderBy: Boolean
+        limit: Option[Int]
     ): Option[String] =
-      val clause = (offset, limit) match
+      (offset, limit) match
         case (Some(o), Some(l)) =>
           Some(s"OFFSET $o ROWS FETCH NEXT $l ROWS ONLY")
         case (Some(o), None) => Some(s"OFFSET $o ROWS")
         case (None, Some(l)) => Some(s"OFFSET 0 ROWS FETCH NEXT $l ROWS ONLY")
         case (None, None)    => None
-      clause.map(c => if hasOrderBy then c else s"ORDER BY (SELECT NULL) $c")
+
+    // T-SQL rejects OFFSET/FETCH without an ORDER BY.
+    override def orderByFallback: Option[String] = Some(
+      "ORDER BY (SELECT NULL)"
+    )
 
   def buildRepoDefaults[EC, E, ID](
       tableNameSql: String,
