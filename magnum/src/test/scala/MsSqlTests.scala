@@ -14,6 +14,34 @@ class MsSqlTests extends FunSuite, TestContainersFixtures:
 
   sharedTests(this, MsSqlDbType, xa)
 
+  // SQL Server's uniqueidentifier does not compare in string order: it orders
+  // by byte group, last group first. It also renders back uppercase whatever
+  // case went in. Both differ from the varchar(36) columns the other
+  // VarCharUUIDCodec dialects use, so they are pinned here and documented in
+  // the README.
+  test("uniqueidentifier sorts by byte group, not lexicographically"):
+    val low = java.util.UUID.fromString("00000000-0000-0000-0000-000000000002")
+    val high = java.util.UUID.fromString("ffffffff-0000-0000-0000-000000000001")
+    xa().connect:
+      sql"""insert into person (id, first_name, last_name, is_admin, created, social_id)
+            values (9, 'A', 'A', 0, sysdatetimeoffset(), $low),
+                   (10, 'B', 'B', 0, sysdatetimeoffset(), $high)""".update.run()
+
+      val sorted =
+        sql"select social_id from person where id in (9, 10) order by social_id"
+          .query[java.util.UUID]
+          .run()
+      // lexicographically `low` sorts first; uniqueidentifier puts `high` first
+      assertEquals(sorted, Vector(high, low))
+      assertNotEquals(sorted, sorted.sortBy(_.toString))
+
+      val rendered =
+        sql"select cast(social_id as varchar(36)) from person where id = 10"
+          .query[String]
+          .run()
+          .head
+      assertEquals(rendered, rendered.toUpperCase)
+
   // SQL Server caps a statement at 2100 parameters, so findAllById splits
   // long id lists across several statements. 2500 ids forces two round trips.
   test("findAllById chunks id lists over the parameter limit"):
