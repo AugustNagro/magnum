@@ -16,7 +16,11 @@ private trait SpecImpl:
       case _                 => throw UnsupportedOperationException()
     sort.column + dir + nullOrder
 
-  def offsetLimitSql(offset: Option[Long], limit: Option[Int]): Option[String] =
+  def offsetLimitSql(
+      offset: Option[Long],
+      limit: Option[Int],
+      hasOrderBy: Boolean
+  ): Option[String] =
     (offset, limit) match
       case (Some(o), Some(l)) => Some(s"OFFSET $o LIMIT $l")
       case (Some(o), None)    => Some(s"OFFSET $o")
@@ -71,8 +75,12 @@ private trait SpecImpl:
     val orderByClauseStr = orderByClause.toString
     if orderByClauseStr.nonEmpty then finalSj.add(orderByClauseStr)
 
-    for offsetLimit <- offsetLimitSql(spec.offset, spec.limit) do
-      finalSj.add(offsetLimit)
+    for offsetLimit <- offsetLimitSql(
+        spec.offset,
+        spec.limit,
+        orderByClauseStr.nonEmpty
+      )
+    do finalSj.add(offsetLimit)
 
     val allFrags = prefixFrag +: whereFrags
     val fragWriter: FragWriter = (ps, startingPos) =>

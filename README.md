@@ -282,7 +282,7 @@ It is a best practice to encapsulate your SQL in repositories.
 class UserRepo extends Repo[User, User, Long]
 ```
 
-Also note that Repo extends ImmutableRepo. Some databases cannot support every method, and will throw UnsupportedOperationException.
+Also note that Repo extends ImmutableRepo. Some databases cannot support every method, and will throw UnsupportedOperationException. For example, `insertReturning` and `insertAllReturning` are unsupported on MySql, MsSql, and Sqlite, since their JDBC drivers cannot return the full inserted row.
 
 ### Database generated columns
 
@@ -576,7 +576,7 @@ Like in Zoolander (the movie), Magnum represents a 'new look' for Database acces
 ## Feature List
 
 * Supports any database with a JDBC driver,
-  including Postgres, MySql, Oracle, ClickHouse, H2, and Sqlite
+  including Postgres, MySql, MsSql, Oracle, ClickHouse, H2, and Sqlite
 * Efficient `sql" "` interpolator
 * Purely-functional API
 * Common queries (like insert, update, delete) generated at compile time
@@ -651,7 +651,7 @@ case class Address(
 
 Some databases directly support the UUID type; these include Postgres, Clickhouse, and H2. When using the built-in `DbCodec[UUID]`, defined in `DbCodec.scala`, serialization and deserialization of `java.util.UUID` will work as expected.
 
-Other databases like MySql, Oracle, and Sqlite, however, do not natively support UUID columns. Users have to choose an alternate datatype to store the UUID: most commonly `varchar(36)` or `binary(16)`. The JDBC drivers for these databases do not support direct serialization and deserialization of `java.util.UUID`, therefore the default `DbCodec[UUID]` will not be sufficient. Instead, import the appropriate codec from `com.augustnagro.magnum.UUIDCodec`. For example,
+Other databases like MySql, MsSql, Oracle, and Sqlite, however, do not natively support UUID columns. (SQL Server has a `uniqueidentifier` type, but the Microsoft JDBC driver does not map it to `java.util.UUID`.) Users have to choose an alternate datatype to store the UUID: most commonly `varchar(36)` or `binary(16)`. The JDBC drivers for these databases do not support direct serialization and deserialization of `java.util.UUID`, therefore the default `DbCodec[UUID]` will not be sufficient. Instead, import the appropriate codec from `com.augustnagro.magnum.UUIDCodec`. For example,
 
 ```scala
 import com.augustnagro.magnum.*
@@ -664,6 +664,5 @@ case class Person(@Id id: Long, name: String, tracking_id: Option[UUID]) derives
 
 ## Todo
 * JSON / XML support
-* Support MSSql
 * Cats Effect & ZIO modules
 * Explicit Nulls support
