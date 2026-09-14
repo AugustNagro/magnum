@@ -1,39 +1,46 @@
 package com.augustnagro.magnum
 
-import java.sql.{Connection, PreparedStatement, ResultSet, Statement}
-import java.time.OffsetDateTime
-import scala.collection.View
-import scala.deriving.Mirror
 import scala.reflect.ClassTag
-import scala.util.{Failure, Success, Using}
+import scala.util.Using
 
-object MySqlDbType extends DbType:
+object MsSqlDbType extends DbType:
+
+  /** SQL Server allows at most 2100 parameters per statement. */
+  private val maxInParams = 2000
 
   private val specImpl = new SpecImpl:
+    // SQL Server has no NULLS FIRST/LAST. MySql emulates this with a leading
+    // `col IS NULL, ` sort key, but T-SQL has no boolean expression value,
+    // so a CASE expression is needed instead.
     override def sortSql(sort: Sort): String =
-      val column = sort.column
       val nullSort = sort.nullOrder match
         case NullOrder.Default => ""
-        case NullOrder.First   => s"$column IS NOT NULL, "
-        case NullOrder.Last    => s"$column IS NULL, "
-        case _                 => throw UnsupportedOperationException()
+        case NullOrder.First =>
+          s"CASE WHEN ${sort.column} IS NULL THEN 0 ELSE 1 END, "
+        case NullOrder.Last =>
+          s"CASE WHEN ${sort.column} IS NULL THEN 1 ELSE 0 END, "
+        case _ => throw UnsupportedOperationException()
       val dir = sort.direction match
         case SortOrder.Default => ""
         case SortOrder.Asc     => " ASC"
         case SortOrder.Desc    => " DESC"
         case _                 => throw UnsupportedOperationException()
-      nullSort + column + dir
+      nullSort + sort.column + dir
 
+    // T-SQL requires OFFSET before FETCH NEXT, and requires an ORDER BY
+    // clause for either.
     override def offsetLimitSql(
         offset: Option[Long],
         limit: Option[Int],
         hasOrderBy: Boolean
     ): Option[String] =
-      (offset, limit) match
-        case (Some(o), Some(l)) => Some(s"LIMIT $o, $l")
-        case (Some(o), None)    => Some(s"LIMIT $o, ${Long.MaxValue}")
-        case (None, Some(l))    => Some(s"LIMIT $l")
-        case (None, None)       => None
+      val clause = (offset, limit) match
+        case (Some(o), Some(l)) =>
+          Some(s"OFFSET $o ROWS FETCH NEXT $l ROWS ONLY")
+        case (Some(o), None) => Some(s"OFFSET $o ROWS")
+        case (None, Some(l)) => Some(s"OFFSET 0 ROWS FETCH NEXT $l ROWS ONLY")
+        case (None, None)    => None
+      clause.map(c => if hasOrderBy then c else s"ORDER BY (SELECT NULL) $c")
 
   def buildRepoDefaults[EC, E, ID](
       tableNameSql: String,
@@ -55,8 +62,6 @@ object MySqlDbType extends DbType:
     val selectKeys = eElemNamesSql.mkString(", ")
     val ecInsertKeys = ecElemNamesSql.mkString("(", ", ", ")")
 
-    val insertGenKeys = Array(idName)
-
     val updateKeys: String = eElemNamesSql
       .lazyZip(eElemCodecs)
       .map((sqlName, codec) => sqlName + " = " + codec.queryRepr)
@@ -72,10 +77,10 @@ object MySqlDbType extends DbType:
     val countQuery = Frag(countSql, Vector.empty, FragWriter.empty).query[Long]
     val existsByIdSql =
       s"SELECT 1 FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
-    val findAllSql = s"SELECT * FROM $tableNameSql"
+    val findAllSql = s"SELECT $selectKeys FROM $tableNameSql"
     val findAllQuery = Frag(findAllSql, Vector.empty, FragWriter.empty).query[E]
     val findByIdSql =
-      s"SELECT * FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
+      s"SELECT $selectKeys FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
     val deleteByIdSql =
       s"DELETE FROM $tableNameSql WHERE $idName = ${idCodec.queryRepr}"
     val truncateSql = s"TRUNCATE TABLE $tableNameSql"
@@ -85,7 +90,8 @@ object MySqlDbType extends DbType:
       s"INSERT INTO $tableNameSql $ecInsertKeys VALUES (${ecCodec.queryRepr})"
     val updateSql =
       s"UPDATE $tableNameSql SET $updateKeys WHERE $idName = ${idCodec.queryRepr}"
-    val insertAndFindByIdSql = insertSql + "\n" + findByIdSql
+
+    val compositeId = idCodec.cols.distinct.size != 1
 
     def idWriter(id: ID): FragWriter = (ps, pos) =>
       idCodec.writeSingle(id, ps, pos)
@@ -111,10 +117,37 @@ object MySqlDbType extends DbType:
           .run()
           .headOption
 
+      // SQL Server has no 'ANY' keyword, so the IN list is built per call.
       def findAllById(ids: Iterable[ID])(using DbCon): Vector[E] =
-        throw UnsupportedOperationException(
-          "MySql does not support 'ANY' keyword, and does not support long IN parameter lists. Use findById in a loop instead."
-        )
+        if compositeId then
+          throw UnsupportedOperationException(
+            "Composite ids unsupported for findAllById."
+          )
+        val idSeq = ids.toVector
+        if idSeq.isEmpty then Vector.empty
+        else if idSeq.size > maxInParams then
+          throw UnsupportedOperationException(
+            s"SQL Server supports at most $maxInParams parameters per statement, " +
+              s"but ${idSeq.size} ids were given. Use findById in a loop, " +
+              "or batch the ids into smaller groups."
+          )
+        else
+          val placeholders =
+            Vector.fill(idSeq.size)(idCodec.queryRepr).mkString(", ")
+          val findAllByIdSql =
+            s"SELECT $selectKeys FROM $tableNameSql WHERE $idName IN ($placeholders)"
+          Frag(
+            findAllByIdSql,
+            idSeq,
+            (ps, startingPos) =>
+              var pos = startingPos
+              for id <- idSeq do
+                idCodec.writeSingle(id, ps, pos)
+                pos += idCodec.cols.length
+              pos
+          ).query[E].run()
+        end if
+      end findAllById
 
       def delete(entity: E)(using DbCon): Unit =
         deleteById(
@@ -158,9 +191,9 @@ object MySqlDbType extends DbType:
             timed(batchUpdateResult(ps.executeBatch()))
 
       def insertReturning(entityCreator: EC)(using con: DbCon): E =
-        // unfortunately, mysql only will return auto_incremented keys.
-        // it doesn't return default columns, and adding other columns to
-        // the insertGenKeys array doesn't change this behavior.
+        // SQL Server's getGeneratedKeys only returns the IDENTITY column, not
+        // defaulted or computed columns. Returning the full entity requires an
+        // OUTPUT INSERTED.* clause, which is not implemented.
         throw UnsupportedOperationException()
 
       def insertAllReturning(
@@ -210,4 +243,4 @@ object MySqlDbType extends DbType:
             timed(batchUpdateResult(ps.executeBatch()))
     end new
   end buildRepoDefaults
-end MySqlDbType
+end MsSqlDbType
