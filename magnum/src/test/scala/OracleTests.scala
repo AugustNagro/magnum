@@ -178,6 +178,26 @@ class OracleTests extends FunSuite, TestContainersFixtures:
         stmt.execute(
           "insert into my_time values (timestamp '2025-03-31 21:19:23 -00:00', date '2025-03-31', '05:30:04', timestamp '2025-04-02 20:17:38')"
         )
+        try stmt.execute("drop table comp_id")
+        catch case _ => ()
+        stmt.execute(
+          """create table comp_id (
+            |  a varchar2(50),
+            |  b number,
+            |  c number,
+            |  d varchar2(50),
+            |  primary key (b, d)
+            |)""".stripMargin
+        )
+        stmt.execute(
+          "insert into comp_id values ('alpha', 1, 10, 'first')"
+        )
+        stmt.execute(
+          "insert into comp_id values ('beta', 2, 20, 'second')"
+        )
+        stmt.execute(
+          "insert into comp_id values ('gamma', 3, 30, 'third')"
+        )
       )
       .get
     Transactor(ds)

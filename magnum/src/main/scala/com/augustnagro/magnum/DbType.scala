@@ -12,7 +12,8 @@ trait DbType:
       eElemCodecs: Seq[DbCodec[?]],
       ecElemNames: Seq[String],
       ecElemNamesSql: Seq[String],
-      idIndex: Int
+      idIndices: Seq[Int],
+      idFromProduct: Seq[Any] => ID
   )(using
       eCodec: DbCodec[E],
       ecCodec: DbCodec[EC],
