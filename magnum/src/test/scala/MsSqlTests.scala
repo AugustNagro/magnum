@@ -38,7 +38,7 @@ class MsSqlTests extends FunSuite, TestContainersFixtures:
   val mssqlContainer = ForAllContainerFixture(
     MSSQLServerContainer
       .Def(dockerImageName =
-        DockerImageName.parse("mcr.microsoft.com/mssql/server:2022-latest")
+        DockerImageName.parse("mcr.microsoft.com/mssql/server:2025-latest")
       )
       .createContainer()
   )
