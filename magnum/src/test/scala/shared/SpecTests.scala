@@ -151,6 +151,13 @@ def specTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
         .where(sql"${c.color} = $color")
       assert(carRepo.findAll(spec) == Vector(allCars.head))
 
+  test("prefix with its own order by, plus limit"):
+    xa().transact:
+      val spec = Spec[Car]
+        .prefix(sql"SELECT * FROM car ORDER BY id DESC")
+        .limit(1)
+      assert(carRepo.findAll(spec) == Vector(allCars.last))
+
   test("prefix with embedded sql"):
     xa().transact:
       val c = car.alias("c")
