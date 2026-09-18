@@ -4,7 +4,7 @@ import com.dimafeng.testcontainers.MSSQLServerContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import com.microsoft.sqlserver.jdbc.SQLServerDataSource
 import munit.{AnyFixture, FunSuite}
-import org.testcontainers.utility.{DockerImageName, TestcontainersConfiguration}
+import org.testcontainers.utility.DockerImageName
 import shared.*
 
 import java.nio.file.{Files, Path}
@@ -21,15 +21,7 @@ class MsSqlTests extends FunSuite, TestContainersFixtures:
       )
       .createContainer()
     mssql.container.acceptLicense()
-    mssql.container.withReuse(true)
-    // Testcontainers 2.x removes the container in stop() regardless of
-    // withReuse, so skip the teardown when reuse is opted into locally via
-    // testcontainers.reuse.enable. CI leaves the property unset and still gets
-    // a throwaway container.
-    new ForAllContainerFixture(mssql):
-      override def afterAll(): Unit =
-        if !TestcontainersConfiguration.getInstance.environmentSupportsReuse
-        then super.afterAll()
+    ForAllContainerFixture(mssql)
 
   override def munitFixtures: Seq[AnyFixture[_]] =
     super.munitFixtures :+ mssqlContainer
