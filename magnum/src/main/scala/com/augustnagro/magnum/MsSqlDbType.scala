@@ -216,7 +216,9 @@ object MsSqlDbType extends DbType:
       def insertReturning(entityCreator: EC)(using con: DbCon): E =
         /** https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql?view=sql-server-ver16#triggers
           *
-          * MsSQL OUTPUT INSERTED syntax is complicated by the presence of triggers on the table. Since the Repo has no way to know whether triggers exist, we cannot support.
+          * MsSQL OUTPUT INSERTED syntax is complicated by the presence of
+          * triggers on the table. Since the Repo has no way to know whether
+          * triggers exist, we cannot support.
           */
         throw UnsupportedOperationException()
 
