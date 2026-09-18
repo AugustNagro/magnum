@@ -26,7 +26,7 @@ object MsSqlDbType extends DbType:
         case SortOrder.Default => ""
         case SortOrder.Asc     => " ASC"
         case SortOrder.Desc    => " DESC"
-        case _                 => throw UnsupportedOperationException()
+
       nullSort + sort.column + dir
 
     // T-SQL requires OFFSET before FETCH NEXT.
