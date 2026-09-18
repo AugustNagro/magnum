@@ -282,7 +282,7 @@ It is a best practice to encapsulate your SQL in repositories.
 class UserRepo extends Repo[User, User, Long]
 ```
 
-Also note that Repo extends ImmutableRepo. Some databases cannot support every method, and will throw UnsupportedOperationException. For example, `insertReturning` and `insertAllReturning` are unsupported on MySql, MsSql, and Sqlite, since their JDBC drivers cannot return the full inserted row.
+Also note that Repo extends ImmutableRepo. Some databases cannot support every method, and will throw UnsupportedOperationException.
 
 ### Database generated columns
 
