@@ -72,6 +72,7 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
     assume(dbType != MySqlDbType)
     assume(dbType != OracleDbType)
     assume(dbType != SqliteDbType)
+    assume(dbType != MsSqlDbType)
     xa().connect:
       assertEquals(
         compIdRepo.findAllById(
@@ -92,6 +93,7 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
     assume(dbType != MySqlDbType)
     assume(dbType != OracleDbType)
     assume(dbType != SqliteDbType)
+    assume(dbType != MsSqlDbType)
     xa().connect:
       assertEquals(
         compIdRepoTupled.findAllById(

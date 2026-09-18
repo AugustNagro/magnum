@@ -4,7 +4,7 @@ import com.dimafeng.testcontainers.MSSQLServerContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import com.microsoft.sqlserver.jdbc.SQLServerDataSource
 import munit.{AnyFixture, FunSuite}
-import org.testcontainers.utility.DockerImageName
+import org.testcontainers.utility.{DockerImageName, TestcontainersConfiguration}
 import shared.*
 
 import java.nio.file.{Files, Path}
@@ -14,34 +14,22 @@ class MsSqlTests extends FunSuite, TestContainersFixtures:
 
   sharedTests(this, MsSqlDbType, xa)
 
-
-  // SQL Server caps a statement at 2100 parameters, so findAllById splits
-  // long id lists across several statements. 2500 ids forces two round trips.
-  test("findAllById chunks id lists over the parameter limit"):
-    @Table(MsSqlDbType, SqlNameMapper.CamelToSnakeCase)
-    case class Car(
-        model: String,
-        @Id id: Long,
-        topSpeed: Int,
-        @SqlName("vin") vinNumber: Option[Int],
-        color: shared.Color,
-        created: java.time.OffsetDateTime
-    ) derives DbCodec
-
-    val carRepo = ImmutableRepo[Car, Long]
-    xa().connect:
-      val ids = (1L to 2500L).toVector
-      assert(ids.size > 2000)
-      val found = carRepo.findAllById(ids)
-      assertEquals(found.map(_.id).sorted, Vector(1L, 2L, 3L))
-
-  val mssqlContainer = ForAllContainerFixture(
-    MSSQLServerContainer
+  val mssqlContainer =
+    val mssql = MSSQLServerContainer
       .Def(dockerImageName =
         DockerImageName.parse("mcr.microsoft.com/mssql/server:2025-latest")
       )
       .createContainer()
-  )
+    mssql.container.acceptLicense()
+    mssql.container.withReuse(true)
+    // Testcontainers 2.x removes the container in stop() regardless of
+    // withReuse, so skip the teardown when reuse is opted into locally via
+    // testcontainers.reuse.enable. CI leaves the property unset and still gets
+    // a throwaway container.
+    new ForAllContainerFixture(mssql):
+      override def afterAll(): Unit =
+        if !TestcontainersConfiguration.getInstance.environmentSupportsReuse
+        then super.afterAll()
 
   override def munitFixtures: Seq[AnyFixture[_]] =
     super.munitFixtures :+ mssqlContainer

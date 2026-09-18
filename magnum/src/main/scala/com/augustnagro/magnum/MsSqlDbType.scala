@@ -6,12 +6,6 @@ import scala.util.Using
 
 object MsSqlDbType extends DbType:
 
-  /** SQL Server allows at most 2100 parameters per statement. `findAllById`
-    * chunks its id list so each statement stays under that cap, leaving some
-    * headroom.
-    */
-  private val maxInParams = 2000
-
   private val specImpl = new SpecImpl:
     // SQL Server has no NULLS FIRST/LAST. MySql emulates this with a leading
     // `col IS NULL, ` sort key, but T-SQL has no boolean expression value,
@@ -140,44 +134,6 @@ object MsSqlDbType extends DbType:
             .headOption
       else (_, _) => None
 
-    // SQL Server has no 'ANY' keyword, so the id list is built per call. A
-    // single-column id becomes an IN list; a composite id becomes a
-    // disjunction of equality groups, since T-SQL has no row-value IN list.
-    val idListPredicate: Int => String = idNames match
-      case Seq(name) =>
-        val idRepr = idCodecs.head.queryRepr
-        idCount => s"$name IN (${Vector.fill(idCount)(idRepr).mkString(", ")})"
-      case _ =>
-        idCount => Vector.fill(idCount)(s"($idWhereClause)").mkString(" OR ")
-
-    val idsPerChunk = math.max(1, maxInParams / idCodec.cols.length)
-
-    def findAllByIdChunk(idChunk: Seq[ID], con: DbCon): Vector[E] =
-      val findAllByIdSql =
-        s"SELECT $selectKeys FROM $tableNameSql WHERE ${idListPredicate(idChunk.size)}"
-      Frag(
-        findAllByIdSql,
-        idChunk,
-        (ps, startingPos) =>
-          var pos = startingPos
-          for id <- idChunk do
-            idCodec.writeSingle(id, ps, pos)
-            pos += idCodec.cols.length
-          pos
-      ).query[E].run()(using con)
-
-    // Long id lists are split across several statements to stay under the
-    // parameter limit. Like Postgres' `= ANY(?)`, no result order is
-    // guaranteed, so the chunks can simply be concatenated.
-    val findAllByIdImpl: (Iterable[ID], DbCon) => Vector[E] =
-      if hasId then
-        (ids, con) =>
-          ids.iterator
-            .grouped(idsPerChunk)
-            .flatMap(idChunk => findAllByIdChunk(idChunk, con))
-            .toVector
-      else (_, _) => Vector.empty
-
     val deleteByIdImpl: (ID, DbCon) => Unit =
       if hasId then
         (id, con) =>
@@ -225,7 +181,9 @@ object MsSqlDbType extends DbType:
         findByIdImpl(id, con)
 
       def findAllById(ids: Iterable[ID])(using con: DbCon): Vector[E] =
-        findAllByIdImpl(ids, con)
+        throw UnsupportedOperationException(
+          "MsSqlServer does not support findAllById"
+        )
 
       def delete(entity: E)(using DbCon): Unit =
         deleteById(entityToId(entity))
@@ -258,18 +216,7 @@ object MsSqlDbType extends DbType:
       def insertReturning(entityCreator: EC)(using con: DbCon): E =
         /** https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql?view=sql-server-ver16#triggers
           *
-          * If the OUTPUT clause is specified without also specifying the INTO
-          * keyword, the target of the DML operation can't have any enabled
-          * trigger defined on it for the given DML action.
-          *
-          * An UPDATE, INSERT, or DELETE statement that has an OUTPUT clause
-          * will return rows to the client even if the statement encounters
-          * errors and is rolled back. The result shouldn't be used if any error
-          * occurs.
-          *
-          * Conclusion: This should not be implemented as a default. It is
-          * implementable, if you know your DB does not have certain trigers
-          * enabled
+          * MsSQL OUTPUT INSERTED syntax is complicated by the presence of triggers on the table. Since the Repo has no way to know whether triggers exist, we cannot support.
           */
         throw UnsupportedOperationException()
 
