@@ -12,12 +12,12 @@ private trait SpecImpl:
       case SortOrder.Default => ""
       case SortOrder.Asc     => " ASC"
       case SortOrder.Desc    => " DESC"
-      case _                 => throw UnsupportedOperationException()
+
     val nullOrder = sort.nullOrder match
       case NullOrder.Default => ""
       case NullOrder.First   => " NULLS FIRST"
       case NullOrder.Last    => " NULLS LAST"
-      case _                 => throw UnsupportedOperationException()
+
     sort.column + dir + nullOrder
 
   def offsetLimitSql(offset: Option[Long], limit: Option[Int]): Option[String] =
@@ -37,7 +37,7 @@ private trait SpecImpl:
     val seekDir = seek.seekDirection match
       case SeekDir.Gt => ">"
       case SeekDir.Lt => "<"
-      case _          => throw UnsupportedOperationException()
+
     s"${seek.column} $seekDir ?"
 
   /** Whether a user-supplied prefix Frag already carries its own ORDER BY, in
