@@ -21,7 +21,7 @@ object MsSqlDbType extends DbType:
           s"CASE WHEN ${sort.column} IS NULL THEN 0 ELSE 1 END, "
         case NullOrder.Last =>
           s"CASE WHEN ${sort.column} IS NULL THEN 1 ELSE 0 END, "
-        case _ => throw UnsupportedOperationException()
+
       val dir = sort.direction match
         case SortOrder.Default => ""
         case SortOrder.Asc     => " ASC"
