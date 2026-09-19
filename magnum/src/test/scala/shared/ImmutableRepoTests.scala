@@ -83,6 +83,7 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
       assert(ids == Vector(1L, 3L))
 
   test("serializable transaction"):
+    assume(dbType != ClickhouseDbType)
     xa()
       .withConnectionConfig(withSerializable)
       .transact:

@@ -59,29 +59,29 @@ def specTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
   )
 
   test("like"):
-    xa().transact:
+    xa().connect:
       val model = "Ferr%"
       val spec = Spec[Car].where(sql"model LIKE $model")
       assert(carRepo.findAll(spec) == Vector(allCars(1)))
 
   test("select all"):
-    xa().transact:
+    xa().connect:
       val spec = Spec[Car]
       assert(carRepo.findAll(spec) == allCars)
 
   test("empty predicate"):
-    xa().transact:
+    xa().connect:
       val spec = Spec[Car].where(sql"")
       assert(carRepo.findAll(spec) == allCars)
 
   test("predicate having param at end"):
-    xa().transact:
+    xa().connect:
       val id = CarId(2L)
       val spec = Spec[Car].where(sql"$id < id")
       assert(carRepo.findAll(spec) == Vector(allCars.last))
 
   test("AND in where predicate"):
-    xa().transact:
+    xa().connect:
       val color = Color.Red
       val model = "MCLAREN SENNA"
       val spec =
@@ -89,7 +89,7 @@ def specTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
       assert(carRepo.findAll(spec) == Vector(allCars.head))
 
   test("multiple where parameters"):
-    xa().transact:
+    xa().connect:
       val color = Color.Red
       val model = "MCLAREN SENNA"
       val spec = Spec[Car]
@@ -98,40 +98,40 @@ def specTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
       assert(carRepo.findAll(spec) == Vector(allCars.head))
 
   test("orderBy"):
-    xa().transact:
+    xa().connect:
       val spec = Spec[Car].orderBy("top_speed")
       assert(carRepo.findAll(spec) == allCars.sortBy(_.topSpeed))
 
   test("orderBy null with sort order and null order"):
-    xa().transact:
+    xa().connect:
       val spec = Spec[Car]
         .orderBy("vin", SortOrder.Desc, NullOrder.First)
       assert(carRepo.findAll(spec) == allCars.reverse)
 
   test("limit"):
-    xa().transact:
+    xa().connect:
       val spec = Spec[Car].limit(2)
       assert(carRepo.findAll(spec).size == 2)
 
   test("offset"):
-    xa().transact:
+    xa().connect:
       val spec = Spec[Car].offset(1)
       assert(carRepo.findAll(spec) == allCars.tail)
 
   test("seek"):
-    xa().transact:
+    xa().connect:
       val spec = Spec[Car].seek("id", SeekDir.Gt, 2, SortOrder.Asc)
       assert(carRepo.findAll(spec).size == 1)
 
   test("seek multiple"):
-    xa().transact:
+    xa().connect:
       val spec = Spec[Car]
         .seek("id", SeekDir.Lt, 3, SortOrder.Asc)
         .seek("top_speed", SeekDir.Gt, 210, SortOrder.Asc)
       assert(carRepo.findAll(spec) == Vector(allCars(1)))
 
   test("everything"):
-    xa().transact:
+    xa().connect:
       val idOpt = Option.empty[CarId]
       val speed = 210
       val spec = Spec[Car]
@@ -143,7 +143,7 @@ def specTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
       assert(carRepo.findAll(spec) == Vector(allCars(1)))
 
   test("prefix"):
-    xa().transact:
+    xa().connect:
       val c = car.alias("c")
       val color = Color.Red
       val spec = Spec[Car]
@@ -152,7 +152,7 @@ def specTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
       assert(carRepo.findAll(spec) == Vector(allCars.head))
 
   test("prefix with embedded sql"):
-    xa().transact:
+    xa().connect:
       val c = car.alias("c")
       val color = Color.Red
       val selectPart = sql"SELECT ${c.all}"

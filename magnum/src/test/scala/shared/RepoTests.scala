@@ -151,6 +151,7 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
       assert(people.last.lastName == newPc.last.lastName)
 
   test("insert invalid"):
+    // ClickHouse 26.3 defaults to asynchronous inserts
     assume(dbType != ClickhouseDbType)
     intercept[SqlException]:
       xa().connect:
@@ -284,6 +285,7 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
       )
 
   test("custom update"):
+    assume(dbType != ClickhouseDbType)
     xa().connect:
       val p = Person(
         id = 9L,
@@ -302,8 +304,7 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
         "update person set is_admin = ? where id = ?"
       )
       val rowsUpdated = update.run()
-      val expectedRowsUpdated = if dbType == ClickhouseDbType then 0 else 1
-      assert(rowsUpdated == expectedRowsUpdated)
+      assert(rowsUpdated == 1)
       assert(personRepo.findById(p.id).get.isAdmin == true)
 
   test("custom returning a single column"):

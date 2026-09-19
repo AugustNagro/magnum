@@ -38,7 +38,8 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
       "/mysql/my-user.sql",
       "/mysql/no-id.sql",
       "/mysql/big-dec.sql",
-      "/mysql/my-time.sql"
+      "/mysql/my-time.sql",
+      "/mysql/comp-id.sql"
     ).map(p =>
       Using.resource(getClass.getResourceAsStream(p))(stream =>
         String(stream.readAllBytes(), StandardCharsets.UTF_8)

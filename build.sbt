@@ -39,7 +39,7 @@ addCommandAlias("fmt", "scalafmtAll")
 
 val testcontainersVersion = "0.44.1"
 val circeVersion = "0.14.16"
-val munitVersion = "1.3.5"
+val munitVersion = "1.3.6"
 val postgresDriverVersion = "42.7.13"
 
 lazy val root = project
@@ -57,11 +57,12 @@ lazy val magnum = project
       "org.postgresql" % "postgresql" % postgresDriverVersion % Test,
       "com.dimafeng" %% "testcontainers-scala-mysql" % testcontainersVersion % Test,
       "com.mysql" % "mysql-connector-j" % "26.7.0" % Test,
-      "com.h2database" % "h2" % "2.4.240" % Test,
-      "org.testcontainers" % "testcontainers-oracle-free" % "2.0.3" % Test,
+      "com.h2database" % "h2" % "2.5.250" % Test,
+      "org.testcontainers" % "testcontainers-oracle-free" % "2.0.5" % Test,
       "com.oracle.database.jdbc" % "ojdbc17" % "23.26.3.0.0" % Test,
       "com.dimafeng" %% "testcontainers-scala-clickhouse" % testcontainersVersion % Test,
-      ("com.clickhouse" % "clickhouse-jdbc" % "0.10.0" % Test).classifier("all"),
+      ("com.clickhouse" % "clickhouse-jdbc" % "0.10.0" % Test)
+        .classifier("all"),
       "org.xerial" % "sqlite-jdbc" % "3.53.4.0" % Test
     )
   )
@@ -78,7 +79,7 @@ lazy val magnumPg = project
       "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion % Test,
       "io.circe" %% "circe-core" % circeVersion % Test,
       "io.circe" %% "circe-parser" % circeVersion % Test,
-      "org.scala-lang.modules" %% "scala-xml" % "2.4.0" % Test
+      "org.scala-lang.modules" %% "scala-xml" % "2.5.0" % Test
     )
   )
 

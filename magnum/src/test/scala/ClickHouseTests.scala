@@ -1,48 +1,16 @@
 import com.augustnagro.magnum.*
-import com.clickhouse.jdbc.Driver
+import com.clickhouse.client.api.ClientConfigProperties
+import com.clickhouse.jdbc.DataSourceImpl
 import com.dimafeng.testcontainers.ClickHouseContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import munit.{AnyFixture, FunSuite, Location}
 import org.testcontainers.utility.DockerImageName
 import shared.*
 
-import java.io.PrintWriter
 import java.nio.charset.StandardCharsets
-import java.sql.{Connection, DriverManager}
 import java.time.{LocalDateTime, LocalTime}
-import java.util.logging.Logger
 import java.util.{Properties, UUID}
-import javax.sql.DataSource
 import scala.util.Using
-
-private final class ClickHouseDriverDataSource(
-    url: String,
-    properties: Properties
-) extends DataSource:
-  private val driver = new Driver()
-
-  override def getConnection: Connection =
-    driver.connect(url, properties)
-
-  override def getConnection(username: String, password: String): Connection =
-    val credentials = new Properties()
-    credentials.putAll(properties)
-    credentials.setProperty("user", username)
-    credentials.setProperty("password", password)
-    driver.connect(url, credentials)
-
-  override def getLogWriter: PrintWriter = DriverManager.getLogWriter
-  override def setLogWriter(writer: PrintWriter): Unit =
-    DriverManager.setLogWriter(writer)
-  override def getLoginTimeout: Int = DriverManager.getLoginTimeout
-  override def setLoginTimeout(seconds: Int): Unit =
-    DriverManager.setLoginTimeout(seconds)
-  override def getParentLogger: Logger = Logger.getLogger("com.clickhouse.jdbc")
-  override def unwrap[T](iface: Class[T]): T =
-    if iface.isInstance(this) then iface.cast(this)
-    else throw java.sql.SQLException(s"Not a wrapper for ${iface.getName}")
-  override def isWrapperFor(iface: Class[?]): Boolean = iface.isInstance(this)
-end ClickHouseDriverDataSource
 
 class ClickHouseTests extends FunSuite, TestContainersFixtures:
 
@@ -80,14 +48,14 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
     val props = Properties()
     props.put("user", clickHouse.username)
     props.put("password", clickHouse.password)
-    props.put("jdbc_ignore_unsupported_values", "true")
-    val ds = ClickHouseDriverDataSource(clickHouse.jdbcUrl, props)
+    val ds = DataSourceImpl(clickHouse.jdbcUrl, props)
     val tableStatements = Vector(
       "clickhouse/car.sql",
       "clickhouse/no-id.sql",
       "clickhouse/person.sql",
       "clickhouse/big-dec.sql",
-      "clickhouse/my-time.sql"
+      "clickhouse/my-time.sql",
+      "clickhouse/comp-id.sql"
     ).flatMap(p =>
       Using
         .resource(getClass.getResourceAsStream(p))(stream =>
@@ -102,12 +70,6 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
         val con = use(ds.getConnection)
         val stmt = use(con.createStatement)
         for sql <- tableStatements do stmt.execute(sql)
-        stmt.execute(
-          "alter table person modify setting enable_block_number_column = 1"
-        )
-        stmt.execute(
-          "alter table person modify setting enable_block_offset_column = 1"
-        )
       )
       .get
     Transactor(ds)

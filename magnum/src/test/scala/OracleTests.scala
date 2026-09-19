@@ -5,10 +5,6 @@ import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import munit.{AnyFixture, FunSuite}
 import oracle.jdbc.datasource.impl.OracleDataSource
 import org.testcontainers.oracle.{OracleContainer as JavaOracleContainer}
-import org.testcontainers.containers.wait.strategy.{
-  WaitStrategy,
-  WaitStrategyTarget
-}
 import org.testcontainers.utility.DockerImageName
 import shared.*
 
@@ -16,11 +12,6 @@ import java.sql.Statement
 import java.time.Duration
 import java.time.LocalTime
 import scala.util.Using
-
-private object ContainerStartedWait extends WaitStrategy:
-  override def waitUntilReady(target: WaitStrategyTarget): Unit = ()
-
-  override def withStartupTimeout(timeout: Duration): WaitStrategy = this
 
 private final class OracleFreeContainer
     extends SingleContainer[JavaOracleContainer]:
@@ -30,13 +21,9 @@ private final class OracleFreeContainer
     )
       .withUsername("test")
       .withPassword("test")
-      .withSharedMemorySize(10240000000L)
-      .waitingFor(ContainerStartedWait)
       .withStartupTimeout(Duration.ofSeconds(240))
 
 class OracleTests extends FunSuite, TestContainersFixtures:
-
-  private var oracleReady = false
 
   given DbCodec[Boolean] =
     DbCodec[String].biMap(_ == "Y", b => if b then "Y" else "N")
@@ -46,18 +33,15 @@ class OracleTests extends FunSuite, TestContainersFixtures:
 
   sharedTests(this, OracleDbType, xa)
 
-  val oracleContainer = new ForAllContainerFixture(new OracleFreeContainer):
-    override def afterContainerStart(container: OracleFreeContainer): Unit =
-      awaitOracleReady(container)
+  val oracleContainer = ForAllContainerFixture(OracleFreeContainer())
 
   override def munitFixtures: Seq[AnyFixture[_]] =
     super.munitFixtures :+ oracleContainer
 
   def xa(): Transactor =
     val oracle = oracleContainer()
-    awaitOracleReady(oracle)
     val ds = OracleDataSource()
-    ds.setURL(jdbcUrl(oracle))
+    ds.setURL(oracle.container.getJdbcUrl)
     ds.setUser(oracle.container.getUsername)
     ds.setPassword(oracle.container.getPassword)
     // oracle doesn't support drop if exists,
@@ -199,41 +183,28 @@ class OracleTests extends FunSuite, TestContainersFixtures:
         stmt.execute(
           "insert into my_time values (timestamp '2025-03-31 21:19:23 -00:00', date '2025-03-31', '05:30:04', timestamp '2025-04-02 20:17:38')"
         )
+        try stmt.execute("drop table comp_id")
+        catch case _ => ()
+        stmt.execute(
+          """create table comp_id (
+            |  a varchar2(50),
+            |  b number,
+            |  c number,
+            |  d varchar2(50),
+            |  primary key (b, d)
+            |)""".stripMargin
+        )
+        stmt.execute(
+          "insert into comp_id values ('alpha', 1, 10, 'first')"
+        )
+        stmt.execute(
+          "insert into comp_id values ('beta', 2, 20, 'second')"
+        )
+        stmt.execute(
+          "insert into comp_id values ('gamma', 3, 30, 'third')"
+        )
       )
       .get
     Transactor(ds)
   end xa
-
-  private def jdbcUrl(oracle: OracleFreeContainer): String =
-    s"jdbc:oracle:thin:@${oracle.host}:${oracle.mappedPort(1521)}/FREEPDB1"
-
-  private def awaitOracleReady(oracle: OracleFreeContainer): Unit =
-    if !oracleReady then
-      this.synchronized {
-        if !oracleReady then
-          val ds = OracleDataSource()
-          ds.setURL(jdbcUrl(oracle))
-          ds.setUser(oracle.container.getUsername)
-          ds.setPassword(oracle.container.getPassword)
-          ds.setLoginTimeout(5)
-          val deadline = System.nanoTime() + Duration.ofSeconds(240).toNanos()
-          var consecutiveSuccesses = 0
-          while consecutiveSuccesses < 5 && System.nanoTime() < deadline do
-            try
-              val querySucceeded = Using.Manager { use =>
-                val connection = use(ds.getConnection())
-                val statement = use(connection.createStatement())
-                val result = use(statement.executeQuery("select 1 from dual"))
-                result.next() && result.getInt(1) == 1
-              }.get
-              if querySucceeded then consecutiveSuccesses += 1
-              else consecutiveSuccesses = 0
-            catch case _: Exception => consecutiveSuccesses = 0
-            if consecutiveSuccesses < 5 then Thread.sleep(1000)
-          if consecutiveSuccesses < 5 then
-            throw IllegalStateException(
-              "Timed out waiting for Oracle Free to finish initializing"
-            )
-          oracleReady = true
-      }
 end OracleTests

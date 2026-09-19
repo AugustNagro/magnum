@@ -35,7 +35,8 @@ class PgTests extends FunSuite, TestContainersFixtures:
       "/pg/my-user.sql",
       "/pg/no-id.sql",
       "/pg/big-dec.sql",
-      "/pg/my-time.sql"
+      "/pg/my-time.sql",
+      "/pg/comp-id.sql"
     ).map(p =>
       Using.resource(getClass.getResourceAsStream(p))(stream =>
         String(stream.readAllBytes(), StandardCharsets.UTF_8)

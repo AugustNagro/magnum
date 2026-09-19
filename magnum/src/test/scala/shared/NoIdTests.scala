@@ -35,4 +35,24 @@ def noIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
         .run()
       assert(userNames.size == 3)
 
+  test("NoId ID operations are no-ops"):
+    xa().connect:
+      val noId: Null = null
+      val entity = NoId(OffsetDateTime.now, "unused", "unused")
+      val initialCount = noIdRepo.count
+
+      assert(!noIdRepo.existsById(noId))
+      assertEquals(noIdRepo.findById(noId), None)
+      noIdRepo.deleteById(noId)
+      noIdRepo.delete(entity)
+      assertEquals(
+        noIdRepo.deleteAllById(Vector(noId)),
+        BatchUpdateResult.Success(0)
+      )
+      assertEquals(
+        noIdRepo.deleteAll(Vector(entity)),
+        BatchUpdateResult.Success(0)
+      )
+      assertEquals(noIdRepo.count, initialCount)
+
 end noIdTests

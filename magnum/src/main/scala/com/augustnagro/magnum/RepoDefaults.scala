@@ -54,6 +54,27 @@ object RepoDefaults:
       if TypeRepr.of[ID] =:= TypeRepr.of[Null] then
         '{ ClassTag.Any.asInstanceOf[ClassTag[ID]] }
       else Expr.summon[ClassTag[ID]].get
+
+    // function that builds ID from entity's ID fields
+    val idFromProductExpr: Expr[Seq[Any] => ID] =
+      if TypeRepr.of[ID] =:= TypeRepr.of[Null] then
+        '{ (fields: Seq[Any]) => null.asInstanceOf[ID] }
+      else
+        Expr.summon[Mirror.ProductOf[ID]] match
+          case Some('{ $m: Mirror.ProductOf[ID] }) =>
+            '{ (fields: Seq[Any]) =>
+              $m.fromProduct(Tuple.fromArray(fields.toArray)).asInstanceOf[ID]
+            }
+          case _ =>
+            '{ (fields: Seq[Any]) =>
+              fields.headOption
+                .getOrElse(
+                  throw new IllegalArgumentException(
+                    s"Cannot construct ID from ${fields.size} fields"
+                  )
+                )
+                .asInstanceOf[ID]
+            }
     '{
       ${ exprs.tableAnnot }.dbType.buildRepoDefaults[EC, E, ID](
         ${ exprs.tableNameSql },
@@ -62,7 +83,8 @@ object RepoDefaults:
         $eElemCodecs,
         ${ Expr(exprs.ecElemNames) },
         ${ Expr.ofSeq(exprs.ecElemNamesSql) },
-        ${ exprs.idIndex }
+        ${ exprs.idIndices },
+        ${ idFromProductExpr }
       )(using
         $eCodec,
         $ecCodec,
