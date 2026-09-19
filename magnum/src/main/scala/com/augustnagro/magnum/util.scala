@@ -61,7 +61,7 @@ private def sqlImpl(sc: Expr[StringContext], args: Expr[Seq[Any]])(using
     val sqlQueryReprs: Vector[String] = ${
       queryReprs(allArgsExprs, '{ args }, '{ Vector.newBuilder })
     }
-    val queryExpr: String = $sc.s(sqlQueryReprs: _*)
+    val queryExpr: String = $sc.s(sqlQueryReprs*)
 
     val flattenedArgs: Vector[Any] = ${
       flattenedArgsExpr(allArgsExprs, '{ args }, '{ Vector.newBuilder })

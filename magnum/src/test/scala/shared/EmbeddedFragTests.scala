@@ -27,7 +27,7 @@ def embeddedFragTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
 
   test("embedded frag param exprs should be evaluated only once"):
     object Holder:
-      var uuid: UUID = _
+      var uuid: UUID = scala.compiletime.uninitialized
       def set(uuid: UUID): UUID =
         this.uuid = uuid
         uuid

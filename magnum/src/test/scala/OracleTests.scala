@@ -35,7 +35,7 @@ class OracleTests extends FunSuite, TestContainersFixtures:
 
   val oracleContainer = ForAllContainerFixture(OracleFreeContainer())
 
-  override def munitFixtures: Seq[AnyFixture[_]] =
+  override def munitFixtures: Seq[AnyFixture[?]] =
     super.munitFixtures :+ oracleContainer
 
   def xa(): Transactor =
