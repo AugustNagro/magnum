@@ -36,7 +36,8 @@ object RepoDefaults:
       ID
   ]: RepoDefaults[EC, E, ID] = ${ genImpl[EC, E, ID] }
 
-  private def genImpl[EC: Type, E: Type, ID: Type](using
+  @scala.annotation.publicInBinary
+  private[magnum] def genImpl[EC: Type, E: Type, ID: Type](using
       Quotes
   ): Expr[RepoDefaults[EC, E, ID]] =
     import quotes.reflect.*

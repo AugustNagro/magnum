@@ -4,7 +4,7 @@ import java.sql.{PreparedStatement, ResultSet, Types}
 import java.util.UUID
 
 object UUIDCodec:
-  given VarCharUUIDCodec: DbCodec[UUID] with
+  given VarCharUUIDCodec: DbCodec[UUID]:
     def queryRepr: String = "?"
     val cols: IArray[Int] = IArray(Types.VARCHAR)
     def readSingle(rs: ResultSet, pos: Int): UUID =

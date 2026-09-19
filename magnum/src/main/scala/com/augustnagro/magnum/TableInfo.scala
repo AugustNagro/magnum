@@ -29,6 +29,8 @@ class TableInfo[EC, E, ID](
     private[magnum] val eClassName: String
 ) extends Selectable, SqlLiteral:
 
+  type Fields = NamedTuple.Map[NamedTuple.From[E], [T] =>> ColumnName]
+
   def selectDynamic(scalaName: String): ColumnName =
     all.columnNames.find(_.scalaName == scalaName).get
 
@@ -64,18 +66,15 @@ class TableInfo[EC, E, ID](
 end TableInfo
 
 object TableInfo:
-  transparent inline def apply[EC: Mirror.Of, E: Mirror.Of, ID] =
+  inline def apply[EC: Mirror.Of, E: Mirror.Of, ID]: TableInfo[EC, E, ID] =
     ${ dbSchemaImpl[EC, E, ID] }
 
-  private def dbSchemaImpl[EC: Type, E: Type, ID: Type](using
+  @scala.annotation.publicInBinary
+  private[magnum] def dbSchemaImpl[EC: Type, E: Type, ID: Type](using
       Quotes
-  ): Expr[Any] =
+  ): Expr[TableInfo[EC, E, ID]] =
     import quotes.reflect.*
     val exprs = tableExprs[EC, E, ID]
-    val refinement = exprs.eElemNames
-      .foldLeft(TypeRepr.of[TableInfo[EC, E, ID]])((typeRepr, elemName) =>
-        Refinement(typeRepr, elemName, TypeRepr.of[ColumnName])
-      )
 
     val allColumnsExpr = Expr.ofSeq(
       exprs.eElemNames
@@ -99,34 +98,31 @@ object TableInfo:
         )
     )
 
-    refinement.asType match
-      case '[tpe] =>
-        '{
-          val allColumns = IArray.from($allColumnsExpr)
-          val allQueryRepr = allColumns.map(_.queryRepr).mkString(", ")
-          val allCols = ColumnNames(allQueryRepr, allColumns)
+    '{
+      val allColumns = IArray.from($allColumnsExpr)
+      val allQueryRepr = allColumns.map(_.queryRepr).mkString(", ")
+      val allCols = ColumnNames(allQueryRepr, allColumns)
 
-          val insertColumns = IArray.from($insertColumnsExpr)
-          val insertQueryRepr =
-            insertColumns.map(_.queryRepr).mkString("(", ", ", ")")
-          val insertCols = ColumnNames(insertQueryRepr, insertColumns)
+      val insertColumns = IArray.from($insertColumnsExpr)
+      val insertQueryRepr =
+        insertColumns.map(_.queryRepr).mkString("(", ", ", ")")
+      val insertCols = ColumnNames(insertQueryRepr, insertColumns)
 
-          val idIndices = IArray.from(${ exprs.idIndices })
-          val idColumns = idIndices.map(allColumns.apply)
-          val idColumnsQueryRepr = idColumns.map(_.queryRepr).mkString(", ")
-          val idColumnNames = ColumnNames(idColumnsQueryRepr, idColumns)
+      val idIndices = IArray.from(${ exprs.idIndices })
+      val idColumns = idIndices.map(allColumns.apply)
+      val idColumnsQueryRepr = idColumns.map(_.queryRepr).mkString(", ")
+      val idColumnNames = ColumnNames(idColumnsQueryRepr, idColumns)
 
-          val tableName = ${ exprs.tableNameSql }
-          new TableInfo[EC, E, ID](
-            all = allCols,
-            insertColumns = insertCols,
-            alias = None,
-            table = tableName,
-            queryRepr = tableName,
-            idColumns = idColumnNames,
-            eClassName = ${ exprs.tableNameScala }
-          ).asInstanceOf[tpe]
-        }
-    end match
+      val tableName = ${ exprs.tableNameSql }
+      new TableInfo[EC, E, ID](
+        all = allCols,
+        insertColumns = insertCols,
+        alias = None,
+        table = tableName,
+        queryRepr = tableName,
+        idColumns = idColumnNames,
+        eClassName = ${ exprs.tableNameScala }
+      )
+    }
   end dbSchemaImpl
 end TableInfo

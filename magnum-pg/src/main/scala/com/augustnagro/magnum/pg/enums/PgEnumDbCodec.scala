@@ -18,7 +18,8 @@ import scala.reflect.ClassTag
 inline given PgEnumDbCodec[A <: scala.reflect.Enum: Mirror.SumOf]: DbCodec[A] =
   ${ pgEnumDbCodecImpl[A] }
 
-private def pgEnumDbCodecImpl[A: Type](using Quotes): Expr[DbCodec[A]] =
+@scala.annotation.publicInBinary
+private[enums] def pgEnumDbCodecImpl[A: Type](using Quotes): Expr[DbCodec[A]] =
   import quotes.reflect.*
   val mirror = Expr.summon[Mirror.SumOf[A]].getOrElse {
     report.errorAndAbort(

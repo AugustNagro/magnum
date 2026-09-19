@@ -112,14 +112,8 @@ object DerivingUtil:
               type MirroredElemTypes = mets
             }
           }) =>
-        tupleArity[mets]() == 0
+        TypeRepr.of[mets] =:= TypeRepr.of[EmptyTuple]
       case _ => false
-
-  private def tupleArity[T: Type](res: Int = 0)(using Quotes): Int =
-    import quotes.reflect.*
-    Type.of[T] match
-      case '[x *: xs]    => tupleArity[xs](res + 1)
-      case '[EmptyTuple] => res
 
   /** Finds the first SqlName annotation on type T */
   def sqlTableNameAnnot[T: Type](using Quotes): Option[Expr[SqlName]] =

@@ -106,7 +106,7 @@ object DbCodec:
 
   inline def apply[E](using codec: DbCodec[E]): DbCodec[E] = codec
 
-  given AnyCodec: DbCodec[Any] with
+  given AnyCodec: DbCodec[Any]:
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(rs: ResultSet, pos: Int): Any = rs.getObject(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Any] =
@@ -115,7 +115,7 @@ object DbCodec:
       ps.setObject(pos, a)
     def queryRepr: String = "?"
 
-  given StringCodec: DbCodec[String] with
+  given StringCodec: DbCodec[String]:
     val cols: IArray[Int] = IArray(Types.VARCHAR)
     def readSingle(rs: ResultSet, pos: Int): String = rs.getString(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[String] =
@@ -124,7 +124,7 @@ object DbCodec:
       ps.setString(pos, s)
     def queryRepr: String = "?"
 
-  given BooleanCodec: DbCodec[Boolean] with
+  given BooleanCodec: DbCodec[Boolean]:
     val cols: IArray[Int] = IArray(Types.BOOLEAN)
     def readSingle(rs: ResultSet, pos: Int): Boolean = rs.getBoolean(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Boolean] =
@@ -133,7 +133,7 @@ object DbCodec:
       ps.setBoolean(pos, b)
     def queryRepr: String = "?"
 
-  given ByteCodec: DbCodec[Byte] with
+  given ByteCodec: DbCodec[Byte]:
     val cols: IArray[Int] = IArray(Types.TINYINT)
     def readSingle(rs: ResultSet, pos: Int): Byte = rs.getByte(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Byte] =
@@ -142,7 +142,7 @@ object DbCodec:
       ps.setByte(pos, b)
     def queryRepr: String = "?"
 
-  given ShortCodec: DbCodec[Short] with
+  given ShortCodec: DbCodec[Short]:
     val cols: IArray[Int] = IArray(Types.SMALLINT)
     def readSingle(rs: ResultSet, pos: Int): Short = rs.getShort(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Short] =
@@ -151,7 +151,7 @@ object DbCodec:
       ps.setShort(pos, s)
     def queryRepr: String = "?"
 
-  given IntCodec: DbCodec[Int] with
+  given IntCodec: DbCodec[Int]:
     val cols: IArray[Int] = IArray(Types.INTEGER)
     def readSingle(rs: ResultSet, pos: Int): Int = rs.getInt(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Int] =
@@ -160,7 +160,7 @@ object DbCodec:
       ps.setInt(pos, i)
     def queryRepr: String = "?"
 
-  given LongCodec: DbCodec[Long] with
+  given LongCodec: DbCodec[Long]:
     val cols: IArray[Int] = IArray(Types.BIGINT)
     def readSingle(rs: ResultSet, pos: Int): Long = rs.getLong(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Long] =
@@ -169,7 +169,7 @@ object DbCodec:
       ps.setLong(pos, l)
     def queryRepr: String = "?"
 
-  given FloatCodec: DbCodec[Float] with
+  given FloatCodec: DbCodec[Float]:
     val cols: IArray[Int] = IArray(Types.REAL)
     def readSingle(rs: ResultSet, pos: Int): Float = rs.getFloat(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Float] =
@@ -178,7 +178,7 @@ object DbCodec:
       ps.setFloat(pos, f)
     def queryRepr: String = "?"
 
-  given DoubleCodec: DbCodec[Double] with
+  given DoubleCodec: DbCodec[Double]:
     val cols: IArray[Int] = IArray(Types.DOUBLE)
     def readSingle(rs: ResultSet, pos: Int): Double = rs.getDouble(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Double] =
@@ -187,7 +187,7 @@ object DbCodec:
       ps.setDouble(pos, d)
     def queryRepr: String = "?"
 
-  given ByteArrayCodec: DbCodec[Array[Byte]] with
+  given ByteArrayCodec: DbCodec[Array[Byte]]:
     val cols: IArray[Int] = IArray(Types.BINARY)
     def readSingle(rs: ResultSet, pos: Int): Array[Byte] = rs.getBytes(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Array[Byte]] =
@@ -196,7 +196,7 @@ object DbCodec:
       ps.setBytes(pos, bytes)
     def queryRepr: String = "?"
 
-  given ByteIArrayCodec: DbCodec[IArray[Byte]] with
+  given ByteIArrayCodec: DbCodec[IArray[Byte]]:
     val cols: IArray[Int] = IArray(Types.BINARY)
     def readSingle(rs: ResultSet, pos: Int): IArray[Byte] =
       IArray.unsafeFromArray(rs.getBytes(pos))
@@ -210,7 +210,7 @@ object DbCodec:
       ps.setBytes(pos, IArray.genericWrapArray(bytes).toArray)
     def queryRepr: String = "?"
 
-  given SqlDateCodec: DbCodec[java.sql.Date] with
+  given SqlDateCodec: DbCodec[java.sql.Date]:
     val cols: IArray[Int] = IArray(Types.DATE)
     def readSingle(rs: ResultSet, pos: Int): java.sql.Date = rs.getDate(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.Date] =
@@ -222,7 +222,7 @@ object DbCodec:
     ): Unit = ps.setDate(pos, date)
     def queryRepr: String = "?"
 
-  given SqlTimeCodec: DbCodec[java.sql.Time] with
+  given SqlTimeCodec: DbCodec[java.sql.Time]:
     val cols: IArray[Int] = IArray(Types.TIME)
     def readSingle(rs: ResultSet, pos: Int): java.sql.Time =
       rs.getTime(pos)
@@ -235,7 +235,7 @@ object DbCodec:
     ): Unit = ps.setTime(pos, time)
     def queryRepr: String = "?"
 
-  given SqlTimestampCodec: DbCodec[java.sql.Timestamp] with
+  given SqlTimestampCodec: DbCodec[java.sql.Timestamp]:
     val cols: IArray[Int] = IArray(Types.TIMESTAMP)
     def readSingle(rs: ResultSet, pos: Int): java.sql.Timestamp =
       rs.getTimestamp(pos)
@@ -248,7 +248,7 @@ object DbCodec:
     ): Unit = ps.setTimestamp(pos, t)
     def queryRepr: String = "?"
 
-  given OffsetDateTimeCodec: DbCodec[OffsetDateTime] with
+  given OffsetDateTimeCodec: DbCodec[OffsetDateTime]:
     val cols: IArray[Int] = IArray(Types.TIMESTAMP_WITH_TIMEZONE)
     def readSingle(rs: ResultSet, pos: Int): OffsetDateTime =
       rs.getObject(pos, classOf[OffsetDateTime])
@@ -261,7 +261,7 @@ object DbCodec:
   given InstantCodec: DbCodec[Instant] =
     OffsetDateTimeCodec.biMap(_.toInstant, _.atOffset(ZoneOffset.UTC))
 
-  given LocalDateCodec: DbCodec[LocalDate] with
+  given LocalDateCodec: DbCodec[LocalDate]:
     val cols: IArray[Int] = IArray(Types.DATE)
     def readSingle(rs: ResultSet, pos: Int): LocalDate =
       rs.getObject(pos, classOf[LocalDate])
@@ -271,7 +271,7 @@ object DbCodec:
       ps.setObject(pos, ld)
     def queryRepr: String = "?"
 
-  given LocalTimeCodec: DbCodec[LocalTime] with
+  given LocalTimeCodec: DbCodec[LocalTime]:
     val cols: IArray[Int] = IArray(Types.TIME)
     def readSingle(rs: ResultSet, pos: Int): LocalTime =
       rs.getObject(pos, classOf[LocalTime])
@@ -281,7 +281,7 @@ object DbCodec:
       ps.setObject(pos, lt)
     def queryRepr: String = "?"
 
-  given LocalDateTimeCodec: DbCodec[LocalDateTime] with
+  given LocalDateTimeCodec: DbCodec[LocalDateTime]:
     val cols: IArray[Int] = IArray(Types.TIMESTAMP)
     def readSingle(rs: ResultSet, pos: Int): LocalDateTime =
       rs.getObject(pos, classOf[LocalDateTime])
@@ -294,7 +294,7 @@ object DbCodec:
   given ZoneIdCodec: DbCodec[ZoneId] =
     StringCodec.biMap(ZoneId.of, _.toString)
 
-  given SqlRefCodec: DbCodec[java.sql.Ref] with
+  given SqlRefCodec: DbCodec[java.sql.Ref]:
     val cols: IArray[Int] = IArray(Types.REF)
     def readSingle(rs: ResultSet, pos: Int): java.sql.Ref = rs.getRef(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.Ref] =
@@ -303,7 +303,7 @@ object DbCodec:
       ps.setRef(pos, ref)
     def queryRepr: String = "?"
 
-  given SqlBlobCodec: DbCodec[java.sql.Blob] with
+  given SqlBlobCodec: DbCodec[java.sql.Blob]:
     val cols: IArray[Int] = IArray(Types.BLOB)
     def readSingle(rs: ResultSet, pos: Int): java.sql.Blob = rs.getBlob(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.Blob] =
@@ -312,7 +312,7 @@ object DbCodec:
       ps.setBlob(pos, b)
     def queryRepr: String = "?"
 
-  given SqlClobCodec: DbCodec[java.sql.Clob] with
+  given SqlClobCodec: DbCodec[java.sql.Clob]:
     val cols: IArray[Int] = IArray(Types.CLOB)
     def readSingle(rs: ResultSet, pos: Int): java.sql.Clob = rs.getClob(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.Clob] =
@@ -321,7 +321,7 @@ object DbCodec:
       ps.setClob(pos, c)
     def queryRepr: String = "?"
 
-  given URLCodec: DbCodec[URL] with
+  given URLCodec: DbCodec[URL]:
     val cols: IArray[Int] = IArray(Types.VARCHAR)
     def readSingle(rs: ResultSet, pos: Int): URL = rs.getURL(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[URL] =
@@ -330,7 +330,7 @@ object DbCodec:
       ps.setURL(pos, url)
     def queryRepr: String = "?"
 
-  given RowIdCodec: DbCodec[java.sql.RowId] with
+  given RowIdCodec: DbCodec[java.sql.RowId]:
     val cols: IArray[Int] = IArray(Types.ROWID)
     def readSingle(rs: ResultSet, pos: Int): java.sql.RowId = rs.getRowId(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.RowId] =
@@ -343,7 +343,7 @@ object DbCodec:
       ps.setRowId(pos, rowId)
     def queryRepr: String = "?"
 
-  given SqlNClobCodec: DbCodec[java.sql.NClob] with
+  given SqlNClobCodec: DbCodec[java.sql.NClob]:
     val cols: IArray[Int] = IArray(Types.NCLOB)
     def readSingle(rs: ResultSet, pos: Int): java.sql.NClob = rs.getNClob(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.NClob] =
@@ -352,7 +352,7 @@ object DbCodec:
       ps.setNClob(pos, nc)
     def queryRepr: String = "?"
 
-  given SqlXmlCodec: DbCodec[java.sql.SQLXML] with
+  given SqlXmlCodec: DbCodec[java.sql.SQLXML]:
     val cols: IArray[Int] = IArray(Types.SQLXML)
     def readSingle(rs: ResultSet, pos: Int): java.sql.SQLXML = rs.getSQLXML(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.SQLXML] =
@@ -361,7 +361,7 @@ object DbCodec:
       ps.setSQLXML(pos, s)
     def queryRepr: String = "?"
 
-  given JavaBigDecimalCodec: DbCodec[java.math.BigDecimal] with
+  given JavaBigDecimalCodec: DbCodec[java.math.BigDecimal]:
     val cols: IArray[Int] = IArray(Types.NUMERIC)
     def readSingle(rs: ResultSet, pos: Int): java.math.BigDecimal =
       rs.getBigDecimal(pos)
@@ -378,7 +378,7 @@ object DbCodec:
       ps.setBigDecimal(pos, bd)
     def queryRepr: String = "?"
 
-  given ScalaBigDecimalCodec: DbCodec[scala.math.BigDecimal] with
+  given ScalaBigDecimalCodec: DbCodec[scala.math.BigDecimal]:
     val cols: IArray[Int] = IArray(Types.NUMERIC)
     def readSingle(rs: ResultSet, pos: Int): scala.math.BigDecimal =
       scala.math.BigDecimal(rs.getBigDecimal(pos))
@@ -394,7 +394,7 @@ object DbCodec:
       ps.setBigDecimal(pos, bd.underlying)
     def queryRepr: String = "?"
 
-  given UUIDCodec: DbCodec[UUID] with
+  given UUIDCodec: DbCodec[UUID]:
     def queryRepr: String = "?"
     val cols: IArray[Int] = IArray(Types.OTHER)
     def readSingle(rs: ResultSet, pos: Int): UUID =
@@ -614,7 +614,8 @@ object DbCodec:
   inline def derived[E: Mirror.Of]: DbCodec[E] =
     ${ dbCodecImpl[E] }
 
-  private def dbCodecImpl[E: Type](using Quotes): Expr[DbCodec[E]] =
+  @scala.annotation.publicInBinary
+  private[magnum] def dbCodecImpl[E: Type](using Quotes): Expr[DbCodec[E]] =
     import quotes.reflect.*
     val mirror = Expr.summon[Mirror.Of[E]].getOrElse {
       report.errorAndAbort(

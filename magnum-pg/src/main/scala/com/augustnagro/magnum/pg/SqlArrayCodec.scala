@@ -20,19 +20,19 @@ trait SqlArrayCodec[A]:
 
 object SqlArrayCodec:
 
-  given AnySqlArrayCodec: SqlArrayCodec[Any] with
+  given AnySqlArrayCodec: SqlArrayCodec[Any]:
     val jdbcTypeName: String = JDBCType.JAVA_OBJECT.getName
     def readArray(array: Object): Array[Any] =
       array.asInstanceOf[Array[Any]]
     def toArrayObj(entity: Any): Object = entity.asInstanceOf[Object]
 
-  given StringSqlArrayCodec: SqlArrayCodec[String] with
+  given StringSqlArrayCodec: SqlArrayCodec[String]:
     val jdbcTypeName: String = JDBCType.VARCHAR.getName
     def readArray(array: Object): Array[String] =
       array.asInstanceOf[Array[String]]
     def toArrayObj(entity: String): Object = entity
 
-  given BooleanSqlArrayCodec: SqlArrayCodec[Boolean] with
+  given BooleanSqlArrayCodec: SqlArrayCodec[Boolean]:
     val jdbcTypeName: String = JDBCType.BOOLEAN.getName
     def readArray(array: Object): Array[Boolean] =
       array match
@@ -40,7 +40,7 @@ object SqlArrayCodec:
         case primitive: Array[Boolean]       => primitive
     def toArrayObj(entity: Boolean): Object = Boolean.box(entity)
 
-  given ByteSqlArrayCodec: SqlArrayCodec[Byte] with
+  given ByteSqlArrayCodec: SqlArrayCodec[Byte]:
     val jdbcTypeName: String = JDBCType.TINYINT.getName
     def readArray(array: Object): Array[Byte] =
       array match
@@ -48,7 +48,7 @@ object SqlArrayCodec:
         case primitive: Array[Byte]       => primitive
     def toArrayObj(entity: Byte): Object = Byte.box(entity)
 
-  given ShortSqlArrayCodec: SqlArrayCodec[Short] with
+  given ShortSqlArrayCodec: SqlArrayCodec[Short]:
     val jdbcTypeName: String = JDBCType.SMALLINT.getName
     def readArray(array: Object): Array[Short] =
       array match
@@ -56,7 +56,7 @@ object SqlArrayCodec:
         case primitive: Array[Short]       => primitive
     def toArrayObj(entity: Short): Object = Short.box(entity)
 
-  given IntSqlArrayCodec: SqlArrayCodec[Int] with
+  given IntSqlArrayCodec: SqlArrayCodec[Int]:
     val jdbcTypeName: String = JDBCType.INTEGER.getName
     def readArray(array: Object): Array[Int] =
       array match
@@ -64,7 +64,7 @@ object SqlArrayCodec:
         case primitive: Array[Int] => primitive
     def toArrayObj(entity: Int): Object = Int.box(entity)
 
-  given LongSqlArrayCodec: SqlArrayCodec[Long] with
+  given LongSqlArrayCodec: SqlArrayCodec[Long]:
     val jdbcTypeName: String = JDBCType.BIGINT.getName
     def readArray(array: Object): Array[Long] =
       array match
@@ -72,7 +72,7 @@ object SqlArrayCodec:
         case primitive: Array[Long]       => primitive
     def toArrayObj(entity: Long): Object = Long.box(entity)
 
-  given FloatSqlArrayCodec: SqlArrayCodec[Float] with
+  given FloatSqlArrayCodec: SqlArrayCodec[Float]:
     val jdbcTypeName: String = JDBCType.REAL.getName
     def readArray(array: Object): Array[Float] =
       array match
@@ -80,7 +80,7 @@ object SqlArrayCodec:
         case primitive: Array[Float]       => primitive
     def toArrayObj(entity: Float): Object = Float.box(entity)
 
-  given DoubleSqlArrayCodec: SqlArrayCodec[Double] with
+  given DoubleSqlArrayCodec: SqlArrayCodec[Double]:
     val jdbcTypeName: String = JDBCType.DOUBLE.getName
     def readArray(array: Object): Array[Double] =
       array match
@@ -88,25 +88,25 @@ object SqlArrayCodec:
         case primitive: Array[Double]       => primitive
     def toArrayObj(entity: Double): Object = Double.box(entity)
 
-  given SqlDateSqlArrayCodec: SqlArrayCodec[sql.Date] with
+  given SqlDateSqlArrayCodec: SqlArrayCodec[sql.Date]:
     val jdbcTypeName: String = JDBCType.DATE.getName
     def readArray(array: Object): Array[sql.Date] =
       array.asInstanceOf[Array[sql.Date]]
     def toArrayObj(entity: sql.Date): Object = entity
 
-  given SqlTimeSqlArrayCodec: SqlArrayCodec[sql.Time] with
+  given SqlTimeSqlArrayCodec: SqlArrayCodec[sql.Time]:
     val jdbcTypeName: String = JDBCType.TIME.getName
     def readArray(array: Object): Array[sql.Time] =
       array.asInstanceOf[Array[sql.Time]]
     def toArrayObj(entity: sql.Time): Object = entity
 
-  given SqlTimestampSqlArrayCodec: SqlArrayCodec[sql.Timestamp] with
+  given SqlTimestampSqlArrayCodec: SqlArrayCodec[sql.Timestamp]:
     val jdbcTypeName: String = JDBCType.TIMESTAMP.getName
     def readArray(array: Object): Array[sql.Timestamp] =
       array.asInstanceOf[Array[sql.Timestamp]]
     def toArrayObj(entity: sql.Timestamp): Object = entity
 
-  given OffsetDateTimeSqlArrayCodec: SqlArrayCodec[OffsetDateTime] with
+  given OffsetDateTimeSqlArrayCodec: SqlArrayCodec[OffsetDateTime]:
     val jdbcTypeName: String = JDBCType.TIMESTAMP.getName
     def readArray(array: Object): Array[OffsetDateTime] =
       array
@@ -115,7 +115,7 @@ object SqlArrayCodec:
     def toArrayObj(entity: OffsetDateTime): Object =
       sql.Timestamp.from(entity.toInstant)
 
-  given UUIDSqlArrayCodec: SqlArrayCodec[UUID] with
+  given UUIDSqlArrayCodec: SqlArrayCodec[UUID]:
     val jdbcTypeName: String = Oid.toString(Oid.UUID)
     def readArray(array: Object): Array[UUID] =
       array.asInstanceOf[Array[UUID]]

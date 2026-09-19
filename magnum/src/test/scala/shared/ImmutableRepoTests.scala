@@ -153,7 +153,7 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
   test("sql interpolator selects right DbCodec"):
     case class Coord(x: Double, y: Double)
 
-    given DbCodec[Coord] with
+    given DbCodec[Coord]:
       def cols: IArray[Int] = IArray(java.sql.Types.BINARY)
       def queryRepr: String = "MyCoord(?)"
       def readSingle(rs: ResultSet, pos: Int): Coord = ???

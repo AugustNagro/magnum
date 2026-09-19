@@ -2,7 +2,7 @@ ThisBuild / organization := "com.augustnagro"
 ThisBuild / version := "2.0.0-SNAPSHOT"
 ThisBuild / versionScheme := Some("early-semver")
 ThisBuild / scalaVersion := "3.9.0"
-ThisBuild / scalacOptions ++= Seq("-deprecation")
+ThisBuild / scalacOptions ++= Seq("-deprecation", "-WunstableInlineAccessors")
 ThisBuild / homepage := Some(uri("https://github.com/AugustNagro/magnum"))
 ThisBuild / licenses += (
   "Apache-2.0",

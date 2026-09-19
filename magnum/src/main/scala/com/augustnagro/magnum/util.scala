@@ -46,7 +46,8 @@ extension (inline sc: StringContext)
   inline def sql(inline args: Any*): Frag =
     ${ sqlImpl('{ sc }, '{ args }) }
 
-private def sqlImpl(sc: Expr[StringContext], args: Expr[Seq[Any]])(using
+@scala.annotation.publicInBinary
+private[magnum] def sqlImpl(sc: Expr[StringContext], args: Expr[Seq[Any]])(using
     Quotes
 ): Expr[Frag] =
   import quotes.reflect.*

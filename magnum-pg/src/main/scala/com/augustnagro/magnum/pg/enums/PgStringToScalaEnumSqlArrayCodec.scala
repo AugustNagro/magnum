@@ -24,7 +24,8 @@ inline given PgStringToScalaEnumSqlArrayCodec[
 ]: SqlArrayCodec[A] =
   ${ pgStringToScalaEnumSqlArrayCodecImpl[A] }
 
-private def pgStringToScalaEnumSqlArrayCodecImpl[A: Type](using
+@scala.annotation.publicInBinary
+private[enums] def pgStringToScalaEnumSqlArrayCodecImpl[A: Type](using
     Quotes
 ): Expr[SqlArrayCodec[A]] =
   import quotes.reflect.*
