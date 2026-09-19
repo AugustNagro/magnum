@@ -129,25 +129,25 @@ object PostgresDbType extends DbType:
       def deleteAllById(ids: Iterable[ID])(using
           con: DbCon
       ): BatchUpdateResult =
-        handleQuery(deleteByIdSql, ids):
+        handleQuery(deleteByIdSql, SqlLogParams.Batch(ids)):
           Using(con.connection.prepareStatement(deleteByIdSql)): ps =>
             idCodec.write(ids, ps)
             timed(batchUpdateResult(ps.executeBatch()))
 
       def insert(entityCreator: EC)(using con: DbCon): Unit =
-        handleQuery(insertSql, entityCreator):
+        handleQuery(insertSql, SqlLogParams.Single(entityCreator)):
           Using(con.connection.prepareStatement(insertSql)): ps =>
             ecCodec.writeSingle(entityCreator, ps)
             timed(ps.executeUpdate())
 
       def insertAll(entityCreators: Iterable[EC])(using con: DbCon): Unit =
-        handleQuery(insertSql, entityCreators):
+        handleQuery(insertSql, SqlLogParams.Batch(entityCreators)):
           Using(con.connection.prepareStatement(insertSql)): ps =>
             ecCodec.write(entityCreators, ps)
             timed(batchUpdateResult(ps.executeBatch()))
 
       def insertReturning(entityCreator: EC)(using con: DbCon): E =
-        handleQuery(insertSql, entityCreator):
+        handleQuery(insertSql, SqlLogParams.Single(entityCreator)):
           Using.Manager: use =>
             val ps = use(
               con.connection
@@ -163,7 +163,7 @@ object PostgresDbType extends DbType:
       def insertAllReturning(
           entityCreators: Iterable[EC]
       )(using con: DbCon): Vector[E] =
-        handleQuery(insertSql, entityCreators):
+        handleQuery(insertSql, SqlLogParams.Batch(entityCreators)):
           Using.Manager: use =>
             val ps = use(
               con.connection
@@ -176,7 +176,7 @@ object PostgresDbType extends DbType:
               eCodec.read(rs)
 
       def update(entity: E)(using con: DbCon): Unit =
-        handleQuery(updateSql, entity):
+        handleQuery(updateSql, SqlLogParams.Single(entity)):
           Using(con.connection.prepareStatement(updateSql)): ps =>
             val entityValues: Vector[Any] = entity
               .asInstanceOf[Product]
@@ -196,7 +196,7 @@ object PostgresDbType extends DbType:
       def updateAll(entities: Iterable[E])(using
           con: DbCon
       ): BatchUpdateResult =
-        handleQuery(updateSql, entities):
+        handleQuery(updateSql, SqlLogParams.Batch(entities)):
           Using(con.connection.prepareStatement(updateSql)): ps =>
             for entity <- entities do
               val entityValues: Vector[Any] = entity

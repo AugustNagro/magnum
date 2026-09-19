@@ -101,25 +101,25 @@ object ClickhouseDbType extends DbType:
       def deleteAllById(ids: Iterable[ID])(using
           con: DbCon
       ): BatchUpdateResult =
-        handleQuery(deleteByIdSql, ids):
+        handleQuery(deleteByIdSql, SqlLogParams.Batch(ids)):
           Using(con.connection.prepareStatement(deleteByIdSql)): ps =>
             idCodec.write(ids, ps)
             timed(batchUpdateResult(ps.executeBatch()))
 
       def insert(entityCreator: EC)(using con: DbCon): Unit =
-        handleQuery(insertSql, entityCreator):
+        handleQuery(insertSql, SqlLogParams.Single(entityCreator)):
           Using(con.connection.prepareStatement(insertSql)): ps =>
             ecCodec.writeSingle(entityCreator, ps)
             timed(ps.executeUpdate())
 
       def insertAll(entityCreators: Iterable[EC])(using con: DbCon): Unit =
-        handleQuery(insertSql, entityCreators):
+        handleQuery(insertSql, SqlLogParams.Batch(entityCreators)):
           Using(con.connection.prepareStatement(insertSql)): ps =>
             ecCodec.write(entityCreators, ps)
             timed(batchUpdateResult(ps.executeBatch()))
 
       def insertReturning(entityCreator: EC)(using con: DbCon): E =
-        handleQuery(insertSql, entityCreator):
+        handleQuery(insertSql, SqlLogParams.Single(entityCreator)):
           Using(con.connection.prepareStatement(insertSql)): ps =>
             ecCodec.writeSingle(entityCreator, ps)
             timed:
@@ -129,7 +129,7 @@ object ClickhouseDbType extends DbType:
       def insertAllReturning(
           entityCreators: Iterable[EC]
       )(using con: DbCon): Vector[E] =
-        handleQuery(insertSql, entityCreators):
+        handleQuery(insertSql, SqlLogParams.Batch(entityCreators)):
           Using(con.connection.prepareStatement(insertSql)): ps =>
             ecCodec.write(entityCreators, ps)
             timed:
