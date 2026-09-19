@@ -1,4 +1,5 @@
 import com.augustnagro.magnum.*
+import com.clickhouse.jdbc.Driver
 import com.dimafeng.testcontainers.ClickHouseContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import munit.{AnyFixture, FunSuite, Location}
@@ -14,13 +15,21 @@ import java.util.{Properties, UUID}
 import javax.sql.DataSource
 import scala.util.Using
 
-private final class DriverManagerDataSource(url: String, properties: Properties)
-    extends DataSource:
+private final class ClickHouseDriverDataSource(
+    url: String,
+    properties: Properties
+) extends DataSource:
+  private val driver = new Driver()
+
   override def getConnection: Connection =
-    DriverManager.getConnection(url, properties)
+    driver.connect(url, properties)
 
   override def getConnection(username: String, password: String): Connection =
-    DriverManager.getConnection(url, username, password)
+    val credentials = new Properties()
+    credentials.putAll(properties)
+    credentials.setProperty("user", username)
+    credentials.setProperty("password", password)
+    driver.connect(url, credentials)
 
   override def getLogWriter: PrintWriter = DriverManager.getLogWriter
   override def setLogWriter(writer: PrintWriter): Unit =
@@ -33,6 +42,7 @@ private final class DriverManagerDataSource(url: String, properties: Properties)
     if iface.isInstance(this) then iface.cast(this)
     else throw java.sql.SQLException(s"Not a wrapper for ${iface.getName}")
   override def isWrapperFor(iface: Class[?]): Boolean = iface.isInstance(this)
+end ClickHouseDriverDataSource
 
 class ClickHouseTests extends FunSuite, TestContainersFixtures:
 
@@ -71,7 +81,7 @@ class ClickHouseTests extends FunSuite, TestContainersFixtures:
     props.put("user", clickHouse.username)
     props.put("password", clickHouse.password)
     props.put("jdbc_ignore_unsupported_values", "true")
-    val ds = DriverManagerDataSource(clickHouse.jdbcUrl, props)
+    val ds = ClickHouseDriverDataSource(clickHouse.jdbcUrl, props)
     val tableStatements = Vector(
       "clickhouse/car.sql",
       "clickhouse/no-id.sql",

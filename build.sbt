@@ -3,16 +3,16 @@ ThisBuild / version := "2.0.0-SNAPSHOT"
 ThisBuild / versionScheme := Some("early-semver")
 ThisBuild / scalaVersion := "3.3.8"
 ThisBuild / scalacOptions ++= Seq("-deprecation")
-ThisBuild / homepage := Some(url("https://github.com/AugustNagro/magnum"))
+ThisBuild / homepage := Some(uri("https://github.com/AugustNagro/magnum"))
 ThisBuild / licenses += (
   "Apache-2.0",
-  url(
+  uri(
     "https://opensource.org/licenses/Apache-2.0"
   )
 )
 ThisBuild / scmInfo := Some(
   ScmInfo(
-    url("https://github.com/AugustNagro/magnum"),
+    uri("https://github.com/AugustNagro/magnum"),
     "scm:git:git@github.com:augustnagro/magnum.git",
     Some("scm:git:git@github.com:augustnagro/magnum.git")
   )
@@ -22,7 +22,7 @@ ThisBuild / developers := List(
     id = "augustnagro@gmail.com",
     name = "August Nagro",
     email = "augustnagro@gmail.com",
-    url = url("https://augustnagro.com")
+    url = uri("https://augustnagro.com")
   )
 )
 ThisBuild / publishMavenStyle := true
@@ -61,7 +61,7 @@ lazy val magnum = project
       "org.testcontainers" % "testcontainers-oracle-free" % "2.0.3" % Test,
       "com.oracle.database.jdbc" % "ojdbc17" % "23.26.3.0.0" % Test,
       "com.dimafeng" %% "testcontainers-scala-clickhouse" % testcontainersVersion % Test,
-      "com.clickhouse" % "clickhouse-jdbc" % "0.10.0" % Test classifier "all",
+      ("com.clickhouse" % "clickhouse-jdbc" % "0.10.0" % Test).classifier("all"),
       "org.xerial" % "sqlite-jdbc" % "3.53.4.0" % Test
     )
   )
