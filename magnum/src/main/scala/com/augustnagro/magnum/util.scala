@@ -163,10 +163,9 @@ private def summonWriter[T: Type](using Quotes): Expr[DbCodec[T]] =
             .map(codec => '{ $codec.asInstanceOf[DbCodec[T]] })
     )
     .getOrElse:
-      report.info(
-        s"Could not find given DbCodec for ${TypeRepr.of[T].show}. Using PreparedStatement::setObject instead."
+      report.errorAndAbort(
+        s"Could not find given DbCodec for ${TypeRepr.of[T].show}."
       )
-      '{ DbCodec.AnyCodec.asInstanceOf[DbCodec[T]] }
 
 def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
     con: DbCon
