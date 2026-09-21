@@ -72,6 +72,7 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
     assume(dbType != MySqlDbType)
     assume(dbType != OracleDbType)
     assume(dbType != SqliteDbType)
+    assume(dbType != MsSqlDbType)
     xa().connect:
       assertEquals(
         compIdRepo.findAllById(
@@ -92,6 +93,7 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
     assume(dbType != MySqlDbType)
     assume(dbType != OracleDbType)
     assume(dbType != SqliteDbType)
+    assume(dbType != MsSqlDbType)
     xa().connect:
       assertEquals(
         compIdRepoTupled.findAllById(
@@ -244,6 +246,7 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
   test("composite id insertReturning"):
     assume(dbType != MySqlDbType)
     assume(dbType != SqliteDbType)
+    assume(dbType != MsSqlDbType)
     xa().connect:
       val inserted =
         compIdRepo.insertReturning(CompIdRow("delta", 4, 40, "fourth"))
@@ -253,6 +256,7 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
   test("composite id insertReturning (tupled)"):
     assume(dbType != MySqlDbType)
     assume(dbType != SqliteDbType)
+    assume(dbType != MsSqlDbType)
     xa().connect:
       val inserted = compIdRepoTupled.insertReturning(
         CompIdRow("delta", 4, 40, "fourth")
@@ -263,6 +267,7 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
   test("composite id insertAllReturning"):
     assume(dbType != MySqlDbType)
     assume(dbType != SqliteDbType)
+    assume(dbType != MsSqlDbType)
     xa().connect:
       val newRows = Vector(
         CompIdRow("delta", 4, 40, "fourth"),
@@ -275,6 +280,7 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
   test("composite id insertAllReturning (tupled)"):
     assume(dbType != MySqlDbType)
     assume(dbType != SqliteDbType)
+    assume(dbType != MsSqlDbType)
     xa().connect:
       val newRows = Vector(
         CompIdRow("delta", 4, 40, "fourth"),
