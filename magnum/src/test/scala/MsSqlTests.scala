@@ -17,7 +17,9 @@ class MsSqlTests extends FunSuite, TestContainersFixtures:
   val mssqlContainer =
     val mssql = MSSQLServerContainer
       .Def(dockerImageName =
-        DockerImageName.parse("mcr.microsoft.com/mssql/server:2025-latest")
+        DockerImageName.parse(
+          "mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-24.04"
+        )
       )
       .createContainer()
     mssql.container.acceptLicense()
