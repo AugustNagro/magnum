@@ -38,9 +38,9 @@ object MsSqlDbType extends DbType:
         case (None, None)    => None
 
     // T-SQL rejects OFFSET/FETCH without an ORDER BY.
-    override def orderByFallback: Option[String] = Some(
-      "ORDER BY (SELECT NULL)"
-    )
+    override def orderBy(sorts: Vector[Sort]): String =
+      if sorts.nonEmpty then super.orderBy(sorts)
+      else "ORDER BY (SELECT NULL)"
 
   def buildRepoDefaults[EC, E, ID](
       tableNameSql: String,
