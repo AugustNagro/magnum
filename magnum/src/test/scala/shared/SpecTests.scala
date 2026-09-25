@@ -152,7 +152,7 @@ def specTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
       assert(carRepo.findAll(spec) == Vector(allCars.head))
 
   test("prefix with its own order by, plus limit"):
-    xa().transact:
+    xa().connect:
       val spec = Spec[Car]
         .orderBy("id", SortOrder.Desc)
         .limit(1)
