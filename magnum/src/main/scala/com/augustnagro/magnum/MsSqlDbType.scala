@@ -1,14 +1,46 @@
 package com.augustnagro.magnum
 
-import java.sql.{Connection, JDBCType, PreparedStatement, ResultSet, Statement}
-import java.time.OffsetDateTime
-import scala.collection.View
-import scala.deriving.Mirror
+import java.sql.PreparedStatement
 import scala.reflect.ClassTag
-import scala.util.{Failure, Success, Using}
-import java.util.StringJoiner
+import scala.util.Using
 
-object PostgresDbType extends DbType:
+object MsSqlDbType extends DbType:
+
+  private val specImpl = new SpecImpl:
+    // SQL Server has no NULLS FIRST/LAST. MySql emulates this with a leading
+    // `col IS NULL, ` sort key, but T-SQL has no boolean expression value,
+    // so a CASE expression is needed instead.
+    override def sortSql(sort: Sort): String =
+      val nullSort = sort.nullOrder match
+        case NullOrder.Default => ""
+        case NullOrder.First =>
+          s"CASE WHEN ${sort.column} IS NULL THEN 0 ELSE 1 END, "
+        case NullOrder.Last =>
+          s"CASE WHEN ${sort.column} IS NULL THEN 1 ELSE 0 END, "
+
+      val dir = sort.direction match
+        case SortOrder.Default => ""
+        case SortOrder.Asc     => " ASC"
+        case SortOrder.Desc    => " DESC"
+
+      nullSort + sort.column + dir
+
+    // T-SQL requires OFFSET before FETCH NEXT.
+    override def offsetLimitSql(
+        offset: Option[Long],
+        limit: Option[Int]
+    ): Option[String] =
+      (offset, limit) match
+        case (Some(o), Some(l)) =>
+          Some(s"OFFSET $o ROWS FETCH NEXT $l ROWS ONLY")
+        case (Some(o), None) => Some(s"OFFSET $o ROWS")
+        case (None, Some(l)) => Some(s"OFFSET 0 ROWS FETCH NEXT $l ROWS ONLY")
+        case (None, None)    => None
+
+    // T-SQL rejects OFFSET/FETCH without an ORDER BY.
+    override def orderBy(sorts: Vector[Sort]): String =
+      if sorts.nonEmpty then super.orderBy(sorts)
+      else "ORDER BY (SELECT NULL)"
 
   def buildRepoDefaults[EC, E, ID](
       tableNameSql: String,
@@ -70,56 +102,6 @@ object PostgresDbType extends DbType:
     val findAllQuery = Frag(findAllSql, Vector.empty, FragWriter.empty).query[E]
     val findByIdSql =
       s"SELECT $selectKeys FROM $tableNameSql WHERE $idWhereClause"
-
-    val findAllByIdImpl: (Iterable[ID], DbCon) => Vector[E] = idNames match
-      case Seq() => (_, _) => Vector.empty
-      case Seq(name) =>
-        val findAllByIdSql =
-          s"SELECT $selectKeys FROM $tableNameSql WHERE $name = ANY(?)"
-        val idFirstTypeName = JDBCType.valueOf(idCodec.cols.head).getName
-        (ids, con) =>
-          val idsArray = Array.from[Any](ids)
-          Frag(
-            findAllByIdSql,
-            IArray(idsArray),
-            (ps, pos) =>
-              val sqlArray =
-                ps.getConnection.createArrayOf(idFirstTypeName, idsArray)
-              ps.setArray(pos, sqlArray)
-              pos + 1
-          ).query[E].run()(using con)
-      case _ =>
-        val unnestCalls = idNames.zipWithIndex
-          .map { case (_, i) =>
-            s"?::${JDBCType.valueOf(idCodec.cols(i)).getName}[]"
-          }
-          .mkString(", ")
-        val rowPlaceholders =
-          idNames.zipWithIndex.map { case (n, i) => s"col$i" }.mkString(", ")
-        val findAllByIdSql =
-          s"SELECT $selectKeys FROM $tableNameSql WHERE (${idNames.mkString(", ")}) IN (SELECT $rowPlaceholders FROM unnest($unnestCalls) AS t($rowPlaceholders))"
-        (ids, con) =>
-          val idsSeq = ids.toSeq
-          val fieldArrays = idNames.indices.map(idIdx =>
-            idsSeq.map(_.asInstanceOf[Product].productElement(idIdx))
-          )
-          val arrays = fieldArrays.map(Array.from[Any])
-          val params = IArray.from(arrays)
-          Frag(
-            findAllByIdSql,
-            params,
-            (ps, pos) =>
-              var currentPos = pos
-              for (colType, array) <- idCodec.cols.zip(arrays) do
-                val sqlArray = ps.getConnection.createArrayOf(
-                  JDBCType.valueOf(colType).getName,
-                  array
-                )
-                ps.setArray(currentPos, sqlArray)
-                currentPos += 1
-              currentPos
-          ).query[E].run()(using con)
-
     val deleteByIdSql =
       s"DELETE FROM $tableNameSql WHERE $idWhereClause"
     val truncateSql = s"TRUNCATE TABLE $tableNameSql"
@@ -193,13 +175,15 @@ object PostgresDbType extends DbType:
       def findAll(using DbCon): Vector[E] = findAllQuery.run()
 
       def findAll(spec: Spec[E])(using DbCon): Vector[E] =
-        SpecImpl.Default.findAll(spec, tableNameSql)
+        specImpl.findAll(spec, tableNameSql)
 
       def findById(id: ID)(using con: DbCon): Option[E] =
         findByIdImpl(id, con)
 
       def findAllById(ids: Iterable[ID])(using con: DbCon): Vector[E] =
-        findAllByIdImpl(ids, con)
+        throw UnsupportedOperationException(
+          "MsSqlServer does not support findAllById"
+        )
 
       def delete(entity: E)(using DbCon): Unit =
         deleteById(entityToId(entity))
@@ -207,8 +191,7 @@ object PostgresDbType extends DbType:
       def deleteById(id: ID)(using con: DbCon): Unit =
         deleteByIdImpl(id, con)
 
-      def truncate()(using DbCon): Unit =
-        truncateUpdate.run()
+      def truncate()(using DbCon): Unit = truncateUpdate.run()
 
       def deleteAll(entities: Iterable[E])(using DbCon): BatchUpdateResult =
         deleteAllById(entities.map(entityToId))
@@ -231,33 +214,18 @@ object PostgresDbType extends DbType:
             timed(batchUpdateResult(ps.executeBatch()))
 
       def insertReturning(entityCreator: EC)(using con: DbCon): E =
-        handleQuery(insertSql, SqlLogParams.Single(entityCreator)):
-          Using.Manager: use =>
-            val ps = use(
-              con.connection
-                .prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)
-            )
-            ecCodec.writeSingle(entityCreator, ps)
-            timed:
-              ps.executeUpdate()
-              val rs = use(ps.getGeneratedKeys)
-              rs.next()
-              eCodec.readSingle(rs)
+        /** https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql?view=sql-server-ver16#triggers
+          *
+          * MsSQL OUTPUT INSERTED syntax is complicated by the presence of
+          * triggers on the table. Since the Repo has no way to know whether
+          * triggers exist, we cannot support.
+          */
+        throw UnsupportedOperationException()
 
       def insertAllReturning(
           entityCreators: Iterable[EC]
       )(using con: DbCon): Vector[E] =
-        handleQuery(insertSql, SqlLogParams.Batch(entityCreators)):
-          Using.Manager: use =>
-            val ps = use(
-              con.connection
-                .prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)
-            )
-            ecCodec.write(entityCreators, ps)
-            timed:
-              batchUpdateResult(ps.executeBatch())
-              val rs = use(ps.getGeneratedKeys)
-              eCodec.read(rs)
+        throw UnsupportedOperationException()
 
       def update(entity: E)(using con: DbCon): Unit =
         handleQuery(updateSql, SqlLogParams.Single(entity)):
@@ -283,4 +251,4 @@ object PostgresDbType extends DbType:
 
     end new
   end buildRepoDefaults
-end PostgresDbType
+end MsSqlDbType

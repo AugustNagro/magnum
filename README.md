@@ -24,7 +24,7 @@ Yet another database client for Scala. No dependencies, high productivity.
   * [Postgres Module](#postgres-module)
   * [Logging](#logging-sql-queries)
 * [Integrations](#integrations)
-  * [ZIO](#zio) 
+  * [ZIO](#zio)
 * [Motivation](#motivation)
 * [Feature List And Database Support](#feature-list)
 * [Talks and Blogs](#talks-and-blogs)
@@ -229,7 +229,7 @@ class UserRepo extends ImmutableRepo[User, Long]:
       FROM user
       WHERE last_name = $lastName
       """.query[String].run()
-        
+
   // other User-related queries here
 ```
 
@@ -244,7 +244,7 @@ The `Repo` class auto-generates the following methods at compile-time:
   def findAll(spec: Spec[E])(using DbCon): Vector[E]
   def findById(id: ID)(using DbCon): Option[E]
   def findAllById(ids: Iterable[ID])(using DbCon): Vector[E]
-  
+
   def delete(entity: E)(using DbCon): Unit
   def deleteById(id: ID)(using DbCon): Unit
   def truncate()(using DbCon): Unit
@@ -286,7 +286,7 @@ Also note that Repo extends ImmutableRepo. Some databases cannot support every m
 
 ### Database generated columns
 
-It is often the case that database columns are auto-generated, for example, primary key IDs. This is why the Repo class has 3 type parameters. 
+It is often the case that database columns are auto-generated, for example, primary key IDs. This is why the Repo class has 3 type parameters.
 
 The first defines the Entity-Creator, which should omit any fields that are auto-generated. The entity-creator class must be an 'effective' subclass of the entity class, but it does not have to subclass the entity. This is verified at compile time.
 
@@ -424,7 +424,7 @@ object User:
 
 def allUsers(using DbCon): Vector[User] =
   val u = User.Table
-  // equiv to 
+  // equiv to
   // SELECT id, first_name, age FROM user
   sql"SELECT ${u.all} FROM $u".query[User].run()
 
@@ -465,11 +465,11 @@ To splice Strings directly into `sql` statements, you can interpolate `SqlLitera
 
 ```scala
 val table = SqlLiteral("beans")
-  
+
 sql"select * from $table"
 ```
 
-This feature should be used sparingly and never with untrusted input. 
+This feature should be used sparingly and never with untrusted input.
 
 ### Postgres Module
 
@@ -546,7 +546,7 @@ You can log slow queries by using the `Transactor` class in conjunction with `Sq
 
 ### ZIO
 
-Magnum provides a fine layer of integration with ZIO.    
+Magnum provides a fine layer of integration with ZIO.
 The `magnum-zio` module provides an implementation of the `connect` and `transact` utils that return a ZIO effect.
 
 To use the ZIO integration, add the following dependency:
@@ -576,7 +576,7 @@ Like in Zoolander (the movie), Magnum represents a 'new look' for Database acces
 ## Feature List
 
 * Supports any database with a JDBC driver,
-  including Postgres, MySql, Oracle, ClickHouse, H2, and Sqlite
+  including Postgres, MySql, MsSql, Oracle, ClickHouse, H2, and Sqlite
 * Efficient `sql" "` interpolator
 * Purely-functional API
 * Common queries (like insert, update, delete) generated at compile time
@@ -651,7 +651,7 @@ case class Address(
 
 Some databases directly support the UUID type; these include Postgres, Clickhouse, and H2. When using the built-in `DbCodec[UUID]`, defined in `DbCodec.scala`, serialization and deserialization of `java.util.UUID` will work as expected.
 
-Other databases like MySql, Oracle, and Sqlite, however, do not natively support UUID columns. Users have to choose an alternate datatype to store the UUID: most commonly `varchar(36)` or `binary(16)`. The JDBC drivers for these databases do not support direct serialization and deserialization of `java.util.UUID`, therefore the default `DbCodec[UUID]` will not be sufficient. Instead, import the appropriate codec from `com.augustnagro.magnum.UUIDCodec`. For example,
+Other databases like MySql, MsSql, Oracle, and Sqlite, however, do not natively support UUID columns. Users have to choose an alternate datatype to store the UUID: most commonly `varchar(36)` or `binary(16)`. The JDBC drivers for these databases do not support direct serialization and deserialization of `java.util.UUID`, therefore the default `DbCodec[UUID]` will not be sufficient. Instead, import the appropriate codec from `com.augustnagro.magnum.UUIDCodec`. For example,
 
 ```scala
 import com.augustnagro.magnum.*
@@ -662,8 +662,8 @@ import java.util.UUID
 case class Person(@Id id: Long, name: String, tracking_id: Option[UUID]) derives DbCodec
 ```
 
+
 ## Todo
 * JSON / XML support
-* Support MSSql
 * Cats Effect & ZIO modules
 * Explicit Nulls support

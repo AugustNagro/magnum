@@ -30,6 +30,7 @@ def entityCreatorTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
   test("insertReturning EntityCreator"):
     assume(dbType != MySqlDbType)
     assume(dbType != SqliteDbType)
+    assume(dbType != MsSqlDbType)
     xa().connect:
       val user = userRepo.insertReturning(MyUserCreator("Ash"))
       assert(user.firstName == "Ash")
@@ -37,6 +38,7 @@ def entityCreatorTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
   test("insertAllReturning EntityCreator"):
     assume(dbType != MySqlDbType)
     assume(dbType != SqliteDbType)
+    assume(dbType != MsSqlDbType)
     xa().connect:
       val newUsers = Vector(
         MyUserCreator("Ash"),
@@ -104,6 +106,10 @@ def entityCreatorTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
           if dbType == H2DbType then
             sql"INSERT INTO $user ${user.insertColumns} VALUES ('Bob')"
               .returningKeys[Long](user.id)
+              .iterator()
+          else if dbType == MsSqlDbType then
+            sql"INSERT INTO $user ${user.insertColumns} OUTPUT INSERTED.${user.id} VALUES ('Bob')"
+              .returning[Long]
               .iterator()
           else
             sql"INSERT INTO $user ${user.insertColumns} VALUES ('Bob') RETURNING ${user.id}"
