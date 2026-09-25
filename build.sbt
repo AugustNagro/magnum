@@ -43,6 +43,15 @@ val munitVersion = "1.3.6"
 val postgresDriverVersion = "42.7.13"
 val mssqlDriverVersion = "13.6.0.jre11"
 
+// SQL Server's Linux image is x86-64 only; set -Dmagnum.runx86OnlyTests=true to opt in elsewhere.
+val isX86Architecture = Set("amd64", "x86_64")
+  .contains(sys.props.getOrElse("os.arch", "").toLowerCase)
+val runx86OnlyTests =
+  sys.props
+    .get("magnum.runx86OnlyTests")
+    .map(_.toBoolean)
+    .getOrElse(isX86Architecture)
+
 lazy val root = project
   .in(file("."))
   .aggregate(magnum, magnumPg, magnumZio)
@@ -51,6 +60,8 @@ lazy val magnum = project
   .in(file("magnum"))
   .settings(
     publish / skip := false,
+    Test / testOptions += Tests
+      .Filter(name => runx86OnlyTests || !name.endsWith("MsSqlTests")),
     libraryDependencies ++= Seq(
       "org.scalameta" %% "munit" % munitVersion % Test,
       "com.dimafeng" %% "testcontainers-scala-munit" % testcontainersVersion % Test,
