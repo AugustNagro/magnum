@@ -8,9 +8,15 @@ import org.testcontainers.utility.DockerImageName
 import shared.*
 
 import java.nio.file.{Files, Path}
+import java.util.logging.{Level, Logger}
 import scala.util.Using.Manager
 
 class MsSqlTests extends FunSuite, TestContainersFixtures:
+
+  // The JDBC readiness check necessarily makes unsuccessful connections while SQL Server starts.
+  // SQL Server's driver logs those expected prelogin failures at WARNING level.
+  Class.forName("com.microsoft.sqlserver.jdbc.SQLServerDriver")
+  Logger.getLogger("com.microsoft.sqlserver.jdbc").setLevel(Level.SEVERE)
 
   sharedTests(this, MsSqlDbType, xa)
 
