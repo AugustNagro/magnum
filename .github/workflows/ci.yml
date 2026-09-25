@@ -28,4 +28,4 @@ jobs:
       - name: Cache scala dependencies
         uses: coursier/cache-action@v8
       - name: Run tests
-        run: sbt 'scalafmtCheckAll; test'
+        run: sbt -Dmagnum.runx86OnlyTests=true 'scalafmtCheckAll; test'

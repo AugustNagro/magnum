@@ -591,7 +591,7 @@ Like in Zoolander (the movie), Magnum represents a 'new look' for Database acces
 * Performant batch-queries
 
 ## Developing
-The tests are written using TestContainers, which requires Docker be installed.
+The tests are written using TestContainers, which requires Docker be installed. The MsSqlTests will be auto-skipped on ARM architecture, since the docker image doesn't support ARM.
 
 ## Talks and Blogs
 
