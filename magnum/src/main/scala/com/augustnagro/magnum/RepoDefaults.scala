@@ -113,11 +113,25 @@ object RepoDefaults:
   private def getProductCodecs[Mets: Type](
       res: Vector[Expr[DbCodec[?]]] = Vector.empty
   )(using Quotes): Expr[Seq[DbCodec[?]]] =
+    import quotes.reflect.*
     Type.of[Mets] match
       case '[met *: metTail] =>
-        Expr.summon[DbCodec[met]] match
-          case Some(codec) => getProductCodecs[metTail](res :+ codec)
-          case None => getProductCodecs[metTail](res :+ '{ DbCodec.AnyCodec })
+        val codec = Expr
+          .summon[DbCodec[met]]
+          .orElse(
+            TypeRepr.of[met].widen.asType match
+              case '[tpe] =>
+                Expr
+                  .summon[DbCodec[tpe]]
+                  .map(codec => '{ $codec.asInstanceOf[DbCodec[met]] })
+          )
+          .getOrElse(
+            report.errorAndAbort(
+              s"Could not find given DbCodec for ${TypeRepr.of[met].show}."
+            )
+          )
+        getProductCodecs[metTail](res :+ codec)
       case '[EmptyTuple] => Expr.ofSeq(res)
+  end getProductCodecs
 
 end RepoDefaults

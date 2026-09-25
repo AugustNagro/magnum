@@ -1,38 +1,46 @@
 package com.augustnagro.magnum
 
-import java.sql.{Connection, JDBCType, PreparedStatement, ResultSet, Statement}
-import java.time.OffsetDateTime
-import scala.collection.View
-import scala.deriving.Mirror
+import java.sql.PreparedStatement
 import scala.reflect.ClassTag
-import scala.util.{Failure, Success, Using}
+import scala.util.Using
 
-object MySqlDbType extends DbType:
+object MsSqlDbType extends DbType:
 
   private val specImpl = new SpecImpl:
+    // SQL Server has no NULLS FIRST/LAST. MySql emulates this with a leading
+    // `col IS NULL, ` sort key, but T-SQL has no boolean expression value,
+    // so a CASE expression is needed instead.
     override def sortSql(sort: Sort): String =
-      val column = sort.column
       val nullSort = sort.nullOrder match
         case NullOrder.Default => ""
-        case NullOrder.First   => s"$column IS NOT NULL, "
-        case NullOrder.Last    => s"$column IS NULL, "
-        case _                 => throw UnsupportedOperationException()
+        case NullOrder.First   =>
+          s"CASE WHEN ${sort.column} IS NULL THEN 0 ELSE 1 END, "
+        case NullOrder.Last =>
+          s"CASE WHEN ${sort.column} IS NULL THEN 1 ELSE 0 END, "
+
       val dir = sort.direction match
         case SortOrder.Default => ""
         case SortOrder.Asc     => " ASC"
         case SortOrder.Desc    => " DESC"
-        case _                 => throw UnsupportedOperationException()
-      nullSort + column + dir
 
+      nullSort + sort.column + dir
+
+    // T-SQL requires OFFSET before FETCH NEXT.
     override def offsetLimitSql(
         offset: Option[Long],
         limit: Option[Int]
     ): Option[String] =
       (offset, limit) match
-        case (Some(o), Some(l)) => Some(s"LIMIT $o, $l")
-        case (Some(o), None)    => Some(s"LIMIT $o, ${Long.MaxValue}")
-        case (None, Some(l))    => Some(s"LIMIT $l")
-        case (None, None)       => None
+        case (Some(o), Some(l)) =>
+          Some(s"OFFSET $o ROWS FETCH NEXT $l ROWS ONLY")
+        case (Some(o), None) => Some(s"OFFSET $o ROWS")
+        case (None, Some(l)) => Some(s"OFFSET 0 ROWS FETCH NEXT $l ROWS ONLY")
+        case (None, None)    => None
+
+    // T-SQL rejects OFFSET/FETCH without an ORDER BY.
+    override def orderBy(sorts: Vector[Sort]): String =
+      if sorts.nonEmpty then super.orderBy(sorts)
+      else "ORDER BY (SELECT NULL)"
 
   def buildRepoDefaults[EC, E, ID](
       tableNameSql: String,
@@ -104,8 +112,6 @@ object MySqlDbType extends DbType:
     val updateSql =
       s"UPDATE $tableNameSql SET $updateKeys WHERE $idWhereClause"
 
-    val idFirstTypeName = JDBCType.valueOf(idCodec.cols.head).getName
-
     def idWriter(id: ID): FragWriter = (ps, pos) =>
       idCodec.writeSingle(id, ps, pos)
       pos + idCodec.cols.length
@@ -174,9 +180,9 @@ object MySqlDbType extends DbType:
       def findById(id: ID)(using con: DbCon): Option[E] =
         findByIdImpl(id, con)
 
-      def findAllById(ids: Iterable[ID])(using DbCon): Vector[E] =
+      def findAllById(ids: Iterable[ID])(using con: DbCon): Vector[E] =
         throw UnsupportedOperationException(
-          "MySql does not support 'ANY' keyword, and does not support long IN parameter lists. Use findById in a loop instead."
+          "MsSqlServer does not support findAllById"
         )
 
       def delete(entity: E)(using DbCon): Unit =
@@ -208,9 +214,12 @@ object MySqlDbType extends DbType:
             timed(batchUpdateResult(ps.executeBatch()))
 
       def insertReturning(entityCreator: EC)(using con: DbCon): E =
-        // unfortunately, mysql only will return auto_incremented keys.
-        // it doesn't return default columns, and adding other columns to
-        // the insertGenKeys array doesn't change this behavior.
+        /** https://learn.microsoft.com/en-us/sql/t-sql/queries/output-clause-transact-sql?view=sql-server-ver16#triggers
+          *
+          * MsSQL OUTPUT INSERTED syntax is complicated by the presence of
+          * triggers on the table. Since the Repo has no way to know whether
+          * triggers exist, we cannot support.
+          */
         throw UnsupportedOperationException()
 
       def insertAllReturning(
@@ -242,4 +251,4 @@ object MySqlDbType extends DbType:
 
     end new
   end buildRepoDefaults
-end MySqlDbType
+end MsSqlDbType

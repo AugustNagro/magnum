@@ -41,6 +41,7 @@ val testcontainersVersion = "0.44.1"
 val circeVersion = "0.14.16"
 val munitVersion = "1.3.6"
 val postgresDriverVersion = "42.7.13"
+val mssqlDriverVersion = "13.6.0.jre11"
 
 lazy val root = project
   .in(file("."))
@@ -63,7 +64,9 @@ lazy val magnum = project
       "com.dimafeng" %% "testcontainers-scala-clickhouse" % testcontainersVersion % Test,
       ("com.clickhouse" % "clickhouse-jdbc" % "0.10.0" % Test)
         .classifier("all"),
-      "org.xerial" % "sqlite-jdbc" % "3.53.4.0" % Test
+      "org.xerial" % "sqlite-jdbc" % "3.53.4.0" % Test,
+      "com.dimafeng" %% "testcontainers-scala-mssqlserver" % testcontainersVersion % Test,
+      "com.microsoft.sqlserver" % "mssql-jdbc" % mssqlDriverVersion % Test
     )
   )
 

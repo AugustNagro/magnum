@@ -19,6 +19,7 @@ def embeddedFragTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
         .head
     val isAdminFrag =
       if dbType == OracleDbType then sql"is_admin = 'Y'"
+      else if dbType == MsSqlDbType then sql"is_admin = 1"
       else sql"is_admin = true"
     xa().connect:
       val johnCnt =

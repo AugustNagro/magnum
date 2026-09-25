@@ -128,7 +128,7 @@ object SqliteDbType extends DbType:
       if hasId then
         (ids, con) =>
           given DbCon = con
-          handleQuery(deleteByIdSql, ids):
+          handleQuery(deleteByIdSql, SqlLogParams.Batch(ids)):
             Using(con.connection.prepareStatement(deleteByIdSql)): ps =>
               idCodec.write(ids, ps)
               timed(batchUpdateResult(ps.executeBatch()))
@@ -185,13 +185,13 @@ object SqliteDbType extends DbType:
         deleteAllByIdImpl(ids, con)
 
       def insert(entityCreator: EC)(using con: DbCon): Unit =
-        handleQuery(insertSql, entityCreator):
+        handleQuery(insertSql, SqlLogParams.Single(entityCreator)):
           Using(con.connection.prepareStatement(insertSql)): ps =>
             ecCodec.writeSingle(entityCreator, ps)
             timed(ps.executeUpdate())
 
       def insertAll(entityCreators: Iterable[EC])(using con: DbCon): Unit =
-        handleQuery(insertSql, entityCreators):
+        handleQuery(insertSql, SqlLogParams.Batch(entityCreators)):
           Using(con.connection.prepareStatement(insertSql)): ps =>
             ecCodec.write(entityCreators, ps)
             timed(batchUpdateResult(ps.executeBatch()))
@@ -207,7 +207,7 @@ object SqliteDbType extends DbType:
         throw UnsupportedOperationException()
 
       def update(entity: E)(using con: DbCon): Unit =
-        handleQuery(updateSql, entity):
+        handleQuery(updateSql, SqlLogParams.Single(entity)):
           Using(con.connection.prepareStatement(updateSql)): ps =>
             writeUpdateParams(entity, ps)
             timed(ps.executeUpdate())
@@ -215,7 +215,7 @@ object SqliteDbType extends DbType:
       def updateAll(entities: Iterable[E])(using
           con: DbCon
       ): BatchUpdateResult =
-        handleQuery(updateSql, entities):
+        handleQuery(updateSql, SqlLogParams.Batch(entities)):
           Using(con.connection.prepareStatement(updateSql)): ps =>
             for entity <- entities do
               writeUpdateParams(entity, ps)

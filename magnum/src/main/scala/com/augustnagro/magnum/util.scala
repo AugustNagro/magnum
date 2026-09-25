@@ -164,10 +164,9 @@ private def summonWriter[T: Type](using Quotes): Expr[DbCodec[T]] =
             .map(codec => '{ $codec.asInstanceOf[DbCodec[T]] })
     )
     .getOrElse:
-      report.info(
-        s"Could not find given DbCodec for ${TypeRepr.of[T].show}. Using PreparedStatement::setObject instead."
+      report.errorAndAbort(
+        s"Could not find given DbCodec for ${TypeRepr.of[T].show}."
       )
-      '{ DbCodec.AnyCodec.asInstanceOf[DbCodec[T]] }
 
 def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
     con: DbCon
@@ -196,7 +195,11 @@ def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
     case Failure(t)   =>
       throw SqlException(
         con.sqlLogger.exceptionMsg(
-          SqlExceptionEvent(firstFrag.sqlString, firstFrag.params, t)
+          SqlExceptionEvent(
+            firstFrag.sqlString,
+            SqlLogParams.Fragment(firstFrag.params),
+            t
+          )
         ),
         t
       )
@@ -204,19 +207,6 @@ def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
 end batchUpdate
 
 private val Log = System.getLogger("com.augustnagro.magnum")
-
-private def parseParams(params: Any): Iterator[Iterator[Any]] =
-  params match
-    case p: Product      => Iterator(p.productIterator)
-    case it: Iterable[?] =>
-      it.headOption match
-        case Some(h: Product) =>
-          it.asInstanceOf[Iterable[Product]]
-            .iterator
-            .map(_.productIterator)
-        case _ =>
-          Iterator(it.iterator)
-    case x => Iterator(Iterator(x))
 
 private def paramsString(params: Iterator[Iterator[Any]]): String =
   params.map(_.mkString("(", ", ", ")")).mkString("", ",\n", "\n")
@@ -374,7 +364,7 @@ private def sqlNameAnnot[T: Type](elemName: String)(using
     .flatMap(sym => sym.getAnnotation(annot))
     .map(term => term.asExprOf[SqlName])
 
-private def handleQuery[A](sql: String, params: Any)(
+private def handleQuery[A](sql: String, params: SqlLogParams)(
     attempt: Try[(A, FiniteDuration)]
 )(using con: DbCon): A =
   attempt match

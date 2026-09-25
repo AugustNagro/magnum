@@ -78,6 +78,7 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
     assume(dbType != MySqlDbType)
     assume(dbType != OracleDbType)
     assume(dbType != SqliteDbType)
+    assume(dbType != MsSqlDbType)
     xa().connect:
       val ids = carRepo.findAllById(Vector(1L, 3L)).map(_.id)
       assert(ids == Vector(1L, 3L))
