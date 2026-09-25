@@ -9,7 +9,7 @@ import scala.util.{Failure, Success, Try, Using}
 class Query[E] private[magnum] (val frag: Frag, reader: DbCodec[E]):
 
   def run()(using con: DbCon): Vector[E] =
-    handleQuery(frag.sqlString, frag.params):
+    handleQuery(frag.sqlString, SqlLogParams.Fragment(frag.params)):
       Using.Manager: use =>
         val ps = use(con.connection.prepareStatement(frag.sqlString))
         frag.writer.write(ps, 1)
@@ -23,7 +23,7 @@ class Query[E] private[magnum] (val frag: Frag, reader: DbCodec[E]):
   def iterator(
       fetchSize: Int = 0
   )(using con: DbCon, use: Manager): Iterator[E] =
-    handleQuery(frag.sqlString, frag.params):
+    handleQuery(frag.sqlString, SqlLogParams.Fragment(frag.params)):
       Try:
         val ps = use(con.connection.prepareStatement(frag.sqlString))
         ps.setFetchSize(fetchSize)
