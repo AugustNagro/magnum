@@ -56,7 +56,7 @@ object H2DbType extends DbType:
 
     val idWhereClause = idNames match
       case Seq() => "1 = 0"
-      case _ =>
+      case _     =>
         idNames
           .zip(idCodecs)
           .map((name, codec) => name + " = " + codec.queryRepr)
@@ -72,7 +72,7 @@ object H2DbType extends DbType:
       s"SELECT $selectKeys FROM $tableNameSql WHERE $idWhereClause"
 
     val findAllByIdImpl: (Iterable[ID], DbCon) => Vector[E] = idNames match
-      case Seq() => (_, _) => Vector.empty
+      case Seq()     => (_, _) => Vector.empty
       case Seq(name) =>
         val findAllByIdSql =
           s"SELECT $selectKeys FROM $tableNameSql WHERE $name = ANY(?)"

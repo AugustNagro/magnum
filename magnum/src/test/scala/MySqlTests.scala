@@ -7,7 +7,7 @@ import munit.{AnyFixture, FunSuite, Location}
 import org.testcontainers.utility.DockerImageName
 import shared.*
 
-import java.nio.file.{Files, Path}
+import java.nio.charset.StandardCharsets
 import scala.util.Using
 import scala.util.Using.Manager
 
@@ -17,11 +17,11 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
 
   val mySqlContainer = ForAllContainerFixture(
     MySQLContainer
-      .Def(dockerImageName = DockerImageName.parse("mysql:8.0.32"))
+      .Def(dockerImageName = DockerImageName.parse("mysql:9.7.2"))
       .createContainer()
   )
 
-  override def munitFixtures: Seq[AnyFixture[_]] =
+  override def munitFixtures: Seq[AnyFixture[?]] =
     super.munitFixtures :+ mySqlContainer
 
   def xa(): Transactor =
@@ -40,7 +40,11 @@ class MySqlTests extends FunSuite, TestContainersFixtures:
       "/mysql/big-dec.sql",
       "/mysql/my-time.sql",
       "/mysql/comp-id.sql"
-    ).map(p => Files.readString(Path.of(getClass.getResource(p).toURI)))
+    ).map(p =>
+      Using.resource(getClass.getResourceAsStream(p))(stream =>
+        String(stream.readAllBytes(), StandardCharsets.UTF_8)
+      )
+    )
     Manager(use =>
       val con = use(ds.getConnection)
       val stmt = use(con.createStatement())

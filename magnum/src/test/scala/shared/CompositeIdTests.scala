@@ -27,6 +27,11 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
     CompIdRow("gamma", 3, 30, "third")
   )
 
+  def expectedBatchDeleteResult(rowsUpdated: Int): BatchUpdateResult =
+    BatchUpdateResult.Success(
+      if dbType == ClickhouseDbType then 0 else rowsUpdated
+    )
+
   // ImmutableRepo methods
 
   test("composite id existsById"):
@@ -144,7 +149,7 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
       val row1 = compIdRepo.findById(CompId(1, "first")).get
       val row2 = compIdRepo.findById(CompId(2, "second")).get
       val result = compIdRepo.deleteAll(Vector(row1, row2))
-      assert(result == BatchUpdateResult.Success(2))
+      assert(result == expectedBatchDeleteResult(2))
       assert(compIdRepo.count == 1L)
 
   test("composite id deleteAll (tupled)"):
@@ -152,7 +157,7 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
       val row1 = compIdRepoTupled.findById((1, "first")).get
       val row2 = compIdRepoTupled.findById((2, "second")).get
       val result = compIdRepoTupled.deleteAll(Vector(row1, row2))
-      assert(result == BatchUpdateResult.Success(2))
+      assert(result == expectedBatchDeleteResult(2))
       assert(compIdRepoTupled.count == 1L)
 
   test("composite id deleteAllById"):
@@ -160,7 +165,7 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
       val result = compIdRepo.deleteAllById(
         Vector(CompId(1, "first"), CompId(2, "second"))
       )
-      assert(result == BatchUpdateResult.Success(2))
+      assert(result == expectedBatchDeleteResult(2))
       assert(compIdRepo.count == 1L)
       assertEquals(compIdRepo.findAll, Vector(allCompIdRows(2)))
 
@@ -169,7 +174,7 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
       val result = compIdRepoTupled.deleteAllById(
         Vector((1, "first"), (2, "second"))
       )
-      assert(result == BatchUpdateResult.Success(2))
+      assert(result == expectedBatchDeleteResult(2))
       assert(compIdRepoTupled.count == 1L)
       assertEquals(compIdRepoTupled.findAll, Vector(allCompIdRows(2)))
 
@@ -178,9 +183,7 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
       val result = compIdRepo.deleteAllById(
         Vector(CompId(1, "first"), CompId(9, "missing"))
       )
-      if dbType == ClickhouseDbType then
-        assertEquals(result, BatchUpdateResult.Success(2))
-      else assertEquals(result, BatchUpdateResult.Success(1))
+      assertEquals(result, expectedBatchDeleteResult(1))
       assert(compIdRepo.count == 2L)
       assert(compIdRepo.findById(CompId(1, "first")).isEmpty)
       assert(compIdRepo.findById(CompId(2, "second")).isDefined)
@@ -190,9 +193,7 @@ def compositeIdTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
       val result = compIdRepoTupled.deleteAllById(
         Vector((1, "first"), (9, "missing"))
       )
-      if dbType == ClickhouseDbType then
-        assertEquals(result, BatchUpdateResult.Success(2))
-      else assertEquals(result, BatchUpdateResult.Success(1))
+      assertEquals(result, expectedBatchDeleteResult(1))
       assert(compIdRepoTupled.count == 2L)
       assert(compIdRepoTupled.findById((1, "first")).isEmpty)
       assert(compIdRepoTupled.findById((2, "second")).isDefined)

@@ -13,7 +13,7 @@ private[magnum] enum SqlLogParams:
           case _                   => Iterator(params.iterator)
       case Single(param: Product) => Iterator(param.productIterator)
       case Single(param)          => Iterator(Iterator.single(param))
-      case Batch(params) =>
+      case Batch(params)          =>
         params.iterator.map:
           case param: Product => param.productIterator
           case param          => Iterator.single(param)

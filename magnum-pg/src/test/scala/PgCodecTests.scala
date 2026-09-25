@@ -9,12 +9,13 @@ import com.augustnagro.magnum.pg.PgCodec.given
 import com.augustnagro.magnum.pg.enums.PgEnumToScalaEnumSqlArrayCodec
 import org.postgresql.util.PGInterval
 
-import java.nio.file.{Files, Path}
+import java.nio.charset.StandardCharsets
 import java.time.{LocalDate, OffsetDateTime, ZoneOffset}
 import java.util.Objects
 import java.util.UUID
 import javax.sql.DataSource
 import scala.util.Using.Manager
+import scala.util.Using
 
 class PgCodecTests extends FunSuite, TestContainersFixtures:
   val userRepo = Repo[MagUser, MagUser, Long]
@@ -223,11 +224,11 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
 
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
-      .Def(dockerImageName = DockerImageName.parse("postgres:17.0"))
+      .Def(dockerImageName = DockerImageName.parse("postgres:18.6"))
       .createContainer()
   )
 
-  override def munitFixtures: Seq[AnyFixture[_]] =
+  override def munitFixtures: Seq[AnyFixture[?]] =
     super.munitFixtures :+ pgContainer
 
   def ds(): DataSource =
@@ -236,14 +237,13 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
     ds.setUrl(pg.jdbcUrl)
     ds.setUser(pg.username)
     ds.setPassword(pg.password)
-    val userSql =
-      Files.readString(Path.of(getClass.getResource("/pg-user.sql").toURI))
-    val carSql =
-      Files.readString(Path.of(getClass.getResource("/pg-car.sql").toURI))
-    val serviceListSql =
-      Files.readString(
-        Path.of(getClass.getResource("/pg-service-list.sql").toURI)
+    def resource(path: String): String =
+      Using.resource(getClass.getResourceAsStream(path))(stream =>
+        String(stream.readAllBytes(), StandardCharsets.UTF_8)
       )
+    val userSql = resource("/pg-user.sql")
+    val carSql = resource("/pg-car.sql")
+    val serviceListSql = resource("/pg-service-list.sql")
     Manager { use =>
       val con = use(ds.getConnection)
       val stmt = use(con.createStatement)

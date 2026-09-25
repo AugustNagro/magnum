@@ -40,7 +40,7 @@ object ClickhouseDbType extends DbType:
 
     val idWhereClause = idNames match
       case Seq() => "1 = 0"
-      case _ =>
+      case _     =>
         idNames
           .zip(idCodecs)
           .map((name, codec) => name + " = " + codec.queryRepr)

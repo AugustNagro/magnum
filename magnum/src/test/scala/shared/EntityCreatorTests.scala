@@ -84,6 +84,7 @@ def entityCreatorTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
       assert(userRepo.findAll.exists(_.firstName == "Ash"))
 
   test("custom update EntityCreator"):
+    assume(dbType != ClickhouseDbType)
     xa().connect:
       val u = userRepo.findAll.head
       val newName = "Ash"

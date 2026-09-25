@@ -7,8 +7,9 @@ import munit.{AnyFixture, FunSuite}
 import org.testcontainers.utility.DockerImageName
 import shared.*
 
-import java.nio.file.{Files, Path}
+import java.nio.charset.StandardCharsets
 import java.util.logging.{Level, Logger}
+import scala.util.Using
 import scala.util.Using.Manager
 
 class MsSqlTests extends FunSuite, TestContainersFixtures:
@@ -48,7 +49,11 @@ class MsSqlTests extends FunSuite, TestContainersFixtures:
       "/mssql/big-dec.sql",
       "/mssql/my-time.sql",
       "/mssql/comp-id.sql"
-    ).map(p => Files.readString(Path.of(getClass.getResource(p).toURI)))
+    ).map(p =>
+      Using.resource(getClass.getResourceAsStream(p))(stream =>
+        String(stream.readAllBytes(), StandardCharsets.UTF_8)
+      )
+    )
 
     Manager(use =>
       val con = use(ds.getConnection)

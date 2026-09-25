@@ -13,7 +13,7 @@ object MsSqlDbType extends DbType:
     override def sortSql(sort: Sort): String =
       val nullSort = sort.nullOrder match
         case NullOrder.Default => ""
-        case NullOrder.First =>
+        case NullOrder.First   =>
           s"CASE WHEN ${sort.column} IS NULL THEN 0 ELSE 1 END, "
         case NullOrder.Last =>
           s"CASE WHEN ${sort.column} IS NULL THEN 1 ELSE 0 END, "
@@ -88,7 +88,7 @@ object MsSqlDbType extends DbType:
 
     val idWhereClause = idNames match
       case Seq() => "1 = 0"
-      case _ =>
+      case _     =>
         idNames
           .zip(idCodecs)
           .map((name, codec) => name + " = " + codec.queryRepr)

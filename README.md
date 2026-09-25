@@ -36,7 +36,7 @@ Yet another database client for Scala. No dependencies, high productivity.
 "com.augustnagro" %% "magnum" % "1.3.0"
 ```
 
-Magnum requires Scala >= 3.3.0
+Magnum requires Scala >= 3.9.0
 
 You must also install the JDBC driver for your database, for example:
 

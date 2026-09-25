@@ -1,15 +1,27 @@
 import com.augustnagro.magnum.*
 import com.augustnagro.magnum.UUIDCodec.VarCharUUIDCodec
-import com.dimafeng.testcontainers.OracleContainer
+import com.dimafeng.testcontainers.SingleContainer
 import com.dimafeng.testcontainers.munit.fixtures.TestContainersFixtures
 import munit.{AnyFixture, FunSuite}
 import oracle.jdbc.datasource.impl.OracleDataSource
+import org.testcontainers.oracle.{OracleContainer as JavaOracleContainer}
 import org.testcontainers.utility.DockerImageName
 import shared.*
 
 import java.sql.Statement
+import java.time.Duration
 import java.time.LocalTime
 import scala.util.Using
+
+private final class OracleFreeContainer
+    extends SingleContainer[JavaOracleContainer]:
+  override val container: JavaOracleContainer =
+    new JavaOracleContainer(
+      DockerImageName.parse("gvenzl/oracle-free:23.26.2-slim-faststart")
+    )
+      .withUsername("test")
+      .withPassword("test")
+      .withStartupTimeout(Duration.ofSeconds(240))
 
 class OracleTests extends FunSuite, TestContainersFixtures:
 
@@ -21,25 +33,17 @@ class OracleTests extends FunSuite, TestContainersFixtures:
 
   sharedTests(this, OracleDbType, xa)
 
-  val oracleContainer = ForAllContainerFixture(
-    OracleContainer
-      .Def(dockerImageName =
-        DockerImageName.parse(
-          "gvenzl/oracle-xe:21.3.0"
-        )
-      )
-      .createContainer()
-  )
+  val oracleContainer = ForAllContainerFixture(OracleFreeContainer())
 
-  override def munitFixtures: Seq[AnyFixture[_]] =
+  override def munitFixtures: Seq[AnyFixture[?]] =
     super.munitFixtures :+ oracleContainer
 
   def xa(): Transactor =
     val oracle = oracleContainer()
     val ds = OracleDataSource()
-    ds.setURL(oracle.jdbcUrl)
-    ds.setUser(oracle.username)
-    ds.setPassword(oracle.password)
+    ds.setURL(oracle.container.getJdbcUrl)
+    ds.setUser(oracle.container.getUsername)
+    ds.setPassword(oracle.container.getPassword)
     // oracle doesn't support drop if exists,
     // or multi-statement queries
     Using
@@ -55,20 +59,21 @@ class OracleTests extends FunSuite, TestContainersFixtures:
           |  top_speed number not null,
           |  vin number,
           |  color varchar2(50) not null check (color in ('Red', 'Green', 'Blue')),
-          |  created timestamp not null
+          |  created timestamp with time zone not null
           |)""".stripMargin
         )
+
         stmt.execute(
           """insert into car (model, id, top_speed, vin, color, created)
-          |values ('McLaren Senna', 1, 208, 123, 'Red', timestamp '2024-11-24 22:17:30')""".stripMargin
+          |values ('McLaren Senna', 1, 208, 123, 'Red', timestamp '2024-11-24 22:17:30 +00:00')""".stripMargin
         )
         stmt.execute(
           """insert into car (model, id, top_speed, vin, color, created)
-          |values ('Ferrari F8 Tributo', 2, 212, 124, 'Green', timestamp '2024-11-24 22:17:31')""".stripMargin
+          |values ('Ferrari F8 Tributo', 2, 212, 124, 'Green', timestamp '2024-11-24 22:17:31 +00:00')""".stripMargin
         )
         stmt.execute(
           """insert into car (model, id, top_speed, vin, color, created)
-          |values ('Aston Martin Superleggera', 3, 211, null, 'Blue', timestamp '2024-11-24 22:17:32')""".stripMargin
+          |values ('Aston Martin Superleggera', 3, 211, null, 'Blue', timestamp '2024-11-24 22:17:32 +00:00')""".stripMargin
         )
         try stmt.execute("drop table person")
         catch case _ => ()
@@ -78,7 +83,7 @@ class OracleTests extends FunSuite, TestContainersFixtures:
           |    first_name varchar2(50),
           |    last_name varchar2(50) not null,
           |    is_admin varchar2(1) not null,
-          |    created timestamp not null,
+          |    created timestamp with time zone not null,
           |    social_id varchar2(36)
           |)""".stripMargin
         )
@@ -133,7 +138,7 @@ class OracleTests extends FunSuite, TestContainersFixtures:
         catch case _ => ()
         stmt.execute(
           """create table no_id (
-            |  created_at timestamp not null,
+            |  created_at timestamp with time zone not null,
             |  user_name varchar2(200) not null,
             |  user_action varchar2(200) not null
             |)
@@ -165,7 +170,7 @@ class OracleTests extends FunSuite, TestContainersFixtures:
         catch case _ => ()
         stmt.execute(
           """create table my_time (
-            |  a timestamp with local time zone not null,
+            |  a timestamp with time zone not null,
             |  b date not null,
             |  c VARCHAR2(100) not null,
             |  d timestamp not null

@@ -18,7 +18,8 @@ import scala.reflect.ClassTag
 inline given PgEnumDbCodec[A <: scala.reflect.Enum: Mirror.SumOf]: DbCodec[A] =
   ${ pgEnumDbCodecImpl[A] }
 
-private def pgEnumDbCodecImpl[A: Type](using Quotes): Expr[DbCodec[A]] =
+@scala.annotation.publicInBinary
+private[enums] def pgEnumDbCodecImpl[A: Type](using Quotes): Expr[DbCodec[A]] =
   import quotes.reflect.*
   val mirror = Expr.summon[Mirror.SumOf[A]].getOrElse {
     report.errorAndAbort(
@@ -55,7 +56,7 @@ private def pgEnumDbCodecImpl[A: Type](using Quotes): Expr[DbCodec[A]] =
             val str = rs.getString(pos)
             nameMap.find((name, _) => name == str) match
               case Some((_, v)) => v
-              case None =>
+              case None         =>
                 throw IllegalArgumentException(
                   str + " not convertible to " + $melExpr
                 )
@@ -63,7 +64,7 @@ private def pgEnumDbCodecImpl[A: Type](using Quotes): Expr[DbCodec[A]] =
             Option(rs.getString(pos)).map(str =>
               nameMap.find((name, _) => name == str) match
                 case Some((_, v)) => v
-                case None =>
+                case None         =>
                   throw IllegalArgumentException(
                     str + " not convertible to " + $melExpr
                   )
@@ -71,7 +72,7 @@ private def pgEnumDbCodecImpl[A: Type](using Quotes): Expr[DbCodec[A]] =
           def writeSingle(entity: A, ps: PreparedStatement, pos: Int): Unit =
             nameMap.find((_, v) => v == entity) match
               case Some((k, _)) => ps.setString(pos, k)
-              case None =>
+              case None         =>
                 throw IllegalArgumentException(
                   entity.toString + " not convertible to " + $melExpr
                 )
