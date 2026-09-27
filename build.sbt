@@ -104,9 +104,9 @@ lazy val magnumZio = project
     publish / skip := false,
     libraryDependencies ++= Seq(
       "dev.zio" %% "zio" % "2.1.26" % Provided,
-      "org.scalameta" %% "munit" % munitVersion % Test,
-      "com.dimafeng" %% "testcontainers-scala-munit" % testcontainersVersion % Test,
-      "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion % Test,
+      "dev.zio" %% "zio-test" % "2.1.26" % Test,
+      "dev.zio" %% "zio-test-sbt" % "2.1.26" % Test,
+      "org.testcontainers" % "testcontainers-postgresql" % "2.0.5" % Test,
       "org.postgresql" % "postgresql" % postgresDriverVersion % Test
     )
   )
