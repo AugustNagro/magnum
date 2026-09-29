@@ -13,6 +13,9 @@ import scala.util.{Try, Using}
   */
 open class ImmutableRepo[E, ID](using defaults: RepoDefaults[?, E, ID]):
 
+  /** Metadata for this repository's table */
+  def table: TableInfo[?, E, ID] = defaults.table
+
   /** Count of all entities */
   def count(using DbCon): Long = defaults.count
 

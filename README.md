@@ -419,38 +419,33 @@ case class UserCreator(firstName: String, age: Int) derives DbCodec
 @Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
 case class User(id: Long, firstName: String, age: Int) derives DbCodec
 
-object User:
-  val Table = TableInfo[UserCreator, User, Long]
+val repo = Repo[UserCreator, User, Long]
+val u: TableInfo[UserCreator, User, Long] = repo.table
 
 def allUsers(using DbCon): Vector[User] =
-  val u = User.Table
   // equiv to
   // SELECT id, first_name, age FROM user
   sql"SELECT ${u.all} FROM $u".query[User].run()
 
-def firstNamesForLast(lastName: String)(using DbCon): Vector[String] =
-  val u = User.Table
+def firstNamesForMinAge(minAge: Int)(using DbCon): Vector[String] =
   // equiv to
-  // SELECT DISTINCT first_name FROM user WHERE last_name = ?
+  // SELECT DISTINCT first_name FROM user WHERE age >= ?
   sql"""
     SELECT DISTINCT ${u.firstName} FROM $u
-    WHERE ${u.lastName} = $lastName
+    WHERE ${u.age} >= $minAge
   """.query[String].run()
 
 def insertOrIgnore(creator: UserCreator)(using DbCon): Unit =
-  val u = User.Table
   // equiv to
   // INSERT OR IGNORE INTO user (first_name, age) VALUES (?, ?)
-  sql"INSERT OR IGNORE INTO $u ${u.insertCols} VALUES ($creator)".update.run()
+  sql"INSERT OR IGNORE INTO $u ${u.insertColumns} VALUES ($creator)".update.run()
 ```
-
-It's important that `val Table = TableInfo[X, Y, Z]` is not explicitly typed, otherwise its structural typing will be destroyed.
 
 In the case of multiple joins, you can use `TableInfo.alias(String)` to prevent name conflicts:
 
 ```scala
-val c = TableInfo[Car].alias("c")
-val p = TableInfo[Person].alias("p")
+val c = TableInfo[Car, Car, Null].alias("c")
+val p = TableInfo[Person, Person, Null].alias("p")
 
 sql"""
    SELECT ${c.all}, ${p.firstName}

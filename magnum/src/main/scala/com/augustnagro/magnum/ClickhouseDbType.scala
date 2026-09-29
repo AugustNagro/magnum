@@ -10,6 +10,7 @@ import scala.util.{Failure, Success, Using, boundary}
 
 object ClickhouseDbType extends DbType:
   def buildRepoDefaults[EC, E, ID](
+      tableInfo: TableInfo[EC, E, ID],
       tableNameSql: String,
       eElemNames: Seq[String],
       eElemNamesSql: Seq[String],
@@ -103,6 +104,7 @@ object ClickhouseDbType extends DbType:
       else (_, _) => BatchUpdateResult.Success(0)
 
     new RepoDefaults[EC, E, ID]:
+      val table: TableInfo[EC, E, ID] = tableInfo
       def count(using con: DbCon): Long = countQuery.run().head
 
       def existsById(id: ID)(using con: DbCon): Boolean =
