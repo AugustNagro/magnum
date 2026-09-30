@@ -6,6 +6,7 @@ import scala.deriving.Mirror
 /** Factory for Repo default methods */
 trait DbType:
   def buildRepoDefaults[EC, E, ID](
+      tableInfo: TableInfo[EC, E, ID],
       tableNameSql: String,
       eElemNames: Seq[String],
       eElemNamesSql: Seq[String],

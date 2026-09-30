@@ -43,6 +43,7 @@ object MsSqlDbType extends DbType:
       else "ORDER BY (SELECT NULL)"
 
   def buildRepoDefaults[EC, E, ID](
+      tableInfo: TableInfo[EC, E, ID],
       tableNameSql: String,
       eElemNames: Seq[String],
       eElemNamesSql: Seq[String],
@@ -167,6 +168,7 @@ object MsSqlDbType extends DbType:
         i += 1
 
     new RepoDefaults[EC, E, ID]:
+      val table: TableInfo[EC, E, ID] = tableInfo
       def count(using con: DbCon): Long = countQuery.run().head
 
       def existsById(id: ID)(using con: DbCon): Boolean =

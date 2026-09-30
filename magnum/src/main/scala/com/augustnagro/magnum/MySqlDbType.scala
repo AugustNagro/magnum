@@ -35,6 +35,7 @@ object MySqlDbType extends DbType:
         case (None, None)       => None
 
   def buildRepoDefaults[EC, E, ID](
+      tableInfo: TableInfo[EC, E, ID],
       tableNameSql: String,
       eElemNames: Seq[String],
       eElemNamesSql: Seq[String],
@@ -161,6 +162,7 @@ object MySqlDbType extends DbType:
         i += 1
 
     new RepoDefaults[EC, E, ID]:
+      val table: TableInfo[EC, E, ID] = tableInfo
       def count(using con: DbCon): Long = countQuery.run().head
 
       def existsById(id: ID)(using con: DbCon): Boolean =

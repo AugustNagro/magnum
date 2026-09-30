@@ -26,7 +26,7 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
   ) derives DbCodec
 
   val personRepo = Repo[Person, Person, Long]
-  val person = TableInfo[Person, Person, Long]
+  val person = personRepo.table
 
   test("delete"):
     xa().connect:
