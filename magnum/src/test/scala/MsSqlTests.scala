@@ -32,7 +32,7 @@ class MsSqlTests extends FunSuite, TestContainersFixtures:
     mssql.container.acceptLicense()
     ForAllContainerFixture(mssql)
 
-  override def munitFixtures: Seq[AnyFixture[_]] =
+  override def munitFixtures: Seq[AnyFixture[?]] =
     super.munitFixtures :+ mssqlContainer
 
   def xa(): Transactor =

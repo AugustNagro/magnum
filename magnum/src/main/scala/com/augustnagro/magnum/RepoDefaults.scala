@@ -9,6 +9,7 @@ import scala.reflect.ClassTag
 import scala.util.boundary
 
 trait RepoDefaults[EC, E, ID]:
+  def table: TableInfo[EC, E, ID]
   def count(using DbCon): Long
   def existsById(id: ID)(using DbCon): Boolean
   def findAll(using DbCon): Vector[E]
@@ -85,6 +86,7 @@ object RepoDefaults:
         idFromProduct
       )
       ${ exprs.tableAnnot }.dbType.buildRepoDefaults[EC, E, ID](
+        ${ TableInfo.dbSchemaImpl[EC, E, ID] },
         ${ exprs.tableNameSql },
         ${ Expr(exprs.eElemNames) },
         ${ Expr.ofSeq(exprs.eElemNamesSql) },

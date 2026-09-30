@@ -25,7 +25,7 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
   ) derives DbCodec
 
   val carRepo = ImmutableRepo[Car, Long]
-  val car = TableInfo[Car, Car, Long]
+  val car = carRepo.table
 
   val allCars = Vector(
     Car(
