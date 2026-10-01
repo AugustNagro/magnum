@@ -25,6 +25,7 @@ Yet another database client for Scala. No dependencies, high productivity.
   * [Logging](#logging-sql-queries)
 * [Integrations](#integrations)
   * [ZIO](#zio)
+  * [Cats Effect](#cats-effect)
 * [Motivation](#motivation)
 * [Feature List And Database Support](#feature-list)
 * [Talks and Blogs](#talks-and-blogs)
@@ -552,6 +553,28 @@ To use the ZIO integration, add the following dependency:
 and import these utils in your code with:
 ```scala
 import com.augustnagro.magnum.magzio.*
+```
+
+### Cats Effect
+
+Add the dependency:
+
+```scala
+"com.augustnagro" %% "magnum-cats-effect" % "x.x.x"
+```
+
+Then construct a transactor for your effect type and use the usual Magnum
+queries:
+
+```scala
+import cats.effect.IO
+import com.augustnagro.magnum.*
+import com.augustnagro.magnum.magcats.TransactorCats
+
+val xa = TransactorCats[IO](dataSource)
+val users: IO[Vector[User]] = xa.connect {
+  sql"select * from users".query[User].run()
+}
 ```
 
 ## Motivation

@@ -54,7 +54,7 @@ val runx86OnlyTests =
 
 lazy val root = project
   .in(file("."))
-  .aggregate(magnum, magnumPg, magnumZio)
+  .aggregate(magnum, magnumPg, magnumZio, magnumCatsEffect)
 
 lazy val magnum = project
   .in(file("magnum"))
@@ -107,6 +107,21 @@ lazy val magnumZio = project
       "dev.zio" %% "zio-test" % "2.1.26" % Test,
       "dev.zio" %% "zio-test-sbt" % "2.1.26" % Test,
       "org.testcontainers" % "testcontainers-postgresql" % "2.0.5" % Test,
+      "org.postgresql" % "postgresql" % postgresDriverVersion % Test
+    )
+  )
+
+lazy val magnumCatsEffect = project
+  .in(file("magnum-cats-effect"))
+  .dependsOn(magnum)
+  .settings(
+    name := "magnum-cats-effect",
+    publish / skip := false,
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-effect" % "3.7.1" % Provided,
+      "org.typelevel" %% "munit-cats-effect" % "2.2.1" % Test,
+      "com.dimafeng" %% "testcontainers-scala-munit" % testcontainersVersion % Test,
+      "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion % Test,
       "org.postgresql" % "postgresql" % postgresDriverVersion % Test
     )
   )
