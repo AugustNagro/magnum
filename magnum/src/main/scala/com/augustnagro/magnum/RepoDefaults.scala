@@ -1,9 +1,12 @@
 package com.augustnagro.magnum
 
+import java.sql.{PreparedStatement, ResultSet}
 import scala.compiletime.*
+import scala.collection.immutable.ArraySeq
 import scala.deriving.*
 import scala.quoted.*
 import scala.reflect.ClassTag
+import scala.util.boundary
 
 trait RepoDefaults[EC, E, ID]:
   def table: TableInfo[EC, E, ID]
@@ -46,10 +49,6 @@ object RepoDefaults:
     val eElemCodecs = getEElemCodecs[E]
     val eCodec = Expr.summon[DbCodec[E]].get
     val ecCodec = Expr.summon[DbCodec[EC]].get
-    val idCodec =
-      if TypeRepr.of[ID] =:= TypeRepr.of[Null] then
-        '{ DbCodec.AnyCodec.asInstanceOf[DbCodec[ID]] }
-      else Expr.summon[DbCodec[ID]].get
     val eClassTag = Expr.summon[ClassTag[E]].get
     val ecClassTag = Expr.summon[ClassTag[EC]].get
     val idClassTag =
@@ -78,26 +77,87 @@ object RepoDefaults:
                 .asInstanceOf[ID]
             }
     '{
+      val elemCodecs = $eElemCodecs
+      val idIndices = ${ exprs.idIndices }
+      val idFromProduct = ${ idFromProductExpr }
+      val idCodec = RepoDefaults.idCodec[ID](
+        idIndices,
+        elemCodecs,
+        idFromProduct
+      )
       ${ exprs.tableAnnot }.dbType.buildRepoDefaults[EC, E, ID](
         ${ TableInfo.dbSchemaImpl[EC, E, ID] },
         ${ exprs.tableNameSql },
         ${ Expr(exprs.eElemNames) },
         ${ Expr.ofSeq(exprs.eElemNamesSql) },
-        $eElemCodecs,
+        elemCodecs,
         ${ Expr(exprs.ecElemNames) },
         ${ Expr.ofSeq(exprs.ecElemNamesSql) },
-        ${ exprs.idIndices },
-        ${ idFromProductExpr }
+        idIndices,
+        idFromProduct
       )(using
         $eCodec,
         $ecCodec,
-        $idCodec,
+        idCodec,
         $eClassTag,
         $ecClassTag,
         $idClassTag
       )
     }
   end genImpl
+
+  @scala.annotation.publicInBinary
+  private[RepoDefaults] def idCodec[ID](
+      idIndices: Seq[Int],
+      eElemCodecs: Seq[DbCodec[?]],
+      idFromProduct: Seq[Any] => ID
+  ): DbCodec[ID] =
+    val codecs =
+      IArray.from(idIndices.map(eElemCodecs(_).asInstanceOf[DbCodec[Any]]))
+    codecs match
+      case IArray()      => DbCodec.AnyCodec.asInstanceOf[DbCodec[ID]]
+      case IArray(codec) => codec.asInstanceOf[DbCodec[ID]]
+      case _             =>
+        new DbCodec[ID]:
+          val cols: IArray[Int] = codecs.flatMap(_.cols)
+          val queryRepr: String = codecs.map(_.queryRepr).mkString(", ")
+
+          def readSingle(rs: ResultSet, pos: Int): ID =
+            val res = Array.ofDim[Any](codecs.length)
+            var col = pos
+            var i = 0
+            while i < codecs.length do
+              val codec = codecs(i)
+              res(i) = codec.readSingle(rs, col)
+              col += codec.cols.length
+              i += 1
+            idFromProduct(IArray.unsafeFromArray(res))
+
+          def readSingleOption(rs: ResultSet, pos: Int): Option[ID] =
+            boundary:
+              val res = Array.ofDim[Any](codecs.length)
+              var col = pos
+              var i = 0
+              while i < codecs.length do
+                val codec = codecs(i)
+                codec.readSingleOption(rs, col) match
+                  case Some(value) => res(i) = value
+                  case None        => boundary.break(None)
+                col += codec.cols.length
+                i += 1
+              Some(idFromProduct(IArray.unsafeFromArray(res)))
+
+          def writeSingle(id: ID, ps: PreparedStatement, pos: Int): Unit =
+            val product = id.asInstanceOf[Product]
+            var col = pos
+            var i = 0
+            while i < codecs.length do
+              val codec = codecs(i)
+              codec.writeSingle(product.productElement(i), ps, col)
+              col += codec.cols.length
+              i += 1
+    end match
+  end idCodec
 
   private def getEElemCodecs[E: Type](using Quotes): Expr[Seq[DbCodec[?]]] =
     import quotes.reflect.*
@@ -107,33 +167,38 @@ object RepoDefaults:
               type MirroredElemTypes = mets
             }
           }) =>
-        getProductCodecs[mets]()
+        getProductCodecs[E, mets]()
       case _ =>
         val sumCodec = Expr.summon[DbCodec[E]].get
         '{ Seq($sumCodec) }
 
-  private def getProductCodecs[Mets: Type](
+  private def getProductCodecs[E: Type, Mets: Type](
       res: Vector[Expr[DbCodec[?]]] = Vector.empty
   )(using Quotes): Expr[Seq[DbCodec[?]]] =
     import quotes.reflect.*
     Type.of[Mets] match
       case '[met *: metTail] =>
-        val codec = Expr
-          .summon[DbCodec[met]]
+        val codec = DerivingUtil
+          .fieldCodec[E, met](res.size)
           .orElse(
-            TypeRepr.of[met].widen.asType match
-              case '[tpe] =>
-                Expr
-                  .summon[DbCodec[tpe]]
-                  .map(codec => '{ $codec.asInstanceOf[DbCodec[met]] })
+            Expr
+              .summon[DbCodec[met]]
+              .orElse(
+                TypeRepr.of[met].widen.asType match
+                  case '[tpe] =>
+                    Expr
+                      .summon[DbCodec[tpe]]
+                      .map(codec => '{ $codec.asInstanceOf[DbCodec[met]] })
+              )
           )
           .getOrElse(
             report.errorAndAbort(
               s"Could not find given DbCodec for ${TypeRepr.of[met].show}."
             )
           )
-        getProductCodecs[metTail](res :+ codec)
+        getProductCodecs[E, metTail](res :+ codec)
       case '[EmptyTuple] => Expr.ofSeq(res)
+    end match
   end getProductCodecs
 
 end RepoDefaults

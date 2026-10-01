@@ -137,4 +137,24 @@ object DerivingUtil:
       .find(_.tpe =:= annot)
       .map(term => term.asExprOf[Table])
 
+  def fieldCodec[E: Type, A: Type](index: Int)(using
+      Quotes
+  ): Option[Expr[DbCodec[A]]] =
+    import quotes.reflect.*
+    val annotSymbol = TypeRepr.of[UsingDbCodec[Any]].typeSymbol
+    val field =
+      TypeRepr.of[E].typeSymbol.primaryConstructor.paramSymss.head(index)
+    field.getAnnotation(annotSymbol).map { annot =>
+      val annotType = annot.tpe.baseType(annotSymbol)
+      val codecType = annotType match
+        case AppliedType(_, List(tpe)) => tpe
+        case _                         =>
+          report.errorAndAbort(s"Invalid @UsingDbCodec on ${field.name}")
+      if !(codecType =:= TypeRepr.of[A]) then
+        report.errorAndAbort(
+          s"@UsingDbCodec on ${field.name} requires DbCodec[${TypeRepr.of[A].show}], found DbCodec[${codecType.show}]"
+        )
+      '{ ${ annot.asExprOf[UsingDbCodec[A]] }.codec }
+    }
+
 end DerivingUtil
