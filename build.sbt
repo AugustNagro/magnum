@@ -54,7 +54,7 @@ val runx86OnlyTests =
 
 lazy val root = project
   .in(file("."))
-  .aggregate(magnum, magnumPg, magnumZio)
+  .aggregate(magnum, magnumPg, magnumZio, magnumKyo)
 
 lazy val magnum = project
   .in(file("magnum"))
@@ -107,6 +107,23 @@ lazy val magnumZio = project
       "dev.zio" %% "zio-test" % "2.1.26" % Test,
       "dev.zio" %% "zio-test-sbt" % "2.1.26" % Test,
       "org.testcontainers" % "testcontainers-postgresql" % "2.0.5" % Test,
+      "org.postgresql" % "postgresql" % postgresDriverVersion % Test
+    )
+  )
+
+lazy val magnumKyo = project
+  .in(file("magnum-kyo"))
+  .dependsOn(magnum)
+  .settings(
+    Test / fork := true,
+    publish / skip := false,
+    scalaVersion := "3.7.0",
+    libraryDependencies ++= Seq(
+      "io.getkyo" %% "kyo-core" % "0.19.0" % Provided,
+      "io.getkyo" %% "kyo-combinators" % "0.19.0" % Provided,
+      "org.scalameta" %% "munit" % munitVersion % Test,
+      "com.dimafeng" %% "testcontainers-scala-munit" % testcontainersVersion % Test,
+      "com.dimafeng" %% "testcontainers-scala-postgresql" % testcontainersVersion % Test,
       "org.postgresql" % "postgresql" % postgresDriverVersion % Test
     )
   )
