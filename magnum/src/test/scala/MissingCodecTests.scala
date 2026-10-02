@@ -5,6 +5,18 @@ import scala.compiletime.testing.typeCheckErrors
 
 class MissingCodecTests extends FunSuite:
 
+  test("derived DbCodec rejects a field without a codec"):
+    val errors: List[CompileError] = typeCheckErrors("""
+      import com.augustnagro.magnum.*
+
+      case class MissingField(value: java.net.URI) derives DbCodec
+    """)
+    assert(
+      errors.exists(
+        _.message.contains("Cannot find a DbCodec instance for java.net.URI")
+      )
+    )
+
   test("sql interpolator reports a missing DbCodec"):
     val errors: List[CompileError] = typeCheckErrors("""
       import com.augustnagro.magnum.*

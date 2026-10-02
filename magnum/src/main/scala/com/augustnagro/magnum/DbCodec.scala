@@ -24,7 +24,6 @@ import scala.compiletime.{
   summonInline
 }
 import scala.quoted.*
-import scala.reflect.ClassTag
 import scala.util.boundary
 
 /** Typeclass for JDBC reading & writing.
@@ -628,7 +627,7 @@ object DbCodec:
               type MirroredElemTypes = mets
             }
           } =>
-        val colsExpr = buildColsExpr[mets]()
+        val colsExpr = buildColsExpr[E, mets]()
         '{
           new DbCodec[E] {
             val cols: IArray[Int] = $colsExpr
@@ -642,9 +641,9 @@ object DbCodec:
               }
             def writeSingle(e: E, ps: PreparedStatement, pos: Int): Unit =
               ${
-                productWriteSingle[E, mets]('{ e }, '{ ps }, '{ pos }, '{ 0 })
+                productWriteSingle[E, mets]('{ e }, '{ ps }, '{ pos }, 0)
               }
-            val queryRepr: String = ${ productQueryRepr[mets]() }
+            val queryRepr: String = ${ productQueryRepr[E, mets]() }
           }
         }
       case '{
@@ -690,35 +689,40 @@ object DbCodec:
     end match
   end dbCodecImpl
 
-  private def productQueryRepr[Mets: Type](
+  private def productFieldCodec[E: Type, A: Type](index: Int)(using
+      Quotes
+  ): Expr[DbCodec[A]] =
+    import quotes.reflect.*
+    DerivingUtil
+      .fieldCodec[E, A](index)
+      .orElse(Expr.summon[DbCodec[A]])
+      .getOrElse {
+        report.errorAndAbort(
+          s"Cannot find a DbCodec instance for ${TypeRepr.of[A].show}! Provide one or derive it."
+        )
+      }
+
+  private def productQueryRepr[E: Type, Mets: Type](
       elemReprs: Vector[Expr[String]] = Vector.empty
   )(using Quotes): Expr[String] =
     import quotes.reflect.*
     Type.of[Mets] match
       case '[met *: metTail] =>
-        Expr.summon[DbCodec[met]] match
-          case Some(codec) =>
-            productQueryRepr[metTail](elemReprs :+ '{ $codec.queryRepr })
-          case None =>
-            productQueryRepr[metTail](elemReprs :+ '{ "?" })
+        val codec = productFieldCodec[E, met](elemReprs.size)
+        productQueryRepr[E, metTail](elemReprs :+ '{ $codec.queryRepr })
       case '[EmptyTuple] =>
         val seqExpr = Expr.ofSeq(elemReprs)
         '{ $seqExpr.mkString(", ") }
 
-  private def buildColsExpr[Mets: Type](
+  private def buildColsExpr[E: Type, Mets: Type](
       res: Vector[Expr[IArray[Int]]] = Vector.empty
   )(using Quotes): Expr[IArray[Int]] =
     import quotes.reflect.*
     Type.of[Mets] match
       case '[met *: metTail] =>
-        val metCodec = Expr.summon[DbCodec[met]].getOrElse {
-          val metType = TypeRepr.of[met].show
-          report.errorAndAbort(
-            s"Cannot find a DbCodec instance for $metType! Provide one or derive it."
-          )
-        }
+        val metCodec = productFieldCodec[E, met](res.size)
         val newCols = '{ $metCodec.cols }
-        buildColsExpr[metTail](res :+ newCols)
+        buildColsExpr[E, metTail](res :+ newCols)
       case '[EmptyTuple] =>
         '{
           val iArrays: Seq[IArray[Int]] = ${ Expr.ofSeq(res) }
@@ -734,48 +738,21 @@ object DbCodec:
     import quotes.reflect.*
     Type.of[Mets] match
       case '[met *: metTail] =>
-        Expr.summon[DbCodec[met]] match
-          case Some(codecExpr) =>
-            '{
-              val posValue = $pos
-              val codec = $codecExpr
-              val metValue = codec.readSingle($rs, posValue)
-              val newPos = posValue + codec.cols.length
-              ${
-                productReadSingle[E, metTail](
-                  rs,
-                  m,
-                  res :+ '{ metValue },
-                  '{ newPos }
-                )
-              }
-            }
-          case None =>
-            Expr.summon[ClassTag[met]] match
-              case Some(clsTagExpr) =>
-                report.info(
-                  s"Could not find DbCodec for ${TypeRepr.of[met].show}. Defaulting to ResultSet::[get|set]Object"
-                )
-                '{
-                  val posValue = $pos
-                  val metValue = $rs.getObject(
-                    posValue,
-                    $clsTagExpr.runtimeClass.asInstanceOf[Class[met]]
-                  )
-                  val newPos = posValue + 1
-                  ${
-                    productReadSingle[E, metTail](
-                      rs,
-                      m,
-                      res :+ '{ metValue },
-                      '{ newPos }
-                    )
-                  }
-                }
-              case None =>
-                report.errorAndAbort(
-                  "Could not find DbCodec or ClassTag for ${TypeRepr.of[met].show}"
-                )
+        val codecExpr = productFieldCodec[E, met](res.size)
+        '{
+          val posValue = $pos
+          val codec = $codecExpr
+          val metValue = codec.readSingle($rs, posValue)
+          val newPos = posValue + codec.cols.length
+          ${
+            productReadSingle[E, metTail](
+              rs,
+              m,
+              res :+ '{ metValue },
+              '{ newPos }
+            )
+          }
+        }
       case '[EmptyTuple] =>
         '{
           val product = ${ Expr.ofTupleFromSeq(res) }
@@ -793,52 +770,23 @@ object DbCodec:
     import quotes.reflect.*
     Type.of[Mets] match
       case '[met *: metTail] =>
-        Expr.summon[DbCodec[met]] match
-          case Some(codecExpr) =>
-            '{
-              val posValue = $pos
-              val codec = $codecExpr
-              codec.readSingleOption($rs, posValue) match
-                case Some(metValue) =>
-                  val newPos = posValue + codec.cols.length
-                  ${
-                    productReadOption[E, metTail](
-                      rs,
-                      m,
-                      res :+ '{ metValue },
-                      '{ newPos }
-                    )
-                  }
-                case None => None
-            }
-          case None =>
-            Expr.summon[ClassTag[met]] match
-              case Some(clsTagExpr) =>
-                report.info(
-                  s"Could not find DbCodec for ${TypeRepr.of[met].show}. Defaulting to ResultSet::[get|set]Object"
+        val codecExpr = productFieldCodec[E, met](res.size)
+        '{
+          val posValue = $pos
+          val codec = $codecExpr
+          codec.readSingleOption($rs, posValue) match
+            case Some(metValue) =>
+              val newPos = posValue + codec.cols.length
+              ${
+                productReadOption[E, metTail](
+                  rs,
+                  m,
+                  res :+ '{ metValue },
+                  '{ newPos }
                 )
-                '{
-                  val posValue = $pos
-                  val metValue = $rs.getObject(
-                    posValue,
-                    $clsTagExpr.runtimeClass.asInstanceOf[Class[met]]
-                  )
-                  if $rs.wasNull then None
-                  else
-                    val newPos = posValue + 1
-                    ${
-                      productReadOption[E, metTail](
-                        rs,
-                        m,
-                        res :+ '{ metValue },
-                        '{ newPos }
-                      )
-                    }
-                }
-              case None =>
-                report.errorAndAbort(
-                  "Could not find DbCodec or ClassTag for ${TypeRepr.of[met].show}"
-                )
+              }
+            case None => None
+        }
       case '[EmptyTuple] =>
         '{
           val product = ${ Expr.ofTupleFromSeq(res) }
@@ -851,38 +799,30 @@ object DbCodec:
       e: Expr[E],
       ps: Expr[PreparedStatement],
       pos: Expr[Int],
-      i: Expr[Int]
+      i: Int
   )(using Quotes): Expr[Unit] =
     import quotes.reflect.*
     Type.of[Mets] match
       case '[met *: metTail] =>
-        Expr.summon[DbCodec[met]] match
-          case Some(codecExpr) =>
-            '{
-              val iValue = $i
-              val posValue = $pos
-              val metValue = $e
-                .asInstanceOf[Product]
-                .productElement(iValue)
-                .asInstanceOf[met]
-              val codec = $codecExpr
-              codec.writeSingle(metValue, $ps, posValue)
-              val newPos = posValue + $codecExpr.cols.length
-              val newI = iValue + 1
-              ${ productWriteSingle[E, metTail](e, ps, '{ newPos }, '{ newI }) }
-            }
-          case None =>
-            '{
-              val iValue = $i
-              val posValue = $pos
-              val metValue = $e
-                .asInstanceOf[Product]
-                .productElement(iValue)
-              $ps.setObject(posValue, metValue)
-              val newPos = posValue + 1
-              val newI = iValue + 1
-              ${ productWriteSingle[E, metTail](e, ps, '{ newPos }, '{ newI }) }
-            }
+        val codecExpr = productFieldCodec[E, met](i)
+        '{
+          val posValue = $pos
+          val metValue = $e
+            .asInstanceOf[Product]
+            .productElement(${ Expr(i) })
+            .asInstanceOf[met]
+          val codec = $codecExpr
+          codec.writeSingle(metValue, $ps, posValue)
+          val newPos = posValue + codec.cols.length
+          ${
+            productWriteSingle[E, metTail](
+              e,
+              ps,
+              '{ newPos },
+              i + 1
+            )
+          }
+        }
       case '[EmptyTuple] => '{}
     end match
   end productWriteSingle

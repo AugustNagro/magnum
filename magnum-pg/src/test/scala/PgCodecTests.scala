@@ -208,6 +208,44 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
         sql"SELECT * FROM mag_car WHERE id = ANY($ids)".query[MagCar].run()
       assert(cars == allCars)
 
+  val optionalArraysRepo =
+    Repo[PgOptionalArrays, PgOptionalArrays, UUID]
+
+  test("insert optional PostgreSQL arrays"):
+    connect(ds()):
+      val rows = Vector(
+        PgOptionalArrays(
+          UUID.randomUUID(),
+          Some(Vector(1L, 2L)),
+          Some(IArray(3, 4)),
+          Some(Array(5, 6))
+        ),
+        PgOptionalArrays(
+          UUID.randomUUID(),
+          Some(Vector.empty),
+          Some(IArray.emptyIntIArray),
+          Some(Array.empty[Int])
+        ),
+        PgOptionalArrays(
+          UUID.randomUUID(),
+          None,
+          None,
+          None
+        )
+      )
+
+      optionalArraysRepo.insertAll(rows)
+      val inserted = rows.map(row => optionalArraysRepo.findById(row.id).get)
+      assertEquals(inserted.map(_.vectorValues), rows.map(_.vectorValues))
+      assertEquals(
+        inserted.map(_.iArrayValues.map(_.toList)),
+        rows.map(_.iArrayValues.map(_.toList))
+      )
+      assertEquals(
+        inserted.map(_.arrayValues.map(_.toList)),
+        rows.map(_.arrayValues.map(_.toList))
+      )
+
   test("insert MagServiceList interpolated"):
     connect(ds()):
       val service = LastService("James", LocalDate.of(1970, 4, 22))
@@ -241,15 +279,16 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       Using.resource(getClass.getResourceAsStream(path))(stream =>
         String(stream.readAllBytes(), StandardCharsets.UTF_8)
       )
-    val userSql = resource("/pg-user.sql")
-    val carSql = resource("/pg-car.sql")
-    val serviceListSql = resource("/pg-service-list.sql")
+    val sql = Vector(
+      "/pg-user.sql",
+      "/pg-car.sql",
+      "/pg-service-list.sql",
+      "/pg-optional-arrays.sql"
+    ).map(resource)
     Manager { use =>
       val con = use(ds.getConnection)
       val stmt = use(con.createStatement)
-      stmt.execute(userSql)
-      stmt.execute(carSql)
-      stmt.execute(serviceListSql)
+      sql.foreach(stmt.execute)
     }.get
     ds
   end ds
