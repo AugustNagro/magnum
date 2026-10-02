@@ -20,9 +20,7 @@ class PgCatsEffectTests extends CatsEffectSuite, TestContainersFixtures:
     PostgreSQLContainer
       .Def(dockerImageName = DockerImageName.parse("postgres:18.6"))
       .createContainer()
-  ):
-    override def afterContainerStart(container: PostgreSQLContainer): Unit =
-      initializeSchema(dataSource(container))
+  )
 
   override def munitFixtures: Seq[AnyFixture[?]] =
     super.munitFixtures :+ pgContainer
@@ -34,10 +32,8 @@ class PgCatsEffectTests extends CatsEffectSuite, TestContainersFixtures:
     ds.setPassword(container.password)
     ds
 
-  private lazy val xa: TransactorCats[IO] =
-    TransactorCats[IO](dataSource(pgContainer()))
-
-  private def initializeSchema(ds: PGSimpleDataSource): Unit =
+  private def xa(): TransactorCats[IO] =
+    val ds = dataSource(pgContainer())
     val tableDDLs = Vector(
       "/pg/car.sql",
       "/pg/person.sql",
@@ -55,6 +51,8 @@ class PgCatsEffectTests extends CatsEffectSuite, TestContainersFixtures:
       val statement = use(connection.createStatement())
       tableDDLs.foreach(ddl => statement.execute(ddl))
     ).get
+    TransactorCats[IO](ds)
+  end xa
 
   enum Color derives DbCodec:
     case Red, Green, Blue
@@ -103,47 +101,51 @@ class PgCatsEffectTests extends CatsEffectSuite, TestContainersFixtures:
     con.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE)
 
   test("count") {
-    xa.connect(carRepo.count).map(count => assertEquals(count, 3L))
+    for count <- xa().connect(carRepo.count)
+    yield assertEquals(count, 3L)
   }
 
   test("existsById") {
-    xa.connect((carRepo.existsById(3L), carRepo.existsById(4L)))
-      .map((exists3, exists4) =>
-        assert(exists3)
-        assert(!exists4)
-      )
+    for (exists3, exists4) <-
+        xa().connect((carRepo.existsById(3L), carRepo.existsById(4L)))
+    yield
+      assert(exists3)
+      assert(!exists4)
   }
 
   test("findAll") {
-    xa.connect(carRepo.findAll).map(cars => assertEquals(cars, allCars))
+    for cars <- xa().connect(carRepo.findAll)
+    yield assertEquals(cars, allCars)
   }
 
   test("findById") {
-    xa.connect((carRepo.findById(3L), carRepo.findById(4L)))
-      .map((car3, car4) =>
-        assertEquals(car3, Some(allCars.last))
-        assertEquals(car4, None)
+    for (car3, car4) <- xa().connect(
+        (carRepo.findById(3L), carRepo.findById(4L))
       )
+    yield
+      assertEquals(car3, Some(allCars.last))
+      assertEquals(car4, None)
   }
 
   test("findAllByIds") {
-    xa.connect(carRepo.findAllById(Vector(1L, 3L)).map(_.id))
-      .map(ids => assertEquals(ids, Vector(1L, 3L)))
+    for ids <- xa().connect(carRepo.findAllById(Vector(1L, 3L)).map(_.id))
+    yield assertEquals(ids, Vector(1L, 3L))
   }
 
   test("serializable transaction") {
-    xa.withConnectionConfig(withSerializable)
-      .transact(carRepo.count)
-      .map(count => assertEquals(count, 3L))
+    for count <- xa()
+        .withConnectionConfig(withSerializable)
+        .transact(carRepo.count)
+    yield assertEquals(count, 3L)
   }
 
   test("failed transaction rolls back") {
     for
-      result <- xa.transact {
+      result <- xa().transact {
         sql"delete from car where id = 1".update.run()
         throw IllegalStateException("intentional test failure")
       }.attempt
-      count <- xa.connect(carRepo.count)
+      count <- xa().connect(carRepo.count)
     yield
       assert(result.isLeft)
       assertEquals(count, 3L)
@@ -154,15 +156,14 @@ class PgCatsEffectTests extends CatsEffectSuite, TestContainersFixtures:
     val query =
       sql"select ${car.all} from $car where ${car.topSpeed} > $minSpeed"
         .query[Car]
-    xa.connect(query.run())
-      .map(result =>
-        assertEquals(
-          query.frag.sqlString,
-          "select model, id, top_speed, vin, color, created from car where top_speed > ?"
-        )
-        assertEquals(query.frag.params, Vector(minSpeed))
-        assertEquals(result, allCars.tail)
+    for result <- xa().connect(query.run())
+    yield
+      assertEquals(
+        query.frag.sqlString,
+        "select model, id, top_speed, vin, color, created from car where top_speed > ?"
       )
+      assertEquals(query.frag.params, Vector(minSpeed))
+      assertEquals(result, allCars.tail)
   }
 
   test("select query with aliasing") {
@@ -171,35 +172,36 @@ class PgCatsEffectTests extends CatsEffectSuite, TestContainersFixtures:
     val query =
       sql"select ${cAlias.all} from $cAlias where ${cAlias.topSpeed} > $minSpeed"
         .query[Car]
-    xa.connect(query.run())
-      .map(result =>
-        assertEquals(
-          query.frag.sqlString,
-          "select c.model, c.id, c.top_speed, c.vin, c.color, c.created from car c where c.top_speed > ?"
-        )
-        assertEquals(query.frag.params, Vector(minSpeed))
-        assertEquals(result, allCars.tail)
+    for result <- xa().connect(query.run())
+    yield
+      assertEquals(
+        query.frag.sqlString,
+        "select c.model, c.id, c.top_speed, c.vin, c.color, c.created from car c where c.top_speed > ?"
       )
+      assertEquals(query.frag.params, Vector(minSpeed))
+      assertEquals(result, allCars.tail)
   }
 
   test("select via option") {
     val vin = Option(124)
-    xa.connect(sql"select * from car where vin = $vin".query[Car].run())
-      .map(cars => assertEquals(cars, allCars.filter(_.vinNumber == vin)))
+    for cars <- xa().connect(
+        sql"select * from car where vin = $vin".query[Car].run()
+      )
+    yield assertEquals(cars, allCars.filter(_.vinNumber == vin))
   }
 
   test("tuple select") {
-    xa.connect(
-      sql"select model, color from car where id = 2"
-        .query[(String, Color)]
-        .run()
-    ).map(tuples =>
-      assertEquals(tuples, Vector(allCars(1).model -> allCars(1).color))
-    )
+    for tuples <- xa().connect(
+        sql"select model, color from car where id = 2"
+          .query[(String, Color)]
+          .run()
+      )
+    yield assertEquals(tuples, Vector(allCars(1).model -> allCars(1).color))
   }
 
   test("large tuple support does not override hand-rolled Tuple[2-4] codecs") {
-    IO {
+    for _ <- IO.unit
+    yield
       val tuple2ACodec = summon[DbCodec[(String, Color)]]
       val tuple2BCodec = summon[DbCodec[(String, Int)]]
       val tuple5ACodec =
@@ -208,40 +210,40 @@ class PgCatsEffectTests extends CatsEffectSuite, TestContainersFixtures:
       assert(tuple2ACodec.getClass == tuple2BCodec.getClass)
       assert(tuple5ACodec.getClass != tuple2ACodec.getClass)
       assert(tuple5BCodec.getClass != tuple5ACodec.getClass)
-    }
   }
 
   test("large tuple select") {
-    xa.connect(
-      sql"select model, color, top_speed, id, vin from car where id = 2"
-        .query[(String, Color, Int, Long, Option[Int])]
-        .run()
-        .head
-    ).map(tuple =>
+    for tuple <- xa().connect(
+        sql"select model, color, top_speed, id, vin from car where id = 2"
+          .query[(String, Color, Int, Long, Option[Int])]
+          .run()
+          .head
+      )
+    yield
       val c = allCars(1)
       assertEquals(tuple, (c.model, c.color, c.topSpeed, c.id, c.vinNumber))
-    )
   }
 
   test("reads null int as None and not Some(0)") {
-    xa.connect(carRepo.findById(3L))
-      .map(car => assert(car.flatMap(_.vinNumber).isEmpty))
+    for car <- xa().connect(carRepo.findById(3L))
+    yield assert(car.flatMap(_.vinNumber).isEmpty)
   }
 
   test("created timestamps should match") {
-    xa.connect(carRepo.findAll)
-      .map(cars => assertEquals(cars.map(_.created), allCars.map(_.created)))
+    for cars <- xa().connect(carRepo.findAll)
+    yield assertEquals(cars.map(_.created), allCars.map(_.created))
   }
 
   test(".query iterator") {
-    xa.connect(
-      Using
-        .Manager(implicit use =>
-          val it = sql"SELECT * FROM car".query[Car].iterator()
-          it.map(_.id).size
-        )
-        .get
-    ).map(count => assertEquals(count, 3))
+    for count <- xa().connect(
+        Using
+          .Manager(implicit use =>
+            val it = sql"SELECT * FROM car".query[Car].iterator()
+            it.map(_.id).size
+          )
+          .get
+      )
+    yield assertEquals(count, 3)
   }
 
 end PgCatsEffectTests
