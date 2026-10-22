@@ -206,7 +206,7 @@ def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
   end match
 end batchUpdate
 
-private val Log = System.getLogger("com.augustnagro.magnum")
+private lazy val Log = System.getLogger("com.augustnagro.magnum")
 
 private def paramsString(params: Iterator[Iterator[Any]]): String =
   params.map(_.mkString("(", ", ", ")")).mkString("", ",\n", "\n")
