@@ -316,7 +316,7 @@ An example use-case would be a search results page that allows users to sort and
 Here's an example:
 
 ```scala
-val partialName = "Ja"
+val partialName = "Ja%"
 val lastNameOpt = Option("Brown")
 val searchDate = OffsetDateTime.now.minusDays(2)
 val idPosition = 42L
@@ -486,6 +486,18 @@ and import these utils in your code with:
 ```scala
 import com.augustnagro.magnum.magzio.*
 
+def helloWorld(dataSource: DataSource): Task[Unit] =
+  (for
+    xa <- ZIO.service[TransactorZIO]
+    users <- xa.connect:
+      sql"""SELECT * FROM "user"""".query[User].run()
+    _ <- ZIO.foreachDiscard(users)(user => Console.printLine(user))
+  yield ()).provideLayer(
+    ZLayer.make[TransactorZIO](
+      ZLayer.succeed[DataSource](dataSource),
+      TransactorZIO.layer
+    )
+  )
 ```
 
 We recommend using the Virtual Thread blocking executor in high concurrency scenerios. For example, when you have high requests per minute, but only a few database connections in the connection pool; virtual threads waiting for a db connection use far fewer resources. Do this with Runtime.enableLoomBasedBlockingExecutor: https://zio.dev/reference/core/runtime/#enabling-virtual-threads
