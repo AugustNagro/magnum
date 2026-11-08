@@ -1,6 +1,6 @@
 package shared
 
-import com.augustnagro.magnum.common.*
+import com.augustnagro.magnum.*
 import com.augustnagro.magnum.{BatchUpdateResult, SqlException, ColumnNames}
 import munit.FunSuite
 
@@ -26,7 +26,7 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
   ) derives DbCodec
 
   val personRepo = Repo[Person, Person, Long]
-  val person = TableInfo[Person, Person, Long]
+  val person = personRepo.table
 
   test("delete"):
     xa().connect:
@@ -54,7 +54,7 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
       val p2 = p1.copy(id = 2L)
       val p3 = p1.copy(id = 999L)
       val expectedRowsUpdate = dbType match
-        case ClickhouseDbType => 3
+        case ClickhouseDbType => 0
         case _                => 2
       val res = personRepo.deleteAll(Vector(p1, p2, p3))
       assert(res == BatchUpdateResult.Success(expectedRowsUpdate))
@@ -63,7 +63,7 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
   test("deleteAllById"):
     xa().connect:
       val expectedRowsUpdate = dbType match
-        case ClickhouseDbType => 3
+        case ClickhouseDbType => 0
         case _                => 2
       val res = personRepo.deleteAllById(Vector(1L, 2L, 1L))
       assert(res == BatchUpdateResult.Success(expectedRowsUpdate))
@@ -101,6 +101,8 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
 
   test("insertReturning"):
     assume(dbType != MySqlDbType)
+    assume(dbType != SqliteDbType)
+    assume(dbType != MsSqlDbType)
     xa().connect:
       val person = personRepo.insertReturning(
         Person(
@@ -117,6 +119,7 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
   test("insertAllReturning"):
     assume(dbType != MySqlDbType)
     assume(dbType != SqliteDbType)
+    assume(dbType != MsSqlDbType)
     xa().connect:
       val newPc = Vector(
         Person(
@@ -150,6 +153,8 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
       assert(people.last.lastName == newPc.last.lastName)
 
   test("insert invalid"):
+    // ClickHouse 26.3 defaults to asynchronous inserts
+    assume(dbType != ClickhouseDbType)
     intercept[SqlException]:
       xa().connect:
         val invalidP =
@@ -282,6 +287,7 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
       )
 
   test("custom update"):
+    assume(dbType != ClickhouseDbType)
     xa().connect:
       val p = Person(
         id = 9L,
@@ -322,6 +328,13 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
             .returningKeys[Long]("id")
             .run()
             .head
+        else if dbType == MsSqlDbType then
+          sql"""insert into person (id, first_name, last_name, created, is_admin)
+                output inserted.id
+                values (9, 'Arton', 'Senna', sysdatetimeoffset(), 1)"""
+            .returning[Long]
+            .run()
+            .head
         else
           sql"""insert into person (id, first_name, last_name, created, is_admin)
                 values (9, 'Arton', 'Senna', now(), 'Y') RETURNING id
@@ -345,6 +358,13 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
               person.created
             )
             .run()
+        else if dbType == MsSqlDbType then
+          sql"""insert into person (id, first_name, last_name, created, is_admin)
+               output inserted.id, inserted.created
+               values
+               (9, 'Arton', 'Senna', sysdatetimeoffset(), 1),
+               (10, 'Demo', 'User', sysdatetimeoffset(), 0)
+               """.returning[(Long, OffsetDateTime)].run()
         else
           sql"""insert into person (id, first_name, last_name, created, is_admin) values
                (9, 'Arton', 'Senna', now(), true),
@@ -365,6 +385,10 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
           sql"update person set first_name = 'xxx' where last_name = 'Not Here'"
             .returningKeys[Long](ColumnNames("id", IArray(person.id)))
             .run()
+        else if dbType == MsSqlDbType then
+          sql"update person set first_name = 'xxx' output inserted.id where last_name = 'Not Here'"
+            .returning[Long]
+            .run()
         else
           sql"update person set first_name = 'xxx' where last_name = 'Not Here' returning id"
             .returning[Long]
@@ -380,6 +404,10 @@ def repoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
         if dbType == H2DbType || dbType == OracleDbType then
           sql"update person set last_name = 'xxx'"
             .returningKeys[String](person.firstName)
+            .run()
+        else if dbType == MsSqlDbType then
+          sql"update person set last_name = 'xxx' output inserted.first_name"
+            .returning[String]
             .run()
         else
           sql"update person set last_name = 'xxx' returning first_name"

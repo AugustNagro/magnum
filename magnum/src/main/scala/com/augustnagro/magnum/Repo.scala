@@ -15,6 +15,8 @@ import javax.sql.DataSource
 open class Repo[EC, E, ID](using defaults: RepoDefaults[EC, E, ID])
     extends ImmutableRepo[E, ID]:
 
+  override def table: TableInfo[EC, E, ID] = defaults.table
+
   /** Deletes an entity using its id */
   def delete(entity: E)(using DbCon): Unit = defaults.delete(entity)
 

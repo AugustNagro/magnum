@@ -24,7 +24,8 @@ Yet another database client for Scala. No dependencies, high productivity.
   * [Postgres Module](/PG-MODULE.md)
   * [Logging](#logging-sql-queries)
 * [Integrations](#integrations)
-  * [ZIO](#zio) 
+  * [ZIO](#zio)
+  * [Cats Effect](#cats-effect)
 * [Motivation](#motivation)
 * [Feature List And Database Support](#feature-list)
 * [Talks and Blogs](#talks-and-blogs)
@@ -36,7 +37,7 @@ Yet another database client for Scala. No dependencies, high productivity.
 "com.augustnagro" %% "magnum" % "2.0.0"
 ```
 
-Magnum requires Scala >= 3.3.0
+Magnum requires Scala >= 3.9.0
 
 You must also install the JDBC driver for your database, for example:
 
@@ -55,15 +56,13 @@ https://javadoc.io/doc/com.augustnagro/magnum_3
 ### `connect` creates a database connection.
 
 ```scala
-import com.augustnagro.magnum.common.*
+import com.augustnagro.magnum.*
 
 val xa = Transactor(dataSource: javax.sql.DataSource)
 
 val users: Vector[User] = xa.connect:
   sql"SELECT * FROM user".query[User].run()
 ```
-
-The `connect` method accepts a context function of type `DbCon ?=> A` (essentially `implicit DbCon => A` in Scala 2).
 
 ### `transact` creates a database transaction.
 
@@ -281,9 +280,9 @@ Also note that Repo extends ImmutableRepo. Some databases cannot support every m
 
 ### Database generated columns
 
-It is often the case that database columns are auto-generated, for example, primary key IDs. This is why the Repo class has 3 type parameters. 
+It is often the case that database columns are auto-generated, for example, primary key IDs. This is why the Repo class has 3 type parameters.
 
-The first defines the Entity-Creator, which should omit any fields that are auto-generated. The entity-creator class must be an 'effective' subclass of the entity class, but it does not have to subclass the entity. This is verified at compile time.
+The first defines the Entity-Creator, which should omit any fields that are auto-generated. The creator class must be an 'effective' subclass of the entity-creator class, but it does not have to actually subclass the entity. This is verified at compile time.
 
 The second type parameter is the Entity class, and the final is for the ID. If the Entity does not have a logical ID, use Null.
 
@@ -317,19 +316,19 @@ An example use-case would be a search results page that allows users to sort and
 Here's an example:
 
 ```scala
+val partialName = "Ja"
+val lastNameOpt = Option("Brown")
+val searchDate = OffsetDateTime.now.minusDays(2)
+val idPosition = 42L
+
 val spec = Spec[User]
-  .where(sql"first_name ILIKE '$partialName%'")
+  .where(sql"first_name ILIKE $partialName")
   .where(lastNameOpt.map(ln => sql"last_name = $ln").getOrElse(sql""))
   .where(sql"created >= $searchDate")
   .seek("id", SeekDir.Gt, idPosition, SortOrder.Asc)
   .limit(10)
 
 val users: Vector[User] = userRepo.findAll(spec)
-
-def partialName = "Ja"
-def lastNameOpt = Option("Brown")
-def searchDate = OffsetDateTime.now.minusDays(2)
-def idPosition = 42L
 ```
 
 Note that both [seek pagination](https://blog.jooq.org/faster-sql-paging-with-jooq-using-the-seek-method/) and offset pagination is supported. If you need to use joins to select the columns, use the `Spec.prefix` method.
@@ -405,42 +404,40 @@ To help with this, Magnum offers a `TableInfo` class to enable 'future-proof' qu
 Here's some examples:
 
 ```scala
-import com.augustnagro.magnum.common.*
+import com.augustnagro.magnum.*
 
 case class UserCreator(firstName: String, age: Int) derives DbCodec
 
 @Table(PostgresDbType, SqlNameMapper.CamelToSnakeCase)
 case class User(id: Long, firstName: String, age: Int) derives DbCodec
 
-object UserSql:
-  private val u = TableInfo[UserCreator, User, Long]
+val repo = Repo[UserCreator, User, Long]
+val u: TableInfo[UserCreator, User, Long] = repo.table
 
   def allUsers(using DbCon): Vector[User] =
     // equiv to 
     // SELECT id, first_name, age FROM user
     sql"SELECT ${u.all} FROM $u".query[User].run()
 
-  def firstNamesForLast(lastName: String)(using DbCon): Vector[String] =
+  def firstNamesForMinAge(minAge: Int)(using DbCon): Vector[String] =
     // equiv to
-    // SELECT DISTINCT first_name FROM user WHERE last_name = ?
+    // SELECT DISTINCT first_name FROM user WHERE age > = ?
     sql"""
        SELECT DISTINCT ${u.firstName} FROM $u
-       WHERE ${u.lastName} = $lastName
+       WHERE ${u.age} >= $minAge
        """.query[String].run()
 
   def insertOrIgnore(creator: UserCreator)(using DbCon): Unit =
     // equiv to
     // INSERT OR IGNORE INTO user (first_name, age) VALUES (?, ?)
-    sql"INSERT OR IGNORE INTO $u ${u.insertCols} VALUES ($creator)".update.run()
+    sql"INSERT OR IGNORE INTO $u ${u.insertColumns} VALUES ($creator)".update.run()
 ```
-
-It's important that `val Table = TableInfo[X, Y, Z]` is not explicitly typed, otherwise its structural typing will be destroyed.
 
 In the case of multiple joins, you can use `TableInfo.alias(String)` to prevent name conflicts:
 
 ```scala
-val c = TableInfo[Car].alias("c")
-val p = TableInfo[Person].alias("p")
+val c = TableInfo[Car, Car, Null].alias("c")
+val p = TableInfo[Person, Person, Null].alias("p")
 
 sql"""
    SELECT ${c.all}, ${p.firstName}
@@ -455,15 +452,17 @@ To splice Strings directly into `sql` statements, you can interpolate `SqlLitera
 
 ```scala
 val table = SqlLiteral("beans")
-  
+
 sql"select * from $table"
 ```
 
-This feature should be used sparingly and never with untrusted input. 
+This feature should be used sparingly and never with untrusted input.
 
 ### Logging SQL queries
 
-If you set the java.util Logging level to DEBUG, all SQL queries will be logged.
+Magnum uses the jdk [System.Logger](https://docs.oracle.com/javase//9/docs/api/index.html?jdk.javadoc-summary.html) interface, which supports any logging implementation (java.util.logging, logback, log4j, etc).
+
+If you set the Logging level to DEBUG (or equivalent), all SQL queries will be logged.
 Setting to TRACE will log SQL queries and their parameters.
 
 #### Logging Slow Queries
@@ -474,21 +473,44 @@ You can log slow queries by using the `Transactor` class in conjunction with `Sq
 
 ### ZIO
 
-Magnum provides a fine layer of integration with ZIO.
+Magnum provides a good + simple integration with ZIO.
 
-The `magnum-zio` module provides an implementation of the `connect` and `transact` utils that return a ZIO effect.
+The `magnum-zio` module provides a `TransactorZIO` with `connect` and `transact` utils that return a ZIO effect.
 
 To use the ZIO integration, add the following dependency:
 ```scala
-"com.augustnagro" %% "magnum-zio" % "x.x.x"
+"com.augustnagro" %% "magnumzio" % "<magnum_version>"
 ```
 
 and import these utils in your code with:
 ```scala
 import com.augustnagro.magnum.magzio.*
+
 ```
 
-We recommend that you use the Virtual Thread blocking executor for maximum efficiency (Runtime.enableLoomBasedBlockingExecutor): https://zio.dev/reference/core/runtime/#enabling-virtual-threads
+We recommend using the Virtual Thread blocking executor in high concurrency scenerios. For example, when you have high requests per minute, but only a few database connections in the connection pool; virtual threads waiting for a db connection use far fewer resources. Do this with Runtime.enableLoomBasedBlockingExecutor: https://zio.dev/reference/core/runtime/#enabling-virtual-threads
+
+### Cats Effect
+
+Add the dependency:
+
+```scala
+"com.augustnagro" %% "magnum-cats-effect" % "<magnum_version>"
+```
+
+Then construct a transactor for your effect type and use the usual Magnum
+queries:
+
+```scala
+import cats.effect.IO
+import com.augustnagro.magnum.*
+import com.augustnagro.magnum.magcats.TransactorCats
+
+val xa = TransactorCats[IO](dataSource)
+val users: IO[Vector[User]] = xa.connect {
+  sql"select * from users".query[User].run()
+}
+```
 
 ## Motivation
 
@@ -507,14 +529,14 @@ Like in Zoolander (the movie), Magnum represents a 'new look' for Database acces
 ## Feature List
 
 * Supports any database with a JDBC driver,
-  including Postgres, MySql, Oracle, ClickHouse, H2, and Sqlite
+  including Postgres, MySql, MsSql, Oracle, ClickHouse, H2, and Sqlite
 * Efficient `sql" "` interpolator
 * Purely-functional API
 * Common queries (like insert, update, delete) generated at compile time
 * Difficult to hit [N+1 query problem](https://stackoverflow.com/questions/97197/what-is-the-n1-selects-problem-in-orm-object-relational-mapping)
 * Type-safe Transactions
 * Supports database-generated columns
-* Easy to use, Loom-ready API (no Futures or Effect Systems)
+* Easy to use, direct-style, Virtual Thread-ready API
 * Easy to define entities. Easy to implement DB support & codecs for custom types.
 * Scales to complex SQL queries
 * Specifications for building dynamic queries, such as table filters with pagination
@@ -522,7 +544,7 @@ Like in Zoolander (the movie), Magnum represents a 'new look' for Database acces
 * Performant batch-queries
 
 ## Developing
-The tests are written using TestContainers, which requires Docker be installed.
+The tests are written using TestContainers, which requires Docker be installed. The MsSqlTests will be auto-skipped on ARM architecture, since the docker image doesn't support ARM.
 
 ## Talks and Blogs
 
@@ -593,17 +615,13 @@ def companyInfo(companyName: String)(using DbCon): Vector[(Company, Address)] =
 
 Some databases directly support the UUID type; these include Postgres, Clickhouse, and H2. When using the built-in `DbCodec[UUID]`, defined in `DbCodec.scala`, serialization and deserialization of `java.util.UUID` will work as expected.
 
-Other databases like MySql, Oracle, and Sqlite, however, do not natively support UUID columns. Users have to choose an alternate datatype to store the UUID: most commonly `varchar(36)` or `binary(16)`. The JDBC drivers for these databases do not support direct serialization and deserialization of `java.util.UUID`, therefore the default `DbCodec[UUID]` will not be sufficient. Instead, import the appropriate codec from `com.augustnagro.magnum.UUIDCodec`. For example,
+Other databases like MySql, MsSql, Oracle, and Sqlite, however, do not natively support UUID columns. Users have to choose an alternate datatype to store the UUID: most commonly `varchar(36)` or `binary(16)`. The JDBC drivers for these databases do not support direct serialization and deserialization of `java.util.UUID`, therefore the default `DbCodec[UUID]` will not be sufficient. Instead, import the appropriate codec from `com.augustnagro.magnum.UUIDCodec`. For example,
 
 ```scala
-import com.augustnagro.magnum.common.*
+import com.augustnagro.magnum.*
 import com.augustnagro.magnum.UUIDCodec.VarCharUUIDCodec
 import java.util.UUID
 
 @Table(MySqlDbType)
 case class Person(@Id id: Long, name: String, tracking_id: Option[UUID]) derives DbCodec
 ```
-
-## Todo
-* Support MSSql
-* Cats Effect & ZIO modules

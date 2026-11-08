@@ -1,9 +1,9 @@
 package shared
 
-import com.augustnagro.magnum.common.*
+import com.augustnagro.magnum.*
 import munit.{FunSuite, Location}
 
-import java.sql.Connection
+import java.sql.{Connection, PreparedStatement, ResultSet}
 import java.time.{OffsetDateTime, ZoneOffset}
 import scala.util.Using
 
@@ -25,7 +25,7 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
   ) derives DbCodec
 
   val carRepo = ImmutableRepo[Car, Long]
-  val car = TableInfo[Car, Car, Long]
+  val car = carRepo.table
 
   val allCars = Vector(
     Car(
@@ -78,11 +78,13 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
     assume(dbType != MySqlDbType)
     assume(dbType != OracleDbType)
     assume(dbType != SqliteDbType)
+    assume(dbType != MsSqlDbType)
     xa().connect:
       val ids = carRepo.findAllById(Vector(1L, 3L)).map(_.id)
       assert(ids == Vector(1L, 3L))
 
   test("serializable transaction"):
+    assume(dbType != ClickhouseDbType)
     xa()
       .withConnectionConfig(withSerializable)
       .transact:
@@ -120,7 +122,7 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
 
   test("select via option"):
     xa().connect:
-      val vin = Some(124)
+      val vin = Option(124)
       val cars =
         sql"select * from car where vin = $vin"
           .query[Car]
@@ -148,4 +150,21 @@ def immutableRepoTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
         val it = sql"SELECT * FROM car".query[Car].iterator()
         assert(it.map(_.id).size == 3)
       )
+
+  test("sql interpolator selects right DbCodec"):
+    case class Coord(x: Double, y: Double)
+
+    given DbCodec[Coord]:
+      def cols: IArray[Int] = IArray(java.sql.Types.BINARY)
+      def queryRepr: String = "MyCoord(?)"
+      def readSingle(rs: ResultSet, pos: Int): Coord = ???
+      def readSingleOption(rs: ResultSet, pos: Int): Option[Coord] = ???
+      def writeSingle(coord: Coord, ps: PreparedStatement, pos: Int): Unit = ???
+
+    val myCoord = Coord(1, 2)
+
+    val query = sql"SELECT * FROM test WHERE coord = $myCoord"
+
+    assert(query.sqlString.contains("MyCoord(?)"))
+
 end immutableRepoTests

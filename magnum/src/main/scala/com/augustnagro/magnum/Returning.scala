@@ -22,7 +22,7 @@ class Returning[E] private[magnum] (
     withResultSet(ResultSetIterator(_, frag, reader, con.sqlLogger))
 
   private def withResultSet[A](f: ResultSet => A)(using con: DbCon): A =
-    handleQuery(frag.sqlString, frag.params):
+    handleQuery(frag.sqlString, SqlLogParams.Fragment(frag.params)):
       Manager: use =>
         if keyColumns.isEmpty then
           val ps = use(con.connection.prepareStatement(frag.sqlString))

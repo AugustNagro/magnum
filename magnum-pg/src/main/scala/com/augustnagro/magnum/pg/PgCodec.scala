@@ -13,7 +13,7 @@ import org.postgresql.geometric.{
 import org.postgresql.util.PGInterval
 
 import java.sql
-import java.sql.{JDBCType, PreparedStatement, ResultSet, Types}
+import java.sql.{PreparedStatement, ResultSet, Types}
 import scala.reflect.ClassTag
 import scala.collection.{IterableFactory, mutable as m}
 import scala.compiletime.*
@@ -56,7 +56,7 @@ object PgCodec:
   ): DbCodec[Seq[A]] = new DbCodec[Seq[A]]:
     require(aCodec.cols.length == 1)
     def queryRepr: String = "?"
-    val cols: IArray[Int] = aCodec.cols
+    val cols: IArray[Int] = IArray(Types.OTHER)
     def readSingle(resultSet: ResultSet, pos: Int): Seq[A] =
       readCImpl(Seq, resultSet, pos)
     def readSingleOption(resultSet: ResultSet, pos: Int): Option[Seq[A]] =
@@ -70,7 +70,7 @@ object PgCodec:
   ): DbCodec[List[A]] = new DbCodec[List[A]]:
     require(aCodec.cols.length == 1)
     def queryRepr: String = "?"
-    val cols: IArray[Int] = aCodec.cols
+    val cols: IArray[Int] = IArray(Types.OTHER)
     def readSingle(resultSet: ResultSet, pos: Int): List[A] =
       readCImpl(List, resultSet, pos)
     def readSingleOption(resultSet: ResultSet, pos: Int): Option[List[A]] =
@@ -84,7 +84,7 @@ object PgCodec:
   ): DbCodec[Vector[A]] = new DbCodec[Vector[A]]:
     require(aCodec.cols.length == 1)
     def queryRepr: String = "?"
-    val cols: IArray[Int] = aCodec.cols
+    val cols: IArray[Int] = IArray(Types.OTHER)
     def readSingle(resultSet: ResultSet, pos: Int): Vector[A] =
       readCImpl(Vector, resultSet, pos)
     def readSingleOption(resultSet: ResultSet, pos: Int): Option[Vector[A]] =
@@ -97,9 +97,8 @@ object PgCodec:
       aArrayCodec: SqlArrayCodec[A]
   ): DbCodec[m.Buffer[A]] = new DbCodec[m.Buffer[A]]:
     require(aCodec.cols.length == 1)
-    private val jdbcTypeName = JDBCType.valueOf(aCodec.cols.head).getName
     def queryRepr: String = "?"
-    val cols: IArray[Int] = aCodec.cols
+    val cols: IArray[Int] = IArray(Types.OTHER)
     def readSingle(resultSet: ResultSet, pos: Int): m.Buffer[A] =
       readCImpl(m.Buffer, resultSet, pos)
     def readSingleOption(resultSet: ResultSet, pos: Int): Option[m.Buffer[A]] =
@@ -111,7 +110,7 @@ object PgCodec:
     ): Unit =
       writeCImpl(entity, ps, pos)
 
-  given PgBoxCodec: DbCodec[PGbox] with
+  given PgBoxCodec: DbCodec[PGbox]:
     def queryRepr: String = "?"
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(resultSet: ResultSet, pos: Int): PGbox =
@@ -121,7 +120,7 @@ object PgCodec:
     def writeSingle(entity: PGbox, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
-  given PgCircleCodec: DbCodec[PGcircle] with
+  given PgCircleCodec: DbCodec[PGcircle]:
     def queryRepr: String = "?"
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(resultSet: ResultSet, pos: Int): PGcircle =
@@ -131,7 +130,7 @@ object PgCodec:
     def writeSingle(entity: PGcircle, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
-  given PgIntervalCodec: DbCodec[PGInterval] with
+  given PgIntervalCodec: DbCodec[PGInterval]:
     def queryRepr: String = "?"
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(resultSet: ResultSet, pos: Int): PGInterval =
@@ -141,7 +140,7 @@ object PgCodec:
     def writeSingle(entity: PGInterval, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
-  given PgLineCodec: DbCodec[PGline] with
+  given PgLineCodec: DbCodec[PGline]:
     def queryRepr: String = "?"
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(resultSet: ResultSet, pos: Int): PGline =
@@ -151,7 +150,7 @@ object PgCodec:
     def writeSingle(entity: PGline, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
-  given PgLSegCodec: DbCodec[PGlseg] with
+  given PgLSegCodec: DbCodec[PGlseg]:
     def queryRepr: String = "?"
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(resultSet: ResultSet, pos: Int): PGlseg =
@@ -161,7 +160,7 @@ object PgCodec:
     def writeSingle(entity: PGlseg, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
-  given PgPathCodec: DbCodec[PGpath] with
+  given PgPathCodec: DbCodec[PGpath]:
     def queryRepr: String = "?"
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(resultSet: ResultSet, pos: Int): PGpath =
@@ -171,7 +170,7 @@ object PgCodec:
     def writeSingle(entity: PGpath, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
-  given PgPointCodec: DbCodec[PGpoint] with
+  given PgPointCodec: DbCodec[PGpoint]:
     def queryRepr: String = "?"
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(resultSet: ResultSet, pos: Int): PGpoint =
@@ -181,7 +180,7 @@ object PgCodec:
     def writeSingle(entity: PGpoint, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
-  given PgPolygonCodec: DbCodec[PGpolygon] with
+  given PgPolygonCodec: DbCodec[PGpolygon]:
     def queryRepr: String = "?"
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(resultSet: ResultSet, pos: Int): PGpolygon =
@@ -191,7 +190,8 @@ object PgCodec:
     def writeSingle(entity: PGpolygon, ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
-  private def iArrayFastPath[A](
+  @scala.annotation.publicInBinary
+  private[pg] def iArrayFastPath[A](
       aCodec: DbCodec[A],
       aArrayCodec: SqlArrayCodec[A],
       cTag: ClassTag[IArray[A]]
@@ -200,7 +200,7 @@ object PgCodec:
 
     def queryRepr: String = "?"
 
-    val cols: IArray[Int] = aCodec.cols
+    val cols: IArray[Int] = IArray(Types.OTHER)
 
     def readSingle(resultSet: ResultSet, pos: Int): IArray[A] =
       val jdbcArray = resultSet.getArray(pos)
@@ -221,7 +221,8 @@ object PgCodec:
     def writeSingle(entity: IArray[A], ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
-  private def iArraySlowPath[A](
+  @scala.annotation.publicInBinary
+  private[pg] def iArraySlowPath[A](
       aCodec: DbCodec[A],
       aArrayCodec: SqlArrayCodec[A],
       cTag: ClassTag[IArray[A]]
@@ -230,7 +231,7 @@ object PgCodec:
 
     def queryRepr: String = "?"
 
-    val cols: IArray[Int] = aCodec.cols
+    val cols: IArray[Int] = IArray(Types.OTHER)
 
     def readSingle(resultSet: ResultSet, pos: Int): IArray[A] =
       val jdbcArray = resultSet.getArray(pos)
@@ -254,7 +255,8 @@ object PgCodec:
         ps.getConnection.createArrayOf(aArrayCodec.jdbcTypeName, arr)
       ps.setArray(pos, jdbcArr)
 
-  private def arrayFastPath[A](
+  @scala.annotation.publicInBinary
+  private[pg] def arrayFastPath[A](
       aCodec: DbCodec[A],
       aArrayCodec: SqlArrayCodec[A],
       cTag: ClassTag[Array[A]]
@@ -263,7 +265,7 @@ object PgCodec:
 
     def queryRepr: String = "?"
 
-    val cols: IArray[Int] = aCodec.cols
+    val cols: IArray[Int] = IArray(Types.OTHER)
 
     def readSingle(resultSet: ResultSet, pos: Int): Array[A] =
       val jdbcArray = resultSet.getArray(pos)
@@ -280,7 +282,8 @@ object PgCodec:
     def writeSingle(entity: Array[A], ps: PreparedStatement, pos: Int): Unit =
       ps.setObject(pos, entity)
 
-  private def arraySlowPath[A](
+  @scala.annotation.publicInBinary
+  private[pg] def arraySlowPath[A](
       aCodec: DbCodec[A],
       aArrayCodec: SqlArrayCodec[A],
       cTag: ClassTag[Array[A]]
@@ -289,7 +292,7 @@ object PgCodec:
 
     def queryRepr: String = "?"
 
-    val cols: IArray[Int] = aCodec.cols
+    val cols: IArray[Int] = IArray(Types.OTHER)
 
     def readSingle(resultSet: ResultSet, pos: Int): Array[A] =
       val jdbcArray = resultSet.getArray(pos)

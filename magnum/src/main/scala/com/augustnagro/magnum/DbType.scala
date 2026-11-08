@@ -6,13 +6,15 @@ import scala.deriving.Mirror
 /** Factory for Repo default methods */
 trait DbType:
   def buildRepoDefaults[EC, E, ID](
+      tableInfo: TableInfo[EC, E, ID],
       tableNameSql: String,
       eElemNames: Seq[String],
       eElemNamesSql: Seq[String],
       eElemCodecs: Seq[DbCodec[?]],
       ecElemNames: Seq[String],
       ecElemNamesSql: Seq[String],
-      idIndex: Int
+      idIndices: Seq[Int],
+      idFromProduct: Seq[Any] => ID
   )(using
       eCodec: DbCodec[E],
       ecCodec: DbCodec[EC],

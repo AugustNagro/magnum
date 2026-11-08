@@ -8,12 +8,12 @@ private trait SpecImpl:
       case SortOrder.Default => ""
       case SortOrder.Asc     => " ASC"
       case SortOrder.Desc    => " DESC"
-      case _                 => throw UnsupportedOperationException()
+
     val nullOrder = sort.nullOrder match
       case NullOrder.Default => ""
       case NullOrder.First   => " NULLS FIRST"
       case NullOrder.Last    => " NULLS LAST"
-      case _                 => throw UnsupportedOperationException()
+
     sort.column + dir + nullOrder
 
   def offsetLimitSql(offset: Option[Long], limit: Option[Int]): Option[String] =
@@ -23,11 +23,17 @@ private trait SpecImpl:
       case (None, Some(l))    => Some(s"LIMIT $l")
       case (None, None)       => None
 
+  def orderBy(sorts: Vector[Sort]): String =
+    val orderByClause =
+      StringJoiner(", ", "ORDER BY ", "").setEmptyValue("")
+    for sort <- sorts do orderByClause.add(sortSql(sort))
+    orderByClause.toString
+
   def seekSql(seek: Seek): String =
     val seekDir = seek.seekDirection match
       case SeekDir.Gt => ">"
       case SeekDir.Lt => "<"
-      case _          => throw UnsupportedOperationException()
+
     s"${seek.column} $seekDir ?"
 
   def findAll[E: DbCodec](spec: Spec[E], tableNameSql: String)(using
@@ -60,19 +66,15 @@ private trait SpecImpl:
 
     val seekSorts =
       spec.seeks.map(seek => Sort(seek.column, seek.columnSort, seek.nullOrder))
-    val orderByClause =
-      StringJoiner(", ", "ORDER BY ", "").setEmptyValue("")
-    for sort <- spec.sorts ++ seekSorts do orderByClause.add(sortSql(sort))
+    val sorts = spec.sorts ++ seekSorts
 
     val finalSj = StringJoiner(" ")
     if prefixFrag.sqlString.nonEmpty then finalSj.add(prefixFrag.sqlString)
     val whereClauseStr = whereClause.toString
     if whereClauseStr.nonEmpty then finalSj.add(whereClauseStr)
-    val orderByClauseStr = orderByClause.toString
+    val orderByClauseStr = orderBy(sorts)
     if orderByClauseStr.nonEmpty then finalSj.add(orderByClauseStr)
-
-    for offsetLimit <- offsetLimitSql(spec.offset, spec.limit) do
-      finalSj.add(offsetLimit)
+    for ol <- offsetLimitSql(spec.offset, spec.limit) do finalSj.add(ol)
 
     val allFrags = prefixFrag +: whereFrags
     val fragWriter: FragWriter = (ps, startingPos) =>

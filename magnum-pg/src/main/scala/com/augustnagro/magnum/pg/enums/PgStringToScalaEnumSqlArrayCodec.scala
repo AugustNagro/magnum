@@ -24,7 +24,8 @@ inline given PgStringToScalaEnumSqlArrayCodec[
 ]: SqlArrayCodec[A] =
   ${ pgStringToScalaEnumSqlArrayCodecImpl[A] }
 
-private def pgStringToScalaEnumSqlArrayCodecImpl[A: Type](using
+@scala.annotation.publicInBinary
+private[enums] def pgStringToScalaEnumSqlArrayCodecImpl[A: Type](using
     Quotes
 ): Expr[SqlArrayCodec[A]] =
   import quotes.reflect.*
@@ -55,7 +56,7 @@ private def pgStringToScalaEnumSqlArrayCodecImpl[A: Type](using
               .map(enumName =>
                 nameMap.find((k, _) => k == enumName) match
                   case Some((_, v)) => v
-                  case None =>
+                  case None         =>
                     throw IllegalArgumentException(
                       enumName + " not convertible to " + $melExpr
                     )
@@ -63,7 +64,7 @@ private def pgStringToScalaEnumSqlArrayCodecImpl[A: Type](using
           def toArrayObj(entity: A): Object =
             nameMap.find((_, v) => v == entity) match
               case Some((k, _)) => k
-              case None =>
+              case None         =>
                 throw IllegalArgumentException(
                   entity.toString + " not convertible to " + $melExpr
                 )

@@ -1,6 +1,6 @@
 package shared
 
-import com.augustnagro.magnum.common.*
+import com.augustnagro.magnum.*
 import munit.{FunSuite, Location}
 
 import java.util.UUID
@@ -19,6 +19,7 @@ def embeddedFragTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
         .head
     val isAdminFrag =
       if dbType == OracleDbType then sql"is_admin = 'Y'"
+      else if dbType == MsSqlDbType then sql"is_admin = 1"
       else sql"is_admin = true"
     xa().connect:
       val johnCnt =
@@ -27,7 +28,7 @@ def embeddedFragTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
 
   test("embedded frag param exprs should be evaluated only once"):
     object Holder:
-      var uuid: UUID = _
+      var uuid: UUID = scala.compiletime.uninitialized
       def set(uuid: UUID): UUID =
         this.uuid = uuid
         uuid

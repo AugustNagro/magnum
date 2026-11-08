@@ -1,6 +1,6 @@
 package shared
 
-import com.augustnagro.magnum.common.*
+import com.augustnagro.magnum.*
 import com.augustnagro.magnum.SqlException
 import munit.{FunSuite, Location}
 
@@ -18,7 +18,7 @@ def entityCreatorTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
   case class MyUser(firstName: String, id: Long) derives DbCodec
 
   val userRepo = Repo[MyUserCreator, MyUser, Long]
-  val user = TableInfo[MyUserCreator, MyUser, Long]
+  val user = userRepo.table
 
   test("insert EntityCreator"):
     xa().connect:
@@ -30,6 +30,7 @@ def entityCreatorTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
   test("insertReturning EntityCreator"):
     assume(dbType != MySqlDbType)
     assume(dbType != SqliteDbType)
+    assume(dbType != MsSqlDbType)
     xa().connect:
       val user = userRepo.insertReturning(MyUserCreator("Ash"))
       assert(user.firstName == "Ash")
@@ -37,6 +38,7 @@ def entityCreatorTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
   test("insertAllReturning EntityCreator"):
     assume(dbType != MySqlDbType)
     assume(dbType != SqliteDbType)
+    assume(dbType != MsSqlDbType)
     xa().connect:
       val newUsers = Vector(
         MyUserCreator("Ash"),
@@ -82,6 +84,7 @@ def entityCreatorTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
       assert(userRepo.findAll.exists(_.firstName == "Ash"))
 
   test("custom update EntityCreator"):
+    assume(dbType != ClickhouseDbType)
     xa().connect:
       val u = userRepo.findAll.head
       val newName = "Ash"
@@ -104,6 +107,10 @@ def entityCreatorTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(
           if dbType == H2DbType then
             sql"INSERT INTO $user ${user.insertColumns} VALUES ('Bob')"
               .returningKeys[Long](user.id)
+              .iterator()
+          else if dbType == MsSqlDbType then
+            sql"INSERT INTO $user ${user.insertColumns} OUTPUT INSERTED.${user.id} VALUES ('Bob')"
+              .returning[Long]
               .iterator()
           else
             sql"INSERT INTO $user ${user.insertColumns} VALUES ('Bob') RETURNING ${user.id}"

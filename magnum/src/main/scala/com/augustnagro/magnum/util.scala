@@ -46,7 +46,8 @@ extension (inline sc: StringContext)
   inline def sql(inline args: Any*): Frag =
     ${ sqlImpl('{ sc }, '{ args }) }
 
-private def sqlImpl(sc: Expr[StringContext], args: Expr[Seq[Any]])(using
+@scala.annotation.publicInBinary
+private[magnum] def sqlImpl(sc: Expr[StringContext], args: Expr[Seq[Any]])(using
     Quotes
 ): Expr[Frag] =
   import quotes.reflect.*
@@ -61,7 +62,7 @@ private def sqlImpl(sc: Expr[StringContext], args: Expr[Seq[Any]])(using
     val sqlQueryReprs: Vector[String] = ${
       queryReprs(allArgsExprs, '{ args }, '{ Vector.newBuilder })
     }
-    val queryExpr: String = $sc.s(sqlQueryReprs: _*)
+    val queryExpr: String = $sc.s(sqlQueryReprs*)
 
     val flattenedArgs: Vector[Any] = ${
       flattenedArgsExpr(allArgsExprs, '{ args }, '{ Vector.newBuilder })
@@ -163,10 +164,9 @@ private def summonWriter[T: Type](using Quotes): Expr[DbCodec[T]] =
             .map(codec => '{ $codec.asInstanceOf[DbCodec[T]] })
     )
     .getOrElse:
-      report.info(
-        s"Could not find given DbCodec for ${TypeRepr.of[T].show}. Using PreparedStatement::setObject instead."
+      report.errorAndAbort(
+        s"Could not find given DbCodec for ${TypeRepr.of[T].show}."
       )
-      '{ DbCodec.AnyCodec.asInstanceOf[DbCodec[T]] }
 
 def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
     con: DbCon
@@ -192,10 +192,14 @@ def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
     batchUpdateResult(ps.executeBatch())
   ) match
     case Success(res) => res
-    case Failure(t) =>
+    case Failure(t)   =>
       throw SqlException(
         con.sqlLogger.exceptionMsg(
-          SqlExceptionEvent(firstFrag.sqlString, firstFrag.params, t)
+          SqlExceptionEvent(
+            firstFrag.sqlString,
+            SqlLogParams.Fragment(firstFrag.params),
+            t
+          )
         ),
         t
       )
@@ -203,19 +207,6 @@ def batchUpdate[T](values: Iterable[T])(f: T => Update)(using
 end batchUpdate
 
 private val Log = System.getLogger("com.augustnagro.magnum")
-
-private def parseParams(params: Any): Iterator[Iterator[Any]] =
-  params match
-    case p: Product => Iterator(p.productIterator)
-    case it: Iterable[?] =>
-      it.headOption match
-        case Some(h: Product) =>
-          it.asInstanceOf[Iterable[Product]]
-            .iterator
-            .map(_.productIterator)
-        case _ =>
-          Iterator(it.iterator)
-    case x => Iterator(Iterator(x))
 
 private def paramsString(params: Iterator[Iterator[Any]]): String =
   params.map(_.mkString("(", ", ", ")")).mkString("", ",\n", "\n")
@@ -267,11 +258,11 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
   import quotes.reflect.*
   assertECIsSubsetOfE[EC, E]
 
-  val idIndex = idAnnotIndex[E]
+  val idIndices = idAnnotIndices[E, ID]
   val table: Expr[Table] =
     DerivingUtil.tableAnnot[E] match
       case Some(table) => table
-      case None =>
+      case None        =>
         report.errorAndAbort(
           s"${TypeRepr.of[E].show} must have @Table annotation"
         )
@@ -299,14 +290,14 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
           val eElemNamesSql = eElemNames.map(elemName =>
             sqlNameAnnot[E](elemName) match
               case Some(sqlName) => '{ $sqlName.name }
-              case None =>
+              case None          =>
                 '{ $nameMapper.toColumnName(${ Expr(elemName) }) }
           )
           val ecElemNames = elemNames[ecMels]()
           val ecElemNamesSql = ecElemNames.map(elemName =>
             sqlNameAnnot[E](elemName) match
               case Some(sqlName) => '{ $sqlName.name }
-              case None =>
+              case None          =>
                 '{ $nameMapper.toColumnName(${ Expr(elemName) }) }
           )
           TableExprs(
@@ -317,7 +308,7 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
             eElemNamesSql,
             ecElemNames,
             ecElemNamesSql,
-            idIndex
+            idIndices
           )
         case _ =>
           report.errorAndAbort(
@@ -330,19 +321,22 @@ private def tableExprs[EC: Type, E: Type, ID: Type](using
   end match
 end tableExprs
 
-private def idAnnotIndex[E: Type](using q: Quotes): Expr[Int] =
+private def idAnnotIndices[E: Type, ID: Type](using q: Quotes): Expr[Seq[Int]] =
   import q.reflect.*
-  val idAnnot = TypeRepr.of[Id].typeSymbol
-  val index = TypeRepr
-    .of[E]
-    .typeSymbol
-    .primaryConstructor
-    .paramSymss
-    .head
-    .indexWhere(sym => sym.hasAnnotation(idAnnot)) match
-    case -1 => 0
-    case x  => x
-  Expr(index)
+
+  if TypeRepr.of[ID] =:= TypeRepr.of[Null] then '{ List.empty[Int] }
+  else
+    val idAnnot = TypeRepr.of[Id].typeSymbol
+    val params = TypeRepr
+      .of[E]
+      .typeSymbol
+      .primaryConstructor
+      .paramSymss
+      .head
+    val indices = params.zipWithIndex
+      .collect { case (sym, idx) if sym.hasAnnotation(idAnnot) => idx }
+    val indicesWithDefault = if indices.isEmpty then List(0) else indices
+    Expr(indicesWithDefault)
 
 private def elemNames[Mels: Type](res: List[String] = Nil)(using
     Quotes
@@ -370,7 +364,7 @@ private def sqlNameAnnot[T: Type](elemName: String)(using
     .flatMap(sym => sym.getAnnotation(annot))
     .map(term => term.asExprOf[SqlName])
 
-private def handleQuery[A](sql: String, params: Any)(
+private def handleQuery[A](sql: String, params: SqlLogParams)(
     attempt: Try[(A, FiniteDuration)]
 )(using con: DbCon): A =
   attempt match

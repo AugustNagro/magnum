@@ -9,12 +9,13 @@ import com.augustnagro.magnum.pg.PgCodec.given
 import com.augustnagro.magnum.pg.enums.PgEnumToScalaEnumSqlArrayCodec
 import org.postgresql.util.PGInterval
 
-import java.nio.file.{Files, Path}
+import java.nio.charset.StandardCharsets
 import java.time.{LocalDate, OffsetDateTime, ZoneOffset}
-import java.util
 import java.util.Objects
+import java.util.UUID
 import javax.sql.DataSource
 import scala.util.Using.Manager
+import scala.util.Using
 
 class PgCodecTests extends FunSuite, TestContainersFixtures:
   val userRepo = Repo[MagUser, MagUser, Long]
@@ -42,6 +43,12 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       colorMap = List(
         Vector(Color.RedOrange, Color.RedOrange),
         Vector(Color.Green, Color.Green)
+      ),
+      color = Color.Blue,
+      idUuid = UUID.fromString("00000000-0000-0000-0000-000000000001"),
+      uuids = List(
+        UUID.fromString("00000000-0000-0001-0000-000000000000"),
+        UUID.fromString("00000000-0000-0001-0000-000000000001")
       )
     ),
     MagUser(
@@ -63,6 +70,11 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
       colorMap = List(
         Vector(Color.RedOrange, Color.Green),
         Vector(Color.Green, Color.Blue)
+      ),
+      color = Color.Blue,
+      idUuid = UUID.fromString("00000000-0000-0000-0000-000000000002"),
+      uuids = List(
+        UUID.fromString("00000000-0000-0002-0000-000000000000")
       )
     )
   )
@@ -120,11 +132,29 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
         pnt = PGpoint(3, 4),
         poly = PGpolygon(Array(PGpoint(0, 0), PGpoint(-1, 1), PGpoint(1, 1))),
         colors = List(Color.Blue),
-        colorMap = List(Vector(Color.Blue), Vector(Color.Green))
+        colorMap = List(Vector(Color.Blue), Vector(Color.Green)),
+        color = Color.Green,
+        idUuid = UUID.fromString("00000000-0000-0000-0000-000000000003"),
+        uuids = List(
+          UUID.fromString("00000000-0000-0003-0000-000000000000"),
+          UUID.fromString("00000000-0000-0003-0000-000000000001")
+        )
       )
       userRepo.insert(u)
       val dbU = userRepo.findById(3L).get
       assert(dbU == u)
+
+  test("select MagUser where uuid in set"):
+    connect(ds()):
+      val ids = Vector(
+        UUID.fromString("00000000-0000-0000-0000-000000000001"),
+        UUID.fromString("00000000-0000-0000-0000-000000000002")
+      )
+      val users =
+        sql"SELECT * FROM mag_user WHERE idUuid = ANY($ids)"
+          .query[MagUser]
+          .run()
+      assert(users == allUsers)
 
   test("insert MagCar"):
     connect(ds()):
@@ -169,7 +199,6 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
           .flatten
           .map(_.elem.toString)
       val expected = allCars.flatMap(_.myXml).map(_.elem.toString)
-      println(found)
       assert(found == expected)
 
   test("where = ANY()"):
@@ -179,13 +208,65 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
         sql"SELECT * FROM mag_car WHERE id = ANY($ids)".query[MagCar].run()
       assert(cars == allCars)
 
+  val optionalArraysRepo =
+    Repo[PgOptionalArrays, PgOptionalArrays, UUID]
+
+  test("insert optional PostgreSQL arrays"):
+    connect(ds()):
+      val rows = Vector(
+        PgOptionalArrays(
+          UUID.randomUUID(),
+          Some(Vector(1L, 2L)),
+          Some(IArray(3, 4)),
+          Some(Array(5, 6))
+        ),
+        PgOptionalArrays(
+          UUID.randomUUID(),
+          Some(Vector.empty),
+          Some(IArray.emptyIntIArray),
+          Some(Array.empty[Int])
+        ),
+        PgOptionalArrays(
+          UUID.randomUUID(),
+          None,
+          None,
+          None
+        )
+      )
+
+      optionalArraysRepo.insertAll(rows)
+      val inserted = rows.map(row => optionalArraysRepo.findById(row.id).get)
+      assertEquals(inserted.map(_.vectorValues), rows.map(_.vectorValues))
+      assertEquals(
+        inserted.map(_.iArrayValues.map(_.toList)),
+        rows.map(_.iArrayValues.map(_.toList))
+      )
+      assertEquals(
+        inserted.map(_.arrayValues.map(_.toList)),
+        rows.map(_.arrayValues.map(_.toList))
+      )
+
+  test("insert MagServiceList interpolated"):
+    connect(ds()):
+      val service = LastService("James", LocalDate.of(1970, 4, 22))
+      val frag = sql"INSERT INTO mag_service_list (service) VALUES ($service)"
+      assertEquals(
+        frag.sqlString,
+        "INSERT INTO mag_service_list (service) VALUES (?)"
+      )
+      frag.update.run()
+      assertEquals(
+        sql"SELECT service FROM mag_service_list".query[LastService].run().head,
+        service
+      )
+
   val pgContainer = ForAllContainerFixture(
     PostgreSQLContainer
-      .Def(dockerImageName = DockerImageName.parse("postgres:17.0"))
+      .Def(dockerImageName = DockerImageName.parse("postgres:18.6"))
       .createContainer()
   )
 
-  override def munitFixtures: Seq[AnyFixture[_]] =
+  override def munitFixtures: Seq[AnyFixture[?]] =
     super.munitFixtures :+ pgContainer
 
   def ds(): DataSource =
@@ -194,15 +275,21 @@ class PgCodecTests extends FunSuite, TestContainersFixtures:
     ds.setUrl(pg.jdbcUrl)
     ds.setUser(pg.username)
     ds.setPassword(pg.password)
-    val userSql =
-      Files.readString(Path.of(getClass.getResource("/pg-user.sql").toURI))
-    val carSql =
-      Files.readString(Path.of(getClass.getResource("/pg-car.sql").toURI))
+    def resource(path: String): String =
+      Using.resource(getClass.getResourceAsStream(path))(stream =>
+        String(stream.readAllBytes(), StandardCharsets.UTF_8)
+      )
+    val sql = Vector(
+      "/pg-user.sql",
+      "/pg-car.sql",
+      "/pg-service-list.sql",
+      "/pg-optional-arrays.sql"
+    ).map(resource)
     Manager { use =>
       val con = use(ds.getConnection)
       val stmt = use(con.createStatement)
-      stmt.execute(userSql)
-      stmt.execute(carSql)
+      sql.foreach(stmt.execute)
     }.get
     ds
+  end ds
 end PgCodecTests

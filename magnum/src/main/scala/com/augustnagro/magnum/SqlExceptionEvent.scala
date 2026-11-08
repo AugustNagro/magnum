@@ -4,7 +4,7 @@ package com.augustnagro.magnum
 class SqlExceptionEvent private[magnum] (
     /** The SQL string */
     val sql: String,
-    anyParams: Any,
+    sqlParams: SqlLogParams,
     /** Cause of the exception */
     val cause: Throwable
 ):
@@ -15,4 +15,4 @@ class SqlExceptionEvent private[magnum] (
     *   repo.insertAll(List(User(a, b, c), User(d, e, f))) // provides Iterator(Iterator(a, b, c), Iterator(d, e, f))
     * }}}
     */
-  def params: Iterator[Iterator[Any]] = parseParams(anyParams)
+  def params: Iterator[Iterator[Any]] = sqlParams.iterator

@@ -2,7 +2,15 @@ package com.augustnagro.magnum
 
 import java.net.URL
 import java.sql.{JDBCType, PreparedStatement, ResultSet, Types}
-import java.time.{LocalDate, LocalDateTime, LocalTime, OffsetDateTime}
+import java.time.{
+  Instant,
+  LocalDate,
+  LocalDateTime,
+  LocalTime,
+  OffsetDateTime,
+  ZoneId,
+  ZoneOffset
+}
 import java.util.UUID
 import scala.annotation.implicitNotFound
 import scala.deriving.Mirror
@@ -11,11 +19,12 @@ import scala.compiletime.{
   constValueTuple,
   erasedValue,
   error,
+  summonAll,
   summonFrom,
   summonInline
 }
 import scala.quoted.*
-import scala.reflect.ClassTag
+import scala.util.boundary
 
 /** Typeclass for JDBC reading & writing.
   */
@@ -96,7 +105,7 @@ object DbCodec:
 
   inline def apply[E](using codec: DbCodec[E]): DbCodec[E] = codec
 
-  given AnyCodec: DbCodec[Any] with
+  given AnyCodec: DbCodec[Any]:
     val cols: IArray[Int] = IArray(Types.JAVA_OBJECT)
     def readSingle(rs: ResultSet, pos: Int): Any = rs.getObject(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Any] =
@@ -105,7 +114,7 @@ object DbCodec:
       ps.setObject(pos, a)
     def queryRepr: String = "?"
 
-  given StringCodec: DbCodec[String] with
+  given StringCodec: DbCodec[String]:
     val cols: IArray[Int] = IArray(Types.VARCHAR)
     def readSingle(rs: ResultSet, pos: Int): String = rs.getString(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[String] =
@@ -114,7 +123,7 @@ object DbCodec:
       ps.setString(pos, s)
     def queryRepr: String = "?"
 
-  given BooleanCodec: DbCodec[Boolean] with
+  given BooleanCodec: DbCodec[Boolean]:
     val cols: IArray[Int] = IArray(Types.BOOLEAN)
     def readSingle(rs: ResultSet, pos: Int): Boolean = rs.getBoolean(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Boolean] =
@@ -123,7 +132,7 @@ object DbCodec:
       ps.setBoolean(pos, b)
     def queryRepr: String = "?"
 
-  given ByteCodec: DbCodec[Byte] with
+  given ByteCodec: DbCodec[Byte]:
     val cols: IArray[Int] = IArray(Types.TINYINT)
     def readSingle(rs: ResultSet, pos: Int): Byte = rs.getByte(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Byte] =
@@ -132,7 +141,7 @@ object DbCodec:
       ps.setByte(pos, b)
     def queryRepr: String = "?"
 
-  given ShortCodec: DbCodec[Short] with
+  given ShortCodec: DbCodec[Short]:
     val cols: IArray[Int] = IArray(Types.SMALLINT)
     def readSingle(rs: ResultSet, pos: Int): Short = rs.getShort(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Short] =
@@ -141,7 +150,7 @@ object DbCodec:
       ps.setShort(pos, s)
     def queryRepr: String = "?"
 
-  given IntCodec: DbCodec[Int] with
+  given IntCodec: DbCodec[Int]:
     val cols: IArray[Int] = IArray(Types.INTEGER)
     def readSingle(rs: ResultSet, pos: Int): Int = rs.getInt(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Int] =
@@ -150,7 +159,7 @@ object DbCodec:
       ps.setInt(pos, i)
     def queryRepr: String = "?"
 
-  given LongCodec: DbCodec[Long] with
+  given LongCodec: DbCodec[Long]:
     val cols: IArray[Int] = IArray(Types.BIGINT)
     def readSingle(rs: ResultSet, pos: Int): Long = rs.getLong(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Long] =
@@ -159,7 +168,7 @@ object DbCodec:
       ps.setLong(pos, l)
     def queryRepr: String = "?"
 
-  given FloatCodec: DbCodec[Float] with
+  given FloatCodec: DbCodec[Float]:
     val cols: IArray[Int] = IArray(Types.REAL)
     def readSingle(rs: ResultSet, pos: Int): Float = rs.getFloat(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Float] =
@@ -168,7 +177,7 @@ object DbCodec:
       ps.setFloat(pos, f)
     def queryRepr: String = "?"
 
-  given DoubleCodec: DbCodec[Double] with
+  given DoubleCodec: DbCodec[Double]:
     val cols: IArray[Int] = IArray(Types.DOUBLE)
     def readSingle(rs: ResultSet, pos: Int): Double = rs.getDouble(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Double] =
@@ -177,7 +186,7 @@ object DbCodec:
       ps.setDouble(pos, d)
     def queryRepr: String = "?"
 
-  given ByteArrayCodec: DbCodec[Array[Byte]] with
+  given ByteArrayCodec: DbCodec[Array[Byte]]:
     val cols: IArray[Int] = IArray(Types.BINARY)
     def readSingle(rs: ResultSet, pos: Int): Array[Byte] = rs.getBytes(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[Array[Byte]] =
@@ -186,7 +195,7 @@ object DbCodec:
       ps.setBytes(pos, bytes)
     def queryRepr: String = "?"
 
-  given ByteIArrayCodec: DbCodec[IArray[Byte]] with
+  given ByteIArrayCodec: DbCodec[IArray[Byte]]:
     val cols: IArray[Int] = IArray(Types.BINARY)
     def readSingle(rs: ResultSet, pos: Int): IArray[Byte] =
       IArray.unsafeFromArray(rs.getBytes(pos))
@@ -200,7 +209,7 @@ object DbCodec:
       ps.setBytes(pos, IArray.genericWrapArray(bytes).toArray)
     def queryRepr: String = "?"
 
-  given SqlDateCodec: DbCodec[java.sql.Date] with
+  given SqlDateCodec: DbCodec[java.sql.Date]:
     val cols: IArray[Int] = IArray(Types.DATE)
     def readSingle(rs: ResultSet, pos: Int): java.sql.Date = rs.getDate(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.Date] =
@@ -212,7 +221,7 @@ object DbCodec:
     ): Unit = ps.setDate(pos, date)
     def queryRepr: String = "?"
 
-  given SqlTimeCodec: DbCodec[java.sql.Time] with
+  given SqlTimeCodec: DbCodec[java.sql.Time]:
     val cols: IArray[Int] = IArray(Types.TIME)
     def readSingle(rs: ResultSet, pos: Int): java.sql.Time =
       rs.getTime(pos)
@@ -225,7 +234,7 @@ object DbCodec:
     ): Unit = ps.setTime(pos, time)
     def queryRepr: String = "?"
 
-  given SqlTimestampCodec: DbCodec[java.sql.Timestamp] with
+  given SqlTimestampCodec: DbCodec[java.sql.Timestamp]:
     val cols: IArray[Int] = IArray(Types.TIMESTAMP)
     def readSingle(rs: ResultSet, pos: Int): java.sql.Timestamp =
       rs.getTimestamp(pos)
@@ -238,7 +247,7 @@ object DbCodec:
     ): Unit = ps.setTimestamp(pos, t)
     def queryRepr: String = "?"
 
-  given OffsetDateTimeCodec: DbCodec[OffsetDateTime] with
+  given OffsetDateTimeCodec: DbCodec[OffsetDateTime]:
     val cols: IArray[Int] = IArray(Types.TIMESTAMP_WITH_TIMEZONE)
     def readSingle(rs: ResultSet, pos: Int): OffsetDateTime =
       rs.getObject(pos, classOf[OffsetDateTime])
@@ -248,7 +257,43 @@ object DbCodec:
       ps.setObject(pos, dt)
     def queryRepr: String = "?"
 
-  given SqlRefCodec: DbCodec[java.sql.Ref] with
+  given InstantCodec: DbCodec[Instant] =
+    OffsetDateTimeCodec.biMap(_.toInstant, _.atOffset(ZoneOffset.UTC))
+
+  given LocalDateCodec: DbCodec[LocalDate]:
+    val cols: IArray[Int] = IArray(Types.DATE)
+    def readSingle(rs: ResultSet, pos: Int): LocalDate =
+      rs.getObject(pos, classOf[LocalDate])
+    def readSingleOption(rs: ResultSet, pos: Int): Option[LocalDate] =
+      readOptImpl(this, rs, pos)
+    def writeSingle(ld: LocalDate, ps: PreparedStatement, pos: Int): Unit =
+      ps.setObject(pos, ld)
+    def queryRepr: String = "?"
+
+  given LocalTimeCodec: DbCodec[LocalTime]:
+    val cols: IArray[Int] = IArray(Types.TIME)
+    def readSingle(rs: ResultSet, pos: Int): LocalTime =
+      rs.getObject(pos, classOf[LocalTime])
+    def readSingleOption(rs: ResultSet, pos: Int): Option[LocalTime] =
+      readOptImpl(this, rs, pos)
+    def writeSingle(lt: LocalTime, ps: PreparedStatement, pos: Int): Unit =
+      ps.setObject(pos, lt)
+    def queryRepr: String = "?"
+
+  given LocalDateTimeCodec: DbCodec[LocalDateTime]:
+    val cols: IArray[Int] = IArray(Types.TIMESTAMP)
+    def readSingle(rs: ResultSet, pos: Int): LocalDateTime =
+      rs.getObject(pos, classOf[LocalDateTime])
+    def readSingleOption(rs: ResultSet, pos: Int): Option[LocalDateTime] =
+      readOptImpl(this, rs, pos)
+    def writeSingle(ldt: LocalDateTime, ps: PreparedStatement, pos: Int): Unit =
+      ps.setObject(pos, ldt)
+    def queryRepr: String = "?"
+
+  given ZoneIdCodec: DbCodec[ZoneId] =
+    StringCodec.biMap(ZoneId.of, _.toString)
+
+  given SqlRefCodec: DbCodec[java.sql.Ref]:
     val cols: IArray[Int] = IArray(Types.REF)
     def readSingle(rs: ResultSet, pos: Int): java.sql.Ref = rs.getRef(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.Ref] =
@@ -257,7 +302,7 @@ object DbCodec:
       ps.setRef(pos, ref)
     def queryRepr: String = "?"
 
-  given SqlBlobCodec: DbCodec[java.sql.Blob] with
+  given SqlBlobCodec: DbCodec[java.sql.Blob]:
     val cols: IArray[Int] = IArray(Types.BLOB)
     def readSingle(rs: ResultSet, pos: Int): java.sql.Blob = rs.getBlob(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.Blob] =
@@ -266,7 +311,7 @@ object DbCodec:
       ps.setBlob(pos, b)
     def queryRepr: String = "?"
 
-  given SqlClobCodec: DbCodec[java.sql.Clob] with
+  given SqlClobCodec: DbCodec[java.sql.Clob]:
     val cols: IArray[Int] = IArray(Types.CLOB)
     def readSingle(rs: ResultSet, pos: Int): java.sql.Clob = rs.getClob(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.Clob] =
@@ -275,7 +320,7 @@ object DbCodec:
       ps.setClob(pos, c)
     def queryRepr: String = "?"
 
-  given URLCodec: DbCodec[URL] with
+  given URLCodec: DbCodec[URL]:
     val cols: IArray[Int] = IArray(Types.VARCHAR)
     def readSingle(rs: ResultSet, pos: Int): URL = rs.getURL(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[URL] =
@@ -284,7 +329,7 @@ object DbCodec:
       ps.setURL(pos, url)
     def queryRepr: String = "?"
 
-  given RowIdCodec: DbCodec[java.sql.RowId] with
+  given RowIdCodec: DbCodec[java.sql.RowId]:
     val cols: IArray[Int] = IArray(Types.ROWID)
     def readSingle(rs: ResultSet, pos: Int): java.sql.RowId = rs.getRowId(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.RowId] =
@@ -297,7 +342,7 @@ object DbCodec:
       ps.setRowId(pos, rowId)
     def queryRepr: String = "?"
 
-  given SqlNClobCodec: DbCodec[java.sql.NClob] with
+  given SqlNClobCodec: DbCodec[java.sql.NClob]:
     val cols: IArray[Int] = IArray(Types.NCLOB)
     def readSingle(rs: ResultSet, pos: Int): java.sql.NClob = rs.getNClob(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.NClob] =
@@ -306,7 +351,7 @@ object DbCodec:
       ps.setNClob(pos, nc)
     def queryRepr: String = "?"
 
-  given SqlXmlCodec: DbCodec[java.sql.SQLXML] with
+  given SqlXmlCodec: DbCodec[java.sql.SQLXML]:
     val cols: IArray[Int] = IArray(Types.SQLXML)
     def readSingle(rs: ResultSet, pos: Int): java.sql.SQLXML = rs.getSQLXML(pos)
     def readSingleOption(rs: ResultSet, pos: Int): Option[java.sql.SQLXML] =
@@ -315,7 +360,7 @@ object DbCodec:
       ps.setSQLXML(pos, s)
     def queryRepr: String = "?"
 
-  given JavaBigDecimalCodec: DbCodec[java.math.BigDecimal] with
+  given JavaBigDecimalCodec: DbCodec[java.math.BigDecimal]:
     val cols: IArray[Int] = IArray(Types.NUMERIC)
     def readSingle(rs: ResultSet, pos: Int): java.math.BigDecimal =
       rs.getBigDecimal(pos)
@@ -332,7 +377,7 @@ object DbCodec:
       ps.setBigDecimal(pos, bd)
     def queryRepr: String = "?"
 
-  given ScalaBigDecimalCodec: DbCodec[scala.math.BigDecimal] with
+  given ScalaBigDecimalCodec: DbCodec[scala.math.BigDecimal]:
     val cols: IArray[Int] = IArray(Types.NUMERIC)
     def readSingle(rs: ResultSet, pos: Int): scala.math.BigDecimal =
       scala.math.BigDecimal(rs.getBigDecimal(pos))
@@ -348,7 +393,7 @@ object DbCodec:
       ps.setBigDecimal(pos, bd.underlying)
     def queryRepr: String = "?"
 
-  given UUIDCodec: DbCodec[UUID] with
+  given UUIDCodec: DbCodec[UUID]:
     def queryRepr: String = "?"
     val cols: IArray[Int] = IArray(Types.OTHER)
     def readSingle(rs: ResultSet, pos: Int): UUID =
@@ -372,6 +417,16 @@ object DbCodec:
           codec.writeSingle(a, ps, pos)
         case None =>
           for i <- cols.indices do ps.setNull(pos + i, cols(i))
+    def queryRepr: String = codec.queryRepr
+
+  given SomeCodec[A](using codec: DbCodec[A]): DbCodec[Some[A]] with
+    def cols: IArray[Int] = codec.cols
+    def readSingle(rs: ResultSet, pos: Int): Some[A] =
+      Some(codec.readSingle(rs, pos))
+    def readSingleOption(rs: ResultSet, pos: Int): Option[Some[A]] =
+      codec.readSingleOption(rs, pos).map(Some.apply)
+    def writeSingle(s: Some[A], ps: PreparedStatement, pos: Int): Unit =
+      codec.writeSingle(s.get, ps, pos)
     def queryRepr: String = codec.queryRepr
 
   given Tuple2Codec[A, B](using
@@ -473,6 +528,79 @@ object DbCodec:
       s"(${aCodec.queryRepr}, ${bCodec.queryRepr}, ${cCodec.queryRepr}, ${dCodec.queryRepr})"
   end Tuple4Codec
 
+  inline given TupleNCodec[T <: Tuple]: DbCodec[T] = ${ tupleNCodecImpl[T] }
+
+  private def codecExprs[T <: Tuple: Type](
+      res: Vector[Expr[DbCodec[?]]] = Vector.empty
+  )(using Quotes): Expr[IArray[DbCodec[?]]] =
+    import quotes.reflect.*
+    Type.of[T] match
+      case '[EmptyTuple] => '{ IArray.from(${ Expr.ofSeq(res) }) }
+      case '[t *: ts]    =>
+        val tCodec = Expr.summon[DbCodec[t]].getOrElse {
+          report.errorAndAbort(s"No DbCodec found for type ${Type.show[t]}")
+        }
+        codecExprs[ts](res :+ tCodec)
+
+  def tupleNCodecImpl[T <: Tuple: Type](using Quotes): Expr[DbCodec[T]] =
+    import quotes.reflect.*
+    Type.of[T] match
+      case '[EmptyTuple] =>
+        report.errorAndAbort("Cannot derive DbCodec for EmptyTuple")
+      case '[t *: ts] =>
+        val tCodecsExpr = codecExprs[t *: ts]()
+        '{
+          new DbCodec[t *: ts] {
+            val tCodecs = ${ tCodecsExpr }
+            val cols: IArray[Int] =
+              tCodecs.flatMap(codec => codec.cols)
+
+            def readSingle(rs: ResultSet, pos: Int): t *: ts =
+              val tupleSize = constValue[Tuple.Size[t *: ts]]
+              val result = Array.ofDim[Any](tupleSize)
+              var tupleIdx = 0
+              var psIdx = pos
+              while tupleIdx < tupleSize do
+                val codec = tCodecs(tupleIdx)
+                result(tupleIdx) = codec.readSingle(rs, psIdx)
+                tupleIdx += 1
+                psIdx += codec.cols.length
+              Tuple.fromArray(result).asInstanceOf[t *: ts]
+
+            def readSingleOption(rs: ResultSet, pos: Int): Option[t *: ts] =
+              boundary:
+                val tupleSize = constValue[Tuple.Size[t *: ts]]
+                val res = Array.ofDim[Any](tupleSize)
+                var tupleIdx = 0
+                var psIdx = pos
+                while tupleIdx < tupleSize do
+                  val codec = tCodecs(tupleIdx)
+                  codec.readSingleOption(rs, psIdx) match
+                    case Some(value) => res(tupleIdx) = value
+                    case None        => boundary.break(Option.empty)
+                  tupleIdx += 1
+                  psIdx += codec.cols.length
+                Some(Tuple.fromArray(res)).asInstanceOf[Option[t *: ts]]
+
+            def writeSingle(e: t *: ts, ps: PreparedStatement, pos: Int): Unit =
+              val tupleSize = constValue[Tuple.Size[t *: ts]]
+              var tupleIdx = 0
+              var psIdx = pos
+              while tupleIdx < tupleSize do
+                val codec = tCodecs(tupleIdx)
+                codec
+                  .asInstanceOf[DbCodec[Any]]
+                  .writeSingle(e.productElement(tupleIdx), ps, psIdx)
+                tupleIdx += 1
+                psIdx += codec.cols.length
+
+            val queryRepr: String =
+              tCodecs.map(_.queryRepr).mkString("(", ", ", ")")
+          }.asInstanceOf[DbCodec[T]]
+        }
+    end match
+  end tupleNCodecImpl
+
   private inline def readOptImpl[A](
       codec: DbCodec[A],
       resultSet: ResultSet,
@@ -482,10 +610,11 @@ object DbCodec:
     if resultSet.wasNull then None
     else Some(res)
 
-  inline given derived[E: Mirror.Of]: DbCodec[E] =
+  inline def derived[E: Mirror.Of]: DbCodec[E] =
     ${ dbCodecImpl[E] }
 
-  private def dbCodecImpl[E: Type](using Quotes): Expr[DbCodec[E]] =
+  @scala.annotation.publicInBinary
+  private[magnum] def dbCodecImpl[E: Type](using Quotes): Expr[DbCodec[E]] =
     import quotes.reflect.*
     val mirror = Expr.summon[Mirror.Of[E]].getOrElse {
       report.errorAndAbort(
@@ -498,7 +627,7 @@ object DbCodec:
               type MirroredElemTypes = mets
             }
           } =>
-        val colsExpr = buildColsExpr[mets]()
+        val colsExpr = buildColsExpr[E, mets]()
         '{
           new DbCodec[E] {
             val cols: IArray[Int] = $colsExpr
@@ -512,9 +641,9 @@ object DbCodec:
               }
             def writeSingle(e: E, ps: PreparedStatement, pos: Int): Unit =
               ${
-                productWriteSingle[E, mets]('{ e }, '{ ps }, '{ pos }, '{ 0 })
+                productWriteSingle[E, mets]('{ e }, '{ ps }, '{ pos }, 0)
               }
-            val queryRepr: String = ${ productQueryRepr[mets]() }
+            val queryRepr: String = ${ productQueryRepr[E, mets]() }
           }
         }
       case '{
@@ -534,7 +663,7 @@ object DbCodec:
               val str = rs.getString(pos)
               nameMap.find((name, _) => name == str) match
                 case Some((_, v)) => v
-                case None =>
+                case None         =>
                   throw IllegalArgumentException(
                     str + " not convertible to " + $melExpr
                   )
@@ -542,7 +671,7 @@ object DbCodec:
               Option(rs.getString(pos)).map(str =>
                 nameMap.find((name, _) => name == str) match
                   case Some((_, v)) => v
-                  case None =>
+                  case None         =>
                     throw IllegalArgumentException(
                       str + " not convertible to " + $melExpr
                     )
@@ -550,7 +679,7 @@ object DbCodec:
             def writeSingle(entity: E, ps: PreparedStatement, pos: Int): Unit =
               nameMap.find((_, v) => v == entity) match
                 case Some((k, _)) => ps.setString(pos, k)
-                case None =>
+                case None         =>
                   throw IllegalArgumentException(
                     entity.toString + " not convertible to " + $melExpr
                   )
@@ -560,35 +689,40 @@ object DbCodec:
     end match
   end dbCodecImpl
 
-  private def productQueryRepr[Mets: Type](
+  private def productFieldCodec[E: Type, A: Type](index: Int)(using
+      Quotes
+  ): Expr[DbCodec[A]] =
+    import quotes.reflect.*
+    DerivingUtil
+      .fieldCodec[E, A](index)
+      .orElse(Expr.summon[DbCodec[A]])
+      .getOrElse {
+        report.errorAndAbort(
+          s"Cannot find a DbCodec instance for ${TypeRepr.of[A].show}! Provide one or derive it."
+        )
+      }
+
+  private def productQueryRepr[E: Type, Mets: Type](
       elemReprs: Vector[Expr[String]] = Vector.empty
   )(using Quotes): Expr[String] =
     import quotes.reflect.*
     Type.of[Mets] match
       case '[met *: metTail] =>
-        Expr.summon[DbCodec[met]] match
-          case Some(codec) =>
-            productQueryRepr[metTail](elemReprs :+ '{ $codec.queryRepr })
-          case None =>
-            productQueryRepr[metTail](elemReprs :+ '{ "?" })
+        val codec = productFieldCodec[E, met](elemReprs.size)
+        productQueryRepr[E, metTail](elemReprs :+ '{ $codec.queryRepr })
       case '[EmptyTuple] =>
         val seqExpr = Expr.ofSeq(elemReprs)
         '{ $seqExpr.mkString(", ") }
 
-  private def buildColsExpr[Mets: Type](
+  private def buildColsExpr[E: Type, Mets: Type](
       res: Vector[Expr[IArray[Int]]] = Vector.empty
   )(using Quotes): Expr[IArray[Int]] =
     import quotes.reflect.*
     Type.of[Mets] match
       case '[met *: metTail] =>
-        val metCodec = Expr.summon[DbCodec[met]].getOrElse {
-          val metType = TypeRepr.of[met].show
-          report.errorAndAbort(
-            s"Cannot find a DbCodec instance for $metType! Provide one or derive it."
-          )
-        }
+        val metCodec = productFieldCodec[E, met](res.size)
         val newCols = '{ $metCodec.cols }
-        buildColsExpr[metTail](res :+ newCols)
+        buildColsExpr[E, metTail](res :+ newCols)
       case '[EmptyTuple] =>
         '{
           val iArrays: Seq[IArray[Int]] = ${ Expr.ofSeq(res) }
@@ -604,48 +738,21 @@ object DbCodec:
     import quotes.reflect.*
     Type.of[Mets] match
       case '[met *: metTail] =>
-        Expr.summon[DbCodec[met]] match
-          case Some(codecExpr) =>
-            '{
-              val posValue = $pos
-              val codec = $codecExpr
-              val metValue = codec.readSingle($rs, posValue)
-              val newPos = posValue + codec.cols.length
-              ${
-                productReadSingle[E, metTail](
-                  rs,
-                  m,
-                  res :+ '{ metValue },
-                  '{ newPos }
-                )
-              }
-            }
-          case None =>
-            Expr.summon[ClassTag[met]] match
-              case Some(clsTagExpr) =>
-                report.info(
-                  s"Could not find DbCodec for ${TypeRepr.of[met].show}. Defaulting to ResultSet::[get|set]Object"
-                )
-                '{
-                  val posValue = $pos
-                  val metValue = $rs.getObject(
-                    posValue,
-                    $clsTagExpr.runtimeClass.asInstanceOf[Class[met]]
-                  )
-                  val newPos = posValue + 1
-                  ${
-                    productReadSingle[E, metTail](
-                      rs,
-                      m,
-                      res :+ '{ metValue },
-                      '{ newPos }
-                    )
-                  }
-                }
-              case None =>
-                report.errorAndAbort(
-                  "Could not find DbCodec or ClassTag for ${TypeRepr.of[met].show}"
-                )
+        val codecExpr = productFieldCodec[E, met](res.size)
+        '{
+          val posValue = $pos
+          val codec = $codecExpr
+          val metValue = codec.readSingle($rs, posValue)
+          val newPos = posValue + codec.cols.length
+          ${
+            productReadSingle[E, metTail](
+              rs,
+              m,
+              res :+ '{ metValue },
+              '{ newPos }
+            )
+          }
+        }
       case '[EmptyTuple] =>
         '{
           val product = ${ Expr.ofTupleFromSeq(res) }
@@ -663,52 +770,23 @@ object DbCodec:
     import quotes.reflect.*
     Type.of[Mets] match
       case '[met *: metTail] =>
-        Expr.summon[DbCodec[met]] match
-          case Some(codecExpr) =>
-            '{
-              val posValue = $pos
-              val codec = $codecExpr
-              codec.readSingleOption($rs, posValue) match
-                case Some(metValue) =>
-                  val newPos = posValue + codec.cols.length
-                  ${
-                    productReadOption[E, metTail](
-                      rs,
-                      m,
-                      res :+ '{ metValue },
-                      '{ newPos }
-                    )
-                  }
-                case None => None
-            }
-          case None =>
-            Expr.summon[ClassTag[met]] match
-              case Some(clsTagExpr) =>
-                report.info(
-                  s"Could not find DbCodec for ${TypeRepr.of[met].show}. Defaulting to ResultSet::[get|set]Object"
+        val codecExpr = productFieldCodec[E, met](res.size)
+        '{
+          val posValue = $pos
+          val codec = $codecExpr
+          codec.readSingleOption($rs, posValue) match
+            case Some(metValue) =>
+              val newPos = posValue + codec.cols.length
+              ${
+                productReadOption[E, metTail](
+                  rs,
+                  m,
+                  res :+ '{ metValue },
+                  '{ newPos }
                 )
-                '{
-                  val posValue = $pos
-                  val metValue = $rs.getObject(
-                    posValue,
-                    $clsTagExpr.runtimeClass.asInstanceOf[Class[met]]
-                  )
-                  if $rs.wasNull then None
-                  else
-                    val newPos = posValue + 1
-                    ${
-                      productReadOption[E, metTail](
-                        rs,
-                        m,
-                        res :+ '{ metValue },
-                        '{ newPos }
-                      )
-                    }
-                }
-              case None =>
-                report.errorAndAbort(
-                  "Could not find DbCodec or ClassTag for ${TypeRepr.of[met].show}"
-                )
+              }
+            case None => None
+        }
       case '[EmptyTuple] =>
         '{
           val product = ${ Expr.ofTupleFromSeq(res) }
@@ -721,38 +799,30 @@ object DbCodec:
       e: Expr[E],
       ps: Expr[PreparedStatement],
       pos: Expr[Int],
-      i: Expr[Int]
+      i: Int
   )(using Quotes): Expr[Unit] =
     import quotes.reflect.*
     Type.of[Mets] match
       case '[met *: metTail] =>
-        Expr.summon[DbCodec[met]] match
-          case Some(codecExpr) =>
-            '{
-              val iValue = $i
-              val posValue = $pos
-              val metValue = $e
-                .asInstanceOf[Product]
-                .productElement(iValue)
-                .asInstanceOf[met]
-              val codec = $codecExpr
-              codec.writeSingle(metValue, $ps, posValue)
-              val newPos = posValue + $codecExpr.cols.length
-              val newI = iValue + 1
-              ${ productWriteSingle[E, metTail](e, ps, '{ newPos }, '{ newI }) }
-            }
-          case None =>
-            '{
-              val iValue = $i
-              val posValue = $pos
-              val metValue = $e
-                .asInstanceOf[Product]
-                .productElement(iValue)
-              $ps.setObject(posValue, metValue)
-              val newPos = posValue + 1
-              val newI = iValue + 1
-              ${ productWriteSingle[E, metTail](e, ps, '{ newPos }, '{ newI }) }
-            }
+        val codecExpr = productFieldCodec[E, met](i)
+        '{
+          val posValue = $pos
+          val metValue = $e
+            .asInstanceOf[Product]
+            .productElement(${ Expr(i) })
+            .asInstanceOf[met]
+          val codec = $codecExpr
+          codec.writeSingle(metValue, $ps, posValue)
+          val newPos = posValue + codec.cols.length
+          ${
+            productWriteSingle[E, metTail](
+              e,
+              ps,
+              '{ newPos },
+              i + 1
+            )
+          }
+        }
       case '[EmptyTuple] => '{}
     end match
   end productWriteSingle

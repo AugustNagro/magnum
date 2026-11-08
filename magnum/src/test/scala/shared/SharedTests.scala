@@ -1,9 +1,9 @@
 package shared
 
-import com.augustnagro.magnum.common.*
+import com.augustnagro.magnum.*
 import munit.{FunSuite, Location}
 
-import java.time.OffsetDateTime
+import java.time.{LocalDateTime, LocalTime, OffsetDateTime}
 import java.util.UUID
 
 def sharedTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
@@ -11,7 +11,9 @@ def sharedTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
     DbCodec[UUID],
     DbCodec[Boolean],
     DbCodec[OffsetDateTime],
-    DbCodec[BigDecimal]
+    DbCodec[BigDecimal],
+    DbCodec[LocalTime],
+    DbCodec[LocalDateTime]
 ): Unit =
   immutableRepoTests(suite, dbType, xa)
   repoTests(suite, dbType, xa)
@@ -20,5 +22,11 @@ def sharedTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
   sqlNameTests(suite, dbType, xa)
   noIdTests(suite, dbType, xa)
   embeddedFragTests(suite, dbType, xa)
+  multilineFragTests(suite, dbType, xa)
   bigDecTests(suite, dbType, xa)
   optionalProductTests(suite, dbType, xa)
+  dateTimeTests(suite, dbType, xa)
+  tupleTests(suite, dbType, xa)
+  tableInfoTests(suite, dbType, xa)
+  compositeIdTests(suite, dbType, xa)
+end sharedTests

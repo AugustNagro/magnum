@@ -112,14 +112,8 @@ object DerivingUtil:
               type MirroredElemTypes = mets
             }
           }) =>
-        tupleArity[mets]() == 0
+        TypeRepr.of[mets] =:= TypeRepr.of[EmptyTuple]
       case _ => false
-
-  private def tupleArity[T: Type](res: Int = 0)(using Quotes): Int =
-    import quotes.reflect.*
-    Type.of[T] match
-      case '[x *: xs]    => tupleArity[xs](res + 1)
-      case '[EmptyTuple] => res
 
   /** Finds the first SqlName annotation on type T */
   def sqlTableNameAnnot[T: Type](using Quotes): Option[Expr[SqlName]] =
@@ -142,5 +136,25 @@ object DerivingUtil:
       .annotations
       .find(_.tpe =:= annot)
       .map(term => term.asExprOf[Table])
+
+  def fieldCodec[E: Type, A: Type](index: Int)(using
+      Quotes
+  ): Option[Expr[DbCodec[A]]] =
+    import quotes.reflect.*
+    val annotSymbol = TypeRepr.of[UsingDbCodec[Any]].typeSymbol
+    val field =
+      TypeRepr.of[E].typeSymbol.primaryConstructor.paramSymss.head(index)
+    field.getAnnotation(annotSymbol).map { annot =>
+      val annotType = annot.tpe.baseType(annotSymbol)
+      val codecType = annotType match
+        case AppliedType(_, List(tpe)) => tpe
+        case _                         =>
+          report.errorAndAbort(s"Invalid @UsingDbCodec on ${field.name}")
+      if !(codecType =:= TypeRepr.of[A]) then
+        report.errorAndAbort(
+          s"@UsingDbCodec on ${field.name} requires DbCodec[${TypeRepr.of[A].show}], found DbCodec[${codecType.show}]"
+        )
+      '{ ${ annot.asExprOf[UsingDbCodec[A]] }.codec }
+    }
 
 end DerivingUtil

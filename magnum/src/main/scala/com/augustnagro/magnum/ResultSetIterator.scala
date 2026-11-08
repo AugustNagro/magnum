@@ -16,7 +16,11 @@ private class ResultSetIterator[E](
       case NonFatal(t) =>
         throw SqlException(
           sqlLogger.exceptionMsg(
-            SqlExceptionEvent(frag.sqlString, frag.params, t)
+            SqlExceptionEvent(
+              frag.sqlString,
+              SqlLogParams.Fragment(frag.params),
+              t
+            )
           ),
           t
         )
@@ -33,7 +37,11 @@ private class ResultSetIterator[E](
       case NonFatal(t) =>
         throw SqlException(
           sqlLogger.exceptionMsg(
-            SqlExceptionEvent(frag.sqlString, frag.params, t)
+            SqlExceptionEvent(
+              frag.sqlString,
+              SqlLogParams.Fragment(frag.params),
+              t
+            )
           ),
           t
         )

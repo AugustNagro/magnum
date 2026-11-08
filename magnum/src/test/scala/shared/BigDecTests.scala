@@ -1,6 +1,6 @@
 package shared
 
-import com.augustnagro.magnum.common.*
+import com.augustnagro.magnum.*
 import munit.{FunSuite, Location}
 
 def bigDecTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
@@ -15,7 +15,7 @@ def bigDecTests(suite: FunSuite, dbType: DbType, xa: () => Transactor)(using
   val bigDecRepo = Repo[BigDec, BigDec, Int]
 
   test("option of bigdecimal"):
-    xa().transact:
+    xa().connect:
       val bigDec1 = bigDecRepo.findById(1).get
       assert(bigDec1.myBigDec == Some(BigDecimal(123)))
       val bigDec2 = bigDecRepo.findById(2).get
